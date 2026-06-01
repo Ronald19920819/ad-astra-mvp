@@ -1,11 +1,15 @@
 "use client";
-
+import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { Indie_Flower } from "next/font/google";
-
+import { Indie_Flower, Oxanium } from "next/font/google";
+import { learner } from "@/data/learners";
 const indieFlower = Indie_Flower({
   weight: "400",
+  subsets: ["latin"],
+});
+const oxanium = Oxanium({
+  weight: "600",
   subsets: ["latin"],
 });
 
@@ -47,11 +51,9 @@ export default function BusinessStudiesPage() {
           />
 
           <div>
-            <p
-              className={`${indieFlower.className} text-2xl text-[#102A43] leading-none`}
-            >
-              AD ASTRA
-            </p>
+    <p className={`${oxanium.className} text-2xl font-semibold text-black tracking-wide leading-none`}>
+  AD ASTRA
+</p>
 
             <h1
               className={`${indieFlower.className} text-4xl text-[#102A43] leading-tight`}
@@ -60,11 +62,16 @@ export default function BusinessStudiesPage() {
             </h1>
 
             <p className="text-sm text-slate-500">
-              Morgan • Focus: Application Questions
+              {learner.name} • Focus: Application Questions
             </p>
           </div>
         </div>
-
+<div className="flex gap-3 mt-2 text-xs font-semibold text-black">
+  <Link href="/home">Home</Link>
+  <Link href="/subjects">Subjects</Link>
+  <Link href="/schedule">Schedule</Link>
+  <Link href="/profile">Profile</Link>
+</div>
         <div className="p-5 space-y-5 pb-44">
           <div className="bg-white rounded-3xl shadow-sm p-5 max-w-xl border border-blue-100">
             <p className="font-semibold text-[#102A43] mb-2">
@@ -72,7 +79,7 @@ export default function BusinessStudiesPage() {
             </p>
 
             <p className="text-slate-700 leading-relaxed">
-              Hi Morgan. Welcome back to Business Studies. You have been
+              Hi {learner.name}. Welcome back to Business Studies. You have been
               improving with definitions, but we still need to work on
               application questions. What would you like help with today?
             </p>
@@ -88,7 +95,7 @@ export default function BusinessStudiesPage() {
               }`}
             >
               <p className="text-xs font-semibold mb-1 text-slate-500">
-                {chatMessage.role === "user" ? "Morgan" : "AD Astra Tutor"}
+                {chatMessage.role === "user" ? "{learner.name}" : "AD Astra Tutor"}
               </p>
 
               <p>{chatMessage.text}</p>
@@ -138,6 +145,7 @@ export default function BusinessStudiesPage() {
           </div>
         </form>
       </div>
+      
     </main>
   );
 }
