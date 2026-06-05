@@ -24,3 +24,42 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+.motivation-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+
+  background-image:
+  radial-gradient(circle, rgba(80, 141, 177, 0.9) 2px, transparent 3px),
+  radial-gradient(circle, rgba(80, 141, 177, 0.65) 1.5px, transparent 2.5px),
+  radial-gradient(circle, rgba(80, 141, 177, 0.8) 2px, transparent 3px);
+
+  background-size:
+    90px 90px,
+    130px 130px,
+    180px 180px;
+
+  background-position:
+    20px 20px,
+    80px 45px,
+    140px 70px;
+
+    
+  opacity: 0.55;
+}
+.motivation-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+
+  background:
+    radial-gradient(
+      circle at 80% 50%,
+      rgba(7, 29, 41, 0.12),
+      transparent 70%
+    );
+}
