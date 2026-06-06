@@ -5,10 +5,10 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "AD Astra",
     short_name: "AD Astra",
     description: "AD Astra Learning Platform",
-    start_url: "/home",
+    start_url: "/",
     display: "standalone",
     background_color: "#ffffff",
-    theme_color: "#FEC20C",
+   theme_color: "#102A43",
     icons: [
       {
         src: "/icon-192.png",
