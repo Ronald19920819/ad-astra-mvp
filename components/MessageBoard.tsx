@@ -1,12 +1,16 @@
 import { neueHaas } from "@/app/fonts";
-
+import { Bell, ClipboardList } from "lucide-react";
 export default function MessageBoard() {
   return (
     <div className="mb-5 overflow-hidden rounded-[2rem] border border-blue-100 bg-white shadow-sm">
       <div className="flex items-center gap-4 border-b border-blue-100 px-5 py-4">
-        <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF2FF] text-2xl">
-          🔔
-          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#F97316] text-[11px] font-bold text-white">
+        <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF2FF]">
+  <Bell
+    size={24}
+    color="#508DB1"
+    strokeWidth={2.2}
+  />
+          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#102A43] text-[11px] font-bold text-white">
             2
           </span>
         </div>
@@ -38,9 +42,13 @@ export default function MessageBoard() {
       </div>
 
       <div className="flex items-center gap-4 px-5 py-4">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF7FF] text-2xl">
-          📄
-        </div>
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF7FF]">
+  <ClipboardList
+    size={24}
+    color="#508DB1"
+    strokeWidth={2.2}
+  />
+</div>
 
         <div className="flex-1">
           <p

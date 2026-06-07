@@ -27,6 +27,17 @@ export const learner = {
       status: "Complete",
     },
 
+{
+      name: "Afrikaans",
+      slug: "afrikaans",
+      latestMark: 67,
+      currentTopic: "Analysing Language",
+      focusArea: "Language Analysis",
+      nextActivity: "Activity 12",
+      dueDate: "Friday",
+      status: "Complete",
+    },
+
     {
       name: "History",
       slug: "history",

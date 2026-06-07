@@ -24,6 +24,14 @@ function getSubjectStyle(name: string) {
     };
   }
 
+  if (name.toLowerCase().includes("afrikaans")) {
+    return {
+      icon: "📖",
+      color: "#eb2525",
+      bg: "#EEF5FF",
+    };
+  }
+
   if (name.toLowerCase().includes("history")) {
     return {
       icon: "🏛️",

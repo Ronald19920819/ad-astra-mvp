@@ -1,5 +1,5 @@
 import TutorSuggestion from "@/components/TutorSuggestion";
-import SubjectCard from "@/components/SubjectCard";
+import SchoolOverviewCard from "@/components/SchoolOverviewCard";
 import MessageBoard from "@/components/MessageBoard";
 import MotivationalCard from "@/components/MotivationalCard";
 import HeroBanner from "@/components/HeroBanner";
@@ -26,18 +26,9 @@ export default function HomeDashboard() {
 
         <MessageBoard />
 
-       <div className="space-y-4 mb-5">
-  {learner.subjects.map((subject) => (
-    <SubjectCard
-      key={subject.slug}
-      name={subject.name}
-      latestMark={subject.latestMark}
-      focusArea={subject.focusArea}
-      currentTopic={subject.currentTopic}
-    />
-  ))}
-</div>
-<TutorSuggestion />
+       <SchoolOverviewCard />
+
+       <TutorSuggestion />
         
       </div>
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
@@ -53,8 +44,8 @@ export default function HomeDashboard() {
         Subjects
       </div>
     </Link>
-    <Link href="/activities">
-  <div className="py-4">Activities</div>
+    <Link href="/chat">
+  <div className="py-4">Chat</div>
 </Link>
 <Link href="/schedule">
   <div className="py-4">Schedule</div>

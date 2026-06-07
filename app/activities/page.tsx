@@ -108,9 +108,9 @@ export default function ActivitiesPage() {
             <div className="py-4">Subjects</div>
           </Link>
 
-          <Link href="/activities">
-            <div className="py-4">Activities</div>
-          </Link>
+          <Link href="/chat">
+  <div className="py-4">Chat</div>
+</Link>
 
           <Link href="/schedule">
             <div className="py-4">Schedule</div>

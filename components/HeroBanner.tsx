@@ -70,8 +70,8 @@ export default function HeroBanner() {
 <p
   className={`${neueHaas.className} tracking-[0.15em] uppercase`}
   style={{
-    color: "#d0d4dd",
-    fontSize: "15px",
+    color: "#ffffff",
+    fontSize: "20px",
     fontWeight: 500,
     marginTop: "8px",
   }}
