@@ -24,7 +24,7 @@ const subjects = [
     color: "#2563EB",
     bg: "#EEF5FF",
     icon: BookOpen,
-    href: "/teacher/english",
+   href: "/teacher/subjects/english"
   },
   {
     name: "Afrikaans",
@@ -33,7 +33,7 @@ const subjects = [
     color: "#eb2525",
     bg: "#FFF1F1",
     icon: BookOpen,
-    href: "/teacher/afrikaans",
+    href: "/teacher/subjects/afrikaans",
   },
   {
     name: "History",
@@ -42,7 +42,7 @@ const subjects = [
     color: "#3AAA35",
     bg: "#EEFBEA",
     icon: ScrollText,
-    href: "/teacher/history",
+    href: "/teacher/subjects/history",
   },
 ];
 
@@ -61,32 +61,31 @@ export default function TeacherSubjectsPage() {
             backgroundPosition: "center",
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
-
-          <div className="relative z-10 h-full p-6 flex flex-col pt-3">
-            <div className="flex items-center gap-4 mb-4 -mt-4">
-              <Image
-                src="/ad_astra_logo.png"
-                alt="AD Astra Logo"
-                width={70}
-                height={70}
-                unoptimized
-                className="bg-transparent"
-              />
-
-              <Image
-                src="/ad_astra_wordmark_2.png"
-                alt="AD ASTRA"
-                width={210}
-                height={55}
-                priority
-                style={{
-                  width: "210px",
-                  height: "auto",
-                }}
-              />
-            </div>
-
+           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
+          
+                    <div className="relative z-10 h-full p-5 flex flex-col pt-2">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Image
+                          src="/ad_astra_logo.png"
+                          alt="AD Astra Logo"
+                          width={58}
+                          height={58}
+                          unoptimized
+                          className="bg-transparent"
+                        />
+          
+                        <Image
+                          src="/ad_astra_wordmark_2.png"
+                          alt="AD ASTRA"
+                          width={180}
+                          height={47}
+                          priority
+                          style={{
+                            width: "180px",
+                            height: "auto",
+                          }}
+                        />
+                      </div>
             <h1
               style={{
                 color: "white",
@@ -179,7 +178,7 @@ export default function TeacherSubjectsPage() {
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm font-semibold text-black">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
           <Link href="/teacher">
             <div className="py-4">Home</div>
           </Link>

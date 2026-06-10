@@ -14,28 +14,28 @@ const ShadowsIntoLight = Shadows_Into_Light({
 });
 
 type ChatMessage = {
-  role: "learner" | "teacher";
+  role: "teacher" | "learner";
   text: string;
 };
 
 export default function TeacherRonaldChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "teacher",
-      text: "Hi Danielle, remember to review Activity 16 before Friday. Let me know if you need help with the case study questions.",
-    },
+   {
+  role: "learner",
+  text: "Sir, can you please explain the case study question again? I am not sure how much detail I need to include.",
+},
   ]);
 
   function sendMessage() {
     if (!message.trim()) return;
 
-    const learnerMessage = message;
+   const teacherMessage = message;
 
-    setMessages((previousMessages) => [
-      ...previousMessages,
-      { role: "learner", text: learnerMessage },
-    ]);
+setMessages((previousMessages) => [
+  ...previousMessages,
+  { role: "teacher", text: teacherMessage },
+]);
 
     setMessage("");
   }
@@ -46,7 +46,7 @@ export default function TeacherRonaldChatPage() {
         
         <div className="sticky top-0 z-50 border-b border-blue-100 bg-[#102A43] px-4 py-3 shadow-sm">
   <div className="mx-auto flex max-w-3xl items-center gap-3">
-    <Link href="/chat">
+    <Link href="/teacher/messages">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
         <ArrowLeft
           size={24}
@@ -57,8 +57,8 @@ export default function TeacherRonaldChatPage() {
     </Link>
 
     <Image
-      src="/re-petersen.png"
-      alt="Teacher Ronald"
+     src="/learner-profile.png"
+     alt="Danielle Coetzee"
       width={44}
       height={44}
       className="rounded-full border border-white/30 object-cover"
@@ -74,7 +74,7 @@ export default function TeacherRonaldChatPage() {
           lineHeight: 1.1,
         }}
       >
-        Teacher Ronald
+        Danielle Coetzee
       </h1>
 
       <p
@@ -86,7 +86,7 @@ export default function TeacherRonaldChatPage() {
           marginTop: "2px",
         }}
       >
-        Teacher Chat
+        Learner Chat
       </p>
     </div>
   </div>
@@ -97,7 +97,7 @@ export default function TeacherRonaldChatPage() {
             <div
               key={index}
               className={`rounded-[2rem] p-4 max-w-xl shadow-sm leading-relaxed border ${
-                chatMessage.role === "learner"
+                chatMessage.role === "teacher"
                   ? "bg-[#EEF7FF] ml-auto text-slate-800 border-blue-200"
                   : "bg-white mr-auto text-slate-800 border-blue-100"
               }`}
@@ -111,7 +111,9 @@ export default function TeacherRonaldChatPage() {
                   marginBottom: "4px",
                 }}
               >
-                {chatMessage.role === "learner" ? learner.name : "Teacher Ronald"}
+                {chatMessage.role === "teacher"
+                    ? "RE Petersen"
+                    : "Danielle Coetzee"}
               </p>
 
               <p
@@ -140,7 +142,7 @@ export default function TeacherRonaldChatPage() {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               className={`${neueHaas.className} flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-slate-800 outline-none focus:border-blue-500`}
-              placeholder="Message Teacher Ronald..."
+              placeholder="Message Danielle..."
             />
 
             <button

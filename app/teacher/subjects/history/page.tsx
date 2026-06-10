@@ -12,9 +12,10 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  ScrollText,
 } from "lucide-react";
 
-export default function TeacherBusinessStudiesPage() {
+export default function TeacherHistoryPage() {
   return (
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-36`}
@@ -71,7 +72,7 @@ export default function TeacherBusinessStudiesPage() {
                 lineHeight: 1.1,
               }}
             >
-              Business Studies
+              History
             </h1>
 
             <p
@@ -87,10 +88,10 @@ export default function TeacherBusinessStudiesPage() {
           </div>
         </div>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <section className="mb-5 rounded-[2rem] border border-green-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <BarChart3 size={22} />
+            <div className="rounded-2xl bg-[#EEFBEA] p-3 text-[#3AAA35]">
+              <ScrollText size={22} />
             </div>
 
             <div>
@@ -98,32 +99,32 @@ export default function TeacherBusinessStudiesPage() {
                 Subject Overview
               </h2>
               <p className="text-xs font-medium text-black/50">
-                Business Studies workload summary
+                History Studies workload summary
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
+            <div className="rounded-2xl bg-[#F7FFF5] p-4">
               <p className="text-2xl font-bold text-[#102A43]">8</p>
               <p className="text-xs font-medium text-black/60">Enrolled Learners</p>
             </div>
 
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
-              <p className="text-2xl font-bold text-[#F97316]">12</p>
+            <div className="rounded-2xl bg-[#F7FFF5] p-4">
+              <p className="text-2xl font-bold text-[#3AAA35]">12</p>
               <p className="text-xs font-medium text-black/60">
                 Pending Reviews
               </p>
             </div>
 
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
+            <div className="rounded-2xl bg-[#F7FFF5] p-4">
               <p className="text-2xl font-bold text-[#102A43]">4</p>
               <p className="text-xs font-medium text-black/60">
                 Lessons Published
               </p>
             </div>
 
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
+            <div className="rounded-2xl bg-[#F7FFF5] p-4">
               <p className="text-2xl font-bold text-red-500">3</p>
               <p className="text-xs font-medium text-black/60">
                 at-risk learners
@@ -132,9 +133,9 @@ export default function TeacherBusinessStudiesPage() {
           </div>
         </section>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <section className="mb-5 rounded-[2rem] border border-green-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+            <div className="rounded-2xl bg-[#EEFBEA] p-3 text-[#3AAA35]">
               <BookOpen size={22} />
             </div>
 
@@ -154,23 +155,23 @@ export default function TeacherBusinessStudiesPage() {
 
           
 
-          <Link href="/teacher/subjects/business-studies/classroom">
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
+          <Link href="/teacher/subjects/history/classroom">
+            <div className="mt-3 flex items-center justify-between rounded-2xl border border-green-100 bg-[#F7FFF5] px-4 py-3">
               <div className="flex items-center gap-3">
-                <BookOpen size={18} className="text-[#F97316]" />
+                <BookOpen size={18} className="text-[#3AAA35]" />
                 <p className="text-sm font-semibold text-black">
                   Open Classroom
                 </p>
               </div>
 
-              <span className="text-lg font-bold text-[#F97316]">→</span>
+              <span className="text-lg font-bold text-[#3AAA35]">→</span>
             </div>
           </Link>
         </section>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <section className="mb-5 rounded-[2rem] border border-green-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+            <div className="rounded-2xl bg-[#EEFBEA] p-3 text-[#3AAA35]">
               <SquarePen size={22} />
             </div>
 
@@ -188,24 +189,25 @@ export default function TeacherBusinessStudiesPage() {
             Manage lesson activities, submissions and assessment tasks.
           </p>
 
+          
 
-          <Link href="/teacher/subjects/business-studies/activities">
-            <div className="flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
+          <Link href="/teacher/subjects/history/activities">
+            <div className="flex items-center justify-between rounded-2xl border border-green-100 bg-[#F7FFF5] px-4 py-3">
               <div className="flex items-center gap-3">
-                <SquarePen size={18} className="text-[#F97316]" />
+                <SquarePen size={18} className="text-[#3AAA35]" />
                 <p className="text-sm font-semibold text-black">
                   Open Activity Centre
                 </p>
               </div>
 
-              <span className="text-lg font-bold text-[#F97316]">→</span>
+              <span className="text-lg font-bold text-[#3AAA35]">→</span>
             </div>
           </Link>
         </section>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <section className="mb-5 rounded-[2rem] border border-green-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+            <div className="rounded-2xl bg-[#EEFBEA] p-3 text-[#3AAA35]">
               <ClipboardCheck size={22} />
             </div>
 
@@ -219,15 +221,15 @@ export default function TeacherBusinessStudiesPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-orange-100">
-            <div className="grid grid-cols-4 bg-[#FFF3E6] px-3 py-3 text-xs font-bold text-[#102A43]">
+          <div className="overflow-hidden rounded-2xl border border-green-100">
+            <div className="grid grid-cols-4 bg-[#EEFBEA] px-3 py-3 text-xs font-bold text-[#102A43]">
               <p>Learner</p>
               <p>Video</p>
               <p>Reading</p>
               <p>Quiz</p>
             </div>
 
-            <div className="grid grid-cols-4 items-center border-t border-orange-100 px-3 py-3 text-xs">
+            <div className="grid grid-cols-4 items-center border-t border-green-100 px-3 py-3 text-xs">
   <p className="font-semibold text-black">Lesson 2.5</p>
 
   <AlertCircle size={16} className="text-red-500" />
@@ -239,16 +241,16 @@ export default function TeacherBusinessStudiesPage() {
             
           </div>
 
-          <Link href="/teacher/subjects/business-studies/learning-tracker">
+          <Link href="/teacher/subjects/history/learning-tracker">
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Learning Tracker
             </div>
           </Link>
         </section>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <section className="mb-5 rounded-[2rem] border border-green-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+            <div className="rounded-2xl bg-[#EEFBEA] p-3 text-[#3AAA35]">
               <FileText size={22} />
             </div>
 
@@ -262,39 +264,39 @@ export default function TeacherBusinessStudiesPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-orange-100">
-            <div className="grid grid-cols-4 bg-[#FFF3E6] px-3 py-3 text-xs font-bold text-[#102A43]">
+          <div className="overflow-hidden rounded-2xl border border-green-100">
+            <div className="grid grid-cols-4 bg-[#EEFBEA] px-3 py-3 text-xs font-bold text-[#102A43]">
               <p>Learner</p>
               <p>Submit</p>
               <p>AI Mark</p>
               <p>Status</p>
             </div>
 
-            <div className="grid grid-cols-4 items-center border-t border-orange-100 px-3 py-3 text-xs">
+            <div className="grid grid-cols-4 items-center border-t border-green-100 px-3 py-3 text-xs">
   <p className="font-semibold text-black">Activity 5</p>
 
   <p className="font-semibold text-green-600">6/8</p>
 
   <p className="font-bold text-red-500">9/20</p>
 
-  <p className="font-semibold text-[#F97316]">Needs Review</p>
+  <p className="font-semibold text-[#3AAA35]">Needs Review</p>
 </div>
 
             
           </div>
 
-          <Link href="/teacher/subjects/business-studies/activity-review">
+          <Link href="/teacher/subjects/history/activity-review">
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Activity Review
             </div>
           </Link>
         </section>
 
-        <Link href="/teacher/subjects/business-studies/learners">
-          <section className="rounded-[1.5rem] border border-orange-100 bg-white/90 p-4 shadow-sm">
+        <Link href="/teacher/subjects/history/learners">
+          <section className="rounded-[1.5rem] border border-green-100 bg-white/90 p-4 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <div className="rounded-2xl bg-[#EEFBEA] p-3 text-[#3AAA35]">
                   <Users size={20} />
                 </div>
 
@@ -308,7 +310,7 @@ export default function TeacherBusinessStudiesPage() {
                 </div>
               </div>
 
-              <span className="text-lg font-bold text-[#F97316]">→</span>
+              <span className="text-lg font-bold text-[#3AAA35]">→</span>
             </div>
           </section>
         </Link>

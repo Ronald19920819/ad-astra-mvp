@@ -28,31 +28,31 @@ export default function TeacherHomePage() {
             backgroundPosition: "center",
           }}
         >
-          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
-
-          <div className="relative z-10 h-full p-6 flex flex-col pt-3">
-           <div className="flex items-center gap-4 mb-4 -mt-4">
-  <Image
-    src="/ad_astra_logo.png"
-    alt="AD Astra Logo"
-    width={70}
-    height={70}
-    unoptimized
-    className="bg-transparent"
-  />
-
-  <Image
-    src="/ad_astra_wordmark_2.png"
-    alt="AD ASTRA"
-    width={210}
-    height={55}
-    priority
-    style={{
-      width: "210px",
-      height: "auto",
-    }}
-  />
-</div>
+           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
+          
+                    <div className="relative z-10 h-full p-5 flex flex-col pt-2">
+                      <div className="flex items-center gap-3 mb-3">
+                        <Image
+                          src="/ad_astra_logo.png"
+                          alt="AD Astra Logo"
+                          width={58}
+                          height={58}
+                          unoptimized
+                          className="bg-transparent"
+                        />
+          
+                        <Image
+                          src="/ad_astra_wordmark_2.png"
+                          alt="AD ASTRA"
+                          width={180}
+                          height={47}
+                          priority
+                          style={{
+                            width: "180px",
+                            height: "auto",
+                          }}
+                        />
+                      </div>
 
             <h1
               style={{
@@ -119,7 +119,7 @@ export default function TeacherHomePage() {
             <div className="rounded-2xl bg-[#F8FBFF] p-4">
               <p className="text-2xl font-bold text-red-500">5</p>
               <p className="text-xs font-medium text-black/60">
-                Need Attention
+                at-risk learners
               </p>
             </div>
           </div>
@@ -220,13 +220,15 @@ export default function TeacherHomePage() {
             <div className="py-4">Subjects</div>
           </Link>
 
-          <Link href="/teacher/review">
-            <div className="py-4">Review</div>
-          </Link>
-
+        
           <Link href="/teacher/messages">
             <div className="py-4">Messages</div>
           </Link>
+
+           <Link href="/teacher/reports">
+            <div className="py-4">Reports</div>
+          </Link>
+
 
           <Link href="/teacher/profile">
             <div className="py-4">Profile</div>

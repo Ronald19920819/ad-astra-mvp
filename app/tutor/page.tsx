@@ -142,7 +142,7 @@ export default function TutorLandingPage() {
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm font-semibold text-black">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm text-black">
           <Link href="/home"><div className="py-4">Home</div></Link>
           <Link href="/subjects"><div className="py-4">Subjects</div></Link>
           <Link href="/chat"><div className="py-4">Chat</div></Link>
