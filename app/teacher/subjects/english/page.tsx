@@ -220,27 +220,8 @@ export default function TeacherEnglishPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-blue-100">
-            <div className="grid grid-cols-4 bg-[#EEF5FF] px-3 py-3 text-xs font-bold text-[#102A43]">
-              <p>Learner</p>
-              <p>Video</p>
-              <p>Reading</p>
-              <p>Quiz</p>
-            </div>
-
-            <div className="grid grid-cols-4 items-center border-t border-blue-100 px-3 py-3 text-xs">
-  <p className="font-semibold text-black">Lesson 2.5</p>
-
-  <AlertCircle size={16} className="text-red-500" />
-
-  <CheckCircle2 size={16} className="text-green-600" />
-
-  <p className="font-bold text-red-500">9/20</p>
-</div>
-            
-          </div>
-
-          <Link href="/teacher/subjects/english/learning-tracker">
+          
+          <Link href="/teacher/subjects/english/tracker">
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Learning Tracker
             </div>
@@ -263,28 +244,9 @@ export default function TeacherEnglishPage() {
             </div>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-blue-100">
-            <div className="grid grid-cols-4 bg-[#EEF5FF] px-3 py-3 text-xs font-bold text-[#102A43]">
-              <p>Learner</p>
-              <p>Submit</p>
-              <p>AI Mark</p>
-              <p>Status</p>
-            </div>
+          
 
-            <div className="grid grid-cols-4 items-center border-t border-blue-100 px-3 py-3 text-xs">
-  <p className="font-semibold text-black">Activity 5</p>
-
-  <p className="font-semibold text-green-600">6/8</p>
-
-  <p className="font-bold text-red-500">9/20</p>
-
-  <p className="font-semibold text-[#2563EB]">Needs Review</p>
-</div>
-
-            
-          </div>
-
-          <Link href="/teacher/subjects/english/activity-review">
+          <Link href="/teacher/subjects/english/review">
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Activity Review
             </div>

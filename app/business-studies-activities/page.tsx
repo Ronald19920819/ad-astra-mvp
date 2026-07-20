@@ -1,21 +1,182 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowLeft,
-  SquarePen,
   ChevronDown,
+  ChevronRight,
   Clock,
-  CheckCircle2,
-  AlertCircle,
+  SquarePen,
 } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
+import {
+  getLearnerPublishedActivities,
+  type LearnerPublishedActivity,
+} from "@/lib/supabase/activityReader";
+
+const businessStudiesSubjectId =
+  "c472f3c9-0e6f-40de-a748-3ad9400ac069";
+function ActivityCard({ activity }: { activity: LearnerPublishedActivity }) {
+  const hasSchedule =
+    activity.lesson.term_number !== null &&
+    activity.lesson.week_number !== null;
+
+  return (
+    <Link
+      href={`/business-studies-activities/${activity.id}`}
+      data-activity-id={activity.id}
+      className="block"
+    >
+      <div className="rounded-2xl border border-orange-100 bg-[#FFFDF9] p-4 shadow-sm">
+        <div className="mb-2 flex items-center gap-3">
+          <SquarePen size={18} className="shrink-0 text-[#F97316]" />
+          <p className="text-sm font-bold text-black">{activity.title}</p>
+        </div>
+
+        <p className="text-sm text-black/60">
+          Lesson {activity.lesson.lesson_number} — {activity.lesson.title}
+        </p>
+
+        <p className="mt-2 text-xs font-semibold text-slate-600">
+          {hasSchedule && (
+            <>
+              Term {activity.lesson.term_number} · Week{" "}
+              {activity.lesson.week_number} ·{" "}
+            </>
+          )}
+          {activity.total_marks} marks
+        </p>
+
+        {activity.due_date && (
+          <div className="mt-3 flex items-center gap-2 text-xs font-semibold text-[#F97316]">
+            <Clock size={14} />
+            <p>
+              Due{" "}
+              {new Date(activity.due_date).toLocaleDateString("en-ZA", {
+                timeZone: "UTC",
+              })}
+            </p>
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}
 
 export default function BusinessStudiesActivities() {
+  const [activities, setActivities] = useState<LearnerPublishedActivity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [allActivitiesOpen, setAllActivitiesOpen] = useState(false);
+  const [openWeekKey, setOpenWeekKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadActivities() {
+      try {
+        setIsLoading(true);
+        setLoadError("");
+        const publishedActivities = await getLearnerPublishedActivities(
+          businessStudiesSubjectId,
+        );
+        setActivities(publishedActivities);
+      } catch (error) {
+        console.error("Unable to load learner Business Studies activities:", error);
+        setLoadError("Unable to load activities");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadActivities();
+  }, []);
+
+  const scheduledActivities = activities
+    .filter(
+      (activity) =>
+        activity.lesson.term_number !== null &&
+        activity.lesson.week_number !== null,
+    )
+    .sort((activityA, activityB) => {
+      if (activityA.lesson.term_number !== activityB.lesson.term_number) {
+        return (
+          (activityB.lesson.term_number ?? 0) -
+          (activityA.lesson.term_number ?? 0)
+        );
+      }
+
+      if (activityA.lesson.week_number !== activityB.lesson.week_number) {
+        return (
+          (activityB.lesson.week_number ?? 0) -
+          (activityA.lesson.week_number ?? 0)
+        );
+      }
+
+      return (
+        new Date(activityB.created_at).getTime() -
+        new Date(activityA.created_at).getTime()
+      );
+    });
+  const newestScheduledActivity = scheduledActivities[0];
+  const currentTerm = newestScheduledActivity?.lesson.term_number ?? null;
+  const currentWeek = newestScheduledActivity?.lesson.week_number ?? null;
+  const currentActivities = scheduledActivities.filter(
+    (activity) =>
+      activity.lesson.term_number === currentTerm &&
+      activity.lesson.week_number === currentWeek,
+  );
+
+  const activityGroups = Object.values(
+    activities.reduce<
+      Record<
+        string,
+        {
+          key: string;
+          termNumber: number | null;
+          weekNumber: number | null;
+          activities: LearnerPublishedActivity[];
+        }
+      >
+    >((groups, activity) => {
+      const termNumber = activity.lesson.term_number;
+      const weekNumber = activity.lesson.week_number;
+      const key =
+        termNumber === null || weekNumber === null
+          ? "unscheduled"
+          : `${termNumber}-${weekNumber}`;
+
+      if (!groups[key]) {
+        groups[key] = {
+          key,
+          termNumber,
+          weekNumber,
+          activities: [],
+        };
+      }
+
+      groups[key].activities.push(activity);
+      return groups;
+    }, {}),
+  ).sort((groupA, groupB) => {
+    if (groupA.termNumber === null || groupA.weekNumber === null) return 1;
+    if (groupB.termNumber === null || groupB.weekNumber === null) return -1;
+    if (groupA.termNumber !== groupB.termNumber) {
+      return groupB.termNumber - groupA.termNumber;
+    }
+    return groupB.weekNumber - groupA.weekNumber;
+  });
+
+  function toggleAllActivities() {
+    if (allActivitiesOpen) setOpenWeekKey(null);
+    setAllActivitiesOpen(!allActivitiesOpen);
+  }
+
   return (
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12`}
     >
-      <div className="max-w-md mx-auto">
+      <div className="mx-auto max-w-md">
         <div className="mb-6 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg">
           <div className="flex items-center gap-4">
             <Link href="/business-studies-dashboard">
@@ -34,10 +195,7 @@ export default function BusinessStudiesActivities() {
               <h1 className="text-lg font-bold">
                 Business Studies Activities
               </h1>
-
-              <p className="text-sm text-blue-100">
-                Teacher Ronald
-              </p>
+              <p className="text-sm text-blue-100">Teacher Ronald</p>
             </div>
           </div>
         </div>
@@ -53,216 +211,126 @@ export default function BusinessStudiesActivities() {
                 Current Activities
               </h2>
               <p className="text-sm text-black/60">
-                Complete this week&apos;s work
+                {currentTerm !== null && currentWeek !== null
+                  ? `Term ${currentTerm} · Week ${currentWeek}`
+                  : "Complete this week's work"}
               </p>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <Link href="/business-studies-activity">
-              <div className="rounded-2xl border border-orange-100 bg-[#FFFDF9] p-4 shadow-sm">
-                <div className="mb-2 flex items-center gap-3">
-                  <SquarePen size={18} className="text-[#F97316]" />
-                  <p className="text-sm font-bold text-black">
-                    Activity 15 - Lesson 2.5
-                  </p>
-                </div>
-
-                <p className="mb-3 text-sm text-black/60">
-                  Market Changes
-                </p>
-
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#F97316]">
-                  <Clock size={14} />
-                  <p>Due Friday</p>
-                </div>
-              </div>
-            </Link>
-
-            <Link href="/business-studies-activity">
-              <div className="rounded-2xl border border-orange-100 bg-[#FFFDF9] p-4 shadow-sm">
-                <div className="mb-2 flex items-center gap-3">
-                  <SquarePen size={18} className="text-[#F97316]" />
-                  <p className="text-sm font-bold text-black">
-                    Activity 16 - Lesson 2.6
-                  </p>
-                </div>
-
-                <p className="mb-3 text-sm text-black/60">
-                  Changing Customer Needs
-                </p>
-
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#F97316]">
-                  <Clock size={14} />
-                  <p>Due Friday</p>
-                </div>
-              </div>
-            </Link>
-          </div>
+          {isLoading ? (
+            <p className="text-sm text-black/60">Loading activities...</p>
+          ) : loadError ? (
+            <p className="text-sm font-semibold text-red-600">{loadError}</p>
+          ) : activities.length === 0 ? (
+            <p className="text-sm text-black/60">
+              No published activities available
+            </p>
+          ) : currentActivities.length === 0 ? (
+            <p className="text-sm text-black/60">
+              No activities are linked to a scheduled lesson.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {currentActivities.map((activity) => (
+                <ActivityCard key={activity.id} activity={activity} />
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
-  <div className="mb-4 flex items-center justify-between">
-    <div>
-      <h2 className="text-lg font-bold text-[#102A43]">
-        All Weeks
-      </h2>
-      <p className="text-sm text-black/60">
-        Tap a week to view its activities
-      </p>
-    </div>
-
-    <ChevronDown size={22} className="text-[#F97316]" />
-  </div>
-
-  <div className="space-y-3">
-    <details className="rounded-2xl border border-orange-100 bg-white p-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-[#102A43]">
-            Week 3 • Term 2
-          </h3>
-
-          <p className="text-xs text-black/50">
-            2 current activities
-          </p>
-        </div>
-
-        <span className="rounded-full bg-[#FFF3E6] px-3 py-1 text-xs font-semibold text-[#F97316]">
-          Current
-        </span>
-      </summary>
-
-      <div className="mt-4 space-y-2">
-        <Link href="/business-studies-activity">
-          <div className="rounded-2xl bg-[#FFFDF9] p-4 shadow-sm border border-orange-100">
-            <div className="mb-1 flex items-center gap-3">
-              <SquarePen size={18} className="text-[#F97316]" />
-              <p className="text-sm font-bold text-black">
-                Activity 15 - Lesson 2.5
+          <button
+            type="button"
+            onClick={toggleAllActivities}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <div>
+              <h2 className="text-lg font-bold text-[#102A43]">
+                All Activities
+              </h2>
+              <p className="text-sm text-black/60">
+                Tap a week to view its activities
               </p>
             </div>
 
-            <p className="text-sm text-black/60">
-              Market Changes
-            </p>
-          </div>
-        </Link>
+            {allActivitiesOpen ? (
+              <ChevronDown size={22} className="text-[#F97316]" />
+            ) : (
+              <ChevronRight size={22} className="text-[#F97316]" />
+            )}
+          </button>
 
-        <Link href="/business-studies-activity">
-          <div className="rounded-2xl bg-[#FFFDF9] p-4 shadow-sm border border-orange-100">
-            <div className="mb-1 flex items-center gap-3">
-              <SquarePen size={18} className="text-[#F97316]" />
-              <p className="text-sm font-bold text-black">
-                Activity 16 - Lesson 2.6
-              </p>
+          {allActivitiesOpen && (
+            <div className="mt-4 space-y-3">
+              {isLoading ? (
+                <p className="text-sm text-black/60">Loading activities...</p>
+              ) : loadError ? (
+                <p className="text-sm font-semibold text-red-600">
+                  {loadError}
+                </p>
+              ) : activityGroups.length === 0 ? (
+                <p className="text-sm text-black/60">
+                  No published activities available
+                </p>
+              ) : (
+                activityGroups.map((group) => {
+                  const weekIsOpen = openWeekKey === group.key;
+                  const hasSchedule =
+                    group.termNumber !== null && group.weekNumber !== null;
+
+                  return (
+                    <div
+                      key={group.key}
+                      className="overflow-hidden rounded-2xl border border-orange-100 bg-white"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenWeekKey((currentKey) =>
+                            currentKey === group.key ? null : group.key,
+                          )
+                        }
+                        className="flex w-full items-center justify-between p-4 text-left"
+                      >
+                        <div>
+                          <h3 className="text-sm font-bold text-[#102A43]">
+                            {hasSchedule
+                              ? `Term ${group.termNumber} · Week ${group.weekNumber}`
+                              : "Term and week not set"}
+                          </h3>
+                          <p className="text-xs text-black/50">
+                            {group.activities.length}{" "}
+                            {group.activities.length === 1
+                              ? "activity"
+                              : "activities"}
+                          </p>
+                        </div>
+
+                        {weekIsOpen ? (
+                          <ChevronDown size={20} className="text-[#F97316]" />
+                        ) : (
+                          <ChevronRight size={20} className="text-[#F97316]" />
+                        )}
+                      </button>
+
+                      {weekIsOpen && (
+                        <div className="space-y-3 border-t border-orange-100 p-3">
+                          {group.activities.map((activity) => (
+                            <ActivityCard
+                              key={activity.id}
+                              activity={activity}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
-
-            <p className="text-sm text-black/60">
-              Changing Customer Needs
-            </p>
-          </div>
-        </Link>
-      </div>
-    </details>
-
-    <details className="rounded-2xl border border-orange-100 bg-white p-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-[#102A43]">
-            Week 2 • Term 2
-          </h3>
-
-          <p className="text-xs text-black/50">
-            2 activities
-          </p>
-        </div>
-
-        <CheckCircle2 size={18} className="text-green-600" />
-      </summary>
-
-      <div className="mt-4 space-y-2">
-        <Link href="/business-studies-activity">
-          <div className="rounded-2xl bg-[#FFFDF9] p-4 shadow-sm border border-orange-100">
-            <div className="mb-1 flex items-center gap-3">
-              <SquarePen size={18} className="text-[#F97316]" />
-              <p className="text-sm font-bold text-black">
-                Activity 13 - Lesson 2.3
-              </p>
-            </div>
-
-            <p className="text-sm text-black/60">
-              Consumer Markets
-            </p>
-          </div>
-        </Link>
-
-        <Link href="/business-studies-activity">
-          <div className="rounded-2xl bg-[#FFFDF9] p-4 shadow-sm border border-orange-100">
-            <div className="mb-1 flex items-center gap-3">
-              <SquarePen size={18} className="text-[#F97316]" />
-              <p className="text-sm font-bold text-black">
-                Activity 14 - Lesson 2.4
-              </p>
-            </div>
-
-            <p className="text-sm text-black/60">
-              Industrial Markets
-            </p>
-          </div>
-        </Link>
-      </div>
-    </details>
-
-    <details className="rounded-2xl border border-orange-100 bg-white p-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-[#102A43]">
-            Week 1 • Term 2
-          </h3>
-
-          <p className="text-xs text-black/50">
-            2 activities
-          </p>
-        </div>
-
-        <AlertCircle size={18} className="text-red-500" />
-      </summary>
-
-      <div className="mt-4 space-y-2">
-        <Link href="/business-studies-activity">
-          <div className="rounded-2xl bg-[#FFFDF9] p-4 shadow-sm border border-orange-100">
-            <div className="mb-1 flex items-center gap-3">
-              <SquarePen size={18} className="text-[#F97316]" />
-              <p className="text-sm font-bold text-black">
-                Activity 11 - Lesson 2.1
-              </p>
-            </div>
-
-            <p className="text-sm text-black/60">
-              Role of Marketing
-            </p>
-          </div>
-        </Link>
-
-        <Link href="/business-studies-activity">
-          <div className="rounded-2xl bg-[#FFFDF9] p-4 shadow-sm border border-orange-100">
-            <div className="mb-1 flex items-center gap-3">
-              <SquarePen size={18} className="text-[#F97316]" />
-              <p className="text-sm font-bold text-black">
-                Activity 12 - Lesson 2.2
-              </p>
-            </div>
-
-            <p className="text-sm text-black/60">
-              Market Research
-            </p>
-          </div>
-        </Link>
-      </div>
-    </details>
-  </div>
-</section>
+          )}
+        </section>
       </div>
     </main>
   );
