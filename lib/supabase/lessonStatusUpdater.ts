@@ -1,29 +1,15 @@
-import { createClient } from "@/lib/supabase/client";
+import { teacherApiRequest } from "@/lib/supabase/teacherApiClient";
 
 export async function updateLessonStatus(
+  subjectId: string,
   lessonId: string,
   status: "draft" | "published",
 ) {
-  const supabase = createClient();
-
-  const { data, error } = await supabase
-  .from("lessons")
-  .update({
-    status,
-  })
-  .eq("id", lessonId)
-  .select("id, status")
-  .maybeSingle();
-
-if (error) {
-  throw new Error(error.message);
-}
-
-if (!data) {
-  throw new Error(
-    "The lesson was not updated. Check the lesson ID and Supabase update permissions.",
+  return teacherApiRequest<{ id: string; status: "draft" | "published" }>(
+    "/api/teacher/business-studies/lessons",
+    {
+      method: "POST",
+      body: JSON.stringify({ action: "status", subjectId, lessonId, status }),
+    },
   );
-}
-
-return data;
 }

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+import { teacherApiRequest } from "@/lib/supabase/teacherApiClient";
 
 type PublishLessonInput = {
   subjectId: string;
@@ -8,6 +8,8 @@ type PublishLessonInput = {
   displayOrder?: number;
   termNumber: number;
   weekNumber: number;
+  topicId?: string | null;
+  expectedCompletionDate?: string | null;
   status?: "draft" | "published";
 };
 
@@ -19,35 +21,27 @@ export async function publishLesson({
   displayOrder,
   termNumber,
   weekNumber,
+  topicId = null,
+  expectedCompletionDate = null,
   status = "draft",
 }: PublishLessonInput) {
-    const supabase = createClient();
-  const { data, error } = await supabase
-    .from("lessons")
-    .insert({
-  subject_id: subjectId,
-  lesson_number: lessonNumber,
-  title,
-  description: description ?? "",
-  display_order: displayOrder ?? 0,
-  term_number: termNumber,
-  week_number: weekNumber,
-  status,
-  
-})
-    .select()
-    .single();
-
-  if (error) {
-  console.error("Supabase lesson publish error:", {
-    message: error.message,
-    details: error.details,
-    hint: error.hint,
-    code: error.code,
-  });
-
-  throw new Error(error.message);
-}
-
-  return data;
+  return teacherApiRequest<{ id: string }>(
+    "/api/teacher/business-studies/lessons",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        action: "create",
+        subjectId,
+        lessonNumber,
+        title,
+        description,
+        displayOrder,
+        termNumber,
+        weekNumber,
+        topicId,
+        expectedCompletionDate,
+        status,
+      }),
+    },
+  );
 }

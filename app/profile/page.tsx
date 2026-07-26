@@ -1,17 +1,25 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Shadows_Into_Light } from "next/font/google";
-import { learner } from "@/data/learners";
 import { neueHaas } from "@/app/fonts";
+import { createClient } from "@/lib/supabase/client";
+import { LearnerAvatar } from "@/components/learners/LearnerAvatar";
+import { useAuthenticatedLearnerProfile } from "@/lib/learners/useAuthenticatedLearnerProfile";
+import { PasswordResetButton } from "@/components/profiles/PasswordResetButton";
 import {
   User,
   FileText,
   Coins,
   Settings,
-  Lock,
   CreditCard,
   BookOpen,
   BookX,
+  LogOut,
+  Rocket,
 } from "lucide-react";
 
 const shadowsIntoLight = Shadows_Into_Light({
@@ -22,6 +30,39 @@ const shadowsIntoLight = Shadows_Into_Light({
 
 
 export default function ProfilePage() {
+  const router = useRouter();
+  const { profile, journey, isLoading } = useAuthenticatedLearnerProfile();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const [settingsNotice, setSettingsNotice] = useState("");
+  const profileName =
+    profile?.fullName ?? (isLoading ? "Loading profile..." : "Name unavailable");
+
+  async function signOut() {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    setSignOutError("");
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        setSignOutError("Unable to sign out. Please try again.");
+        return;
+      }
+
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Learner sign-out failed:", error);
+      setSignOutError("Unable to sign out. Please try again.");
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
   return (
    <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-28`}>
       <div className="max-w-md mx-auto">
@@ -43,7 +84,7 @@ export default function ProfilePage() {
   />
 
   <h1 className={`${shadowsIntoLight.className} mt-2 text-[34px] text-black leading-tight`}>
-    {learner.name}
+    {profileName}
   </h1>
 
   <p className="mt-1 text-sm font-medium text-black/60">
@@ -52,13 +93,16 @@ export default function ProfilePage() {
 
   <div className="relative mt-5">
     <div className="h-32 w-32 overflow-hidden rounded-full border-4 border-white bg-white shadow-lg">
-      <Image
-        src="/learner-profile.png"
-        alt="Learner Profile Picture"
-        width={128}
-        height={128}
-        className="h-full w-full object-cover"
-      />
+      {profile ? (
+        <LearnerAvatar profile={profile} />
+      ) : (
+        <div
+          aria-label={isLoading ? "Loading learner profile" : "Learner profile unavailable"}
+          className="flex h-full w-full items-center justify-center bg-[#EEF7FF] text-sm font-semibold text-[#102A43]"
+        >
+          {isLoading ? "Loading..." : "Unavailable"}
+        </div>
+      )}
     </div>
 
     <div className="absolute bottom-1 right-1 rounded-full bg-[#102A43] px-3 py-1 text-xs font-semibold text-white shadow-sm">
@@ -84,11 +128,111 @@ export default function ProfilePage() {
           </div>
 
           <div className="space-y-3 text-sm text-black">
-            <p><span className="font-semibold">Name and Surname:</span> {learner.name}</p>
-            <p><span className="font-semibold">Learner ID:</span> 001</p>
-            <p><span className="font-semibold">Subjects:</span> 4</p>
-            <p><span className="font-semibold">School:</span> Clift College</p>
+            <p><span className="font-semibold">Full Name:</span> {profileName}</p>
+            <p className="break-all"><span className="font-semibold">Learner ID:</span> {profile?.learnerProfileId ?? (isLoading ? "Loading..." : "Unavailable")}</p>
+            <p><span className="font-semibold">Email:</span> {profile?.email ?? "Not supplied"}</p>
+            <p><span className="font-semibold">Subjects:</span> {profile?.enrolledSubjectCount ?? (isLoading ? "Loading..." : "0")}</p>
+            <p>
+              <span className="font-semibold">Approved subjects:</span>{" "}
+              {profile?.approvedSubjects.length
+                ? profile.approvedSubjects
+                    .map((subject) => subject.name)
+                    .join(", ")
+                : "None"}
+            </p>
+            <p>
+              <span className="font-semibold">Pending requests:</span>{" "}
+              {profile?.pendingSubjects.length
+                ? profile.pendingSubjects
+                    .map((subject) => subject.name)
+                    .join(", ")
+                : "None"}
+            </p>
+            <p>
+              <span className="font-semibold">Declined requests:</span>{" "}
+              {profile?.declinedSubjects.length
+                ? profile.declinedSubjects
+                    .map((subject) => subject.name)
+                    .join(", ")
+                : "None"}
+            </p>
+            <p><span className="font-semibold">School:</span> {profile?.school ?? "Not supplied"}</p>
+            <p><span className="font-semibold">Grade / Stage:</span> {profile?.gradeStage ?? "Not supplied"}</p>
+            <p>
+              <span className="font-semibold">Account status:</span>{" "}
+              {profile?.accountStatus
+                ? `${profile.accountStatus.charAt(0).toUpperCase()}${profile.accountStatus.slice(1)}`
+                : isLoading
+                  ? "Loading..."
+                  : "Unavailable"}
+            </p>
           </div>
+        </section>
+
+        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
+              <Rocket size={22} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-[#102A43]">
+                My AD Astra Journey
+              </h2>
+              <p className="text-xs font-medium text-black/50">
+                Your progress across approved subjects
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-2xl bg-[#F8FBFF] p-4">
+              <p className="font-semibold text-black/60">
+                Overall Subject Average
+              </p>
+              <p className="mt-1 text-xl font-bold text-[#102A43]">
+                {journey?.overallSubjectAverage === null ||
+                journey?.overallSubjectAverage === undefined
+                  ? "Not available"
+                  : `${Math.round(journey.overallSubjectAverage * 10) / 10}%`}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[#FFF8E6] p-4">
+              <p className="font-semibold text-black/60">
+                Current Achievement
+              </p>
+              <p className="mt-1 font-bold text-[#D9A106]">
+                {journey?.currentAchievement ?? "Mission Not Started"}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[#F8FBFF] p-4">
+              <p className="font-semibold text-black/60">Active Subjects</p>
+              <p className="mt-1 text-xl font-bold text-[#102A43]">
+                {journey?.activeSubjects ?? 0}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-[#F8FBFF] p-4">
+              <p className="font-semibold text-black/60">
+                Completed Activities
+              </p>
+              <p className="mt-1 text-xl font-bold text-[#102A43]">
+                {journey?.completedActivities ?? 0}
+              </p>
+            </div>
+          </div>
+
+          {!isLoading && (journey?.activeSubjects ?? 0) === 0 && (
+            <p className="mt-4 text-sm text-black/60">
+              Your progress will appear after subjects are approved and marked
+              activities become available.
+            </p>
+          )}
+
+          <Link
+            href="/your-work"
+            className="mt-4 block w-full rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
+          >
+            View My Work
+          </Link>
         </section>
 
         <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
@@ -99,7 +243,7 @@ export default function ProfilePage() {
 
             <div>
               <h2 className="text-lg font-bold text-[#102A43]">
-                Learner Reports
+                Learner Report Card
               </h2>
               <p className="text-xs font-medium text-black/50">
                 Teacher progress updates
@@ -134,8 +278,8 @@ export default function ProfilePage() {
 
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-5xl font-bold text-[#D9A106]">0</p>
-              <p className="text-sm text-black/60">Coins earned</p>
+              <p className="text-2xl font-bold text-[#D9A106]">Coming soon</p>
+              <p className="text-sm text-black/60">Coins are not active yet</p>
             </div>
 
             <p className="max-w-[170px] text-right text-sm leading-relaxed text-black/70">
@@ -161,25 +305,59 @@ export default function ProfilePage() {
           </div>
 
           <div className="space-y-3">
-            <button className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black">
-              <Lock size={18} className="text-[#508DB1]" />
-              Change Password
-            </button>
+            <PasswordResetButton className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black disabled:opacity-60" />
 
-            <button className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black">
+            <Link
+              href="/onboarding/subjects"
+              className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black"
+            >
+              <BookOpen size={18} className="text-[#508DB1]" />
+              Register for Additional Subjects
+            </Link>
+
+            <Link
+              href="/onboarding/subjects"
+              className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black"
+            >
+              <BookX size={18} className="text-[#508DB1]" />
+              Deregister Subjects
+            </Link>
+
+            <button
+              type="button"
+              onClick={() =>
+                setSettingsNotice("Subscription upgrades are not available yet.")
+              }
+              className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black"
+            >
               <CreditCard size={18} className="text-[#508DB1]" />
               Upgrade Subscription Plan
             </button>
 
-            <button className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black">
-              <BookOpen size={18} className="text-[#508DB1]" />
-              Register for Subjects
+            {settingsNotice && (
+              <p className="rounded-2xl bg-[#EEF7FF] px-4 py-3 text-sm font-medium text-[#102A43]">
+                {settingsNotice}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={isSigningOut}
+              className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-red-600 disabled:cursor-wait disabled:opacity-60"
+            >
+              <LogOut size={18} aria-hidden="true" />
+              {isSigningOut ? "Signing out..." : "Sign Out"}
             </button>
 
-            <button className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black">
-              <BookX size={18} className="text-[#508DB1]" />
-              Deregister Subjects
-            </button>
+            {signOutError && (
+              <p
+                role="alert"
+                className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
+              >
+                {signOutError}
+              </p>
+            )}
           </div>
         </section>
       </div>

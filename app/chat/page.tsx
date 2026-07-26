@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 import { neueHaas } from "@/app/fonts";
 import {
   MessageCircle,
@@ -90,7 +90,7 @@ export default function ChatPage() {
                 marginTop: "6px",
               }}
             >
-              {learner.name} • Talk to your teachers.
+              <AuthenticatedLearnerName /> • Talk to your teachers.
             </p>
           </div>
         </div>
@@ -116,17 +116,17 @@ export default function ChatPage() {
               <div className="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <Image
-                      src="/re-petersen.png"
-                      alt="RE Petersen"
-                      width={48}
-                      height={48}
-                      className="rounded-full border border-blue-100 object-cover"
-                    />
+                    <div
+                      role="img"
+                      aria-label="Teacher profile"
+                      className="flex h-12 w-12 items-center justify-center rounded-full border border-blue-100 bg-[#EEF7FF] font-bold text-[#102A43]"
+                    >
+                      T
+                    </div>
 
                     <div>
                       <p className="text-sm font-bold text-black">
-                        RE Petersen
+                        Teacher
                       </p>
                       <p className="mt-1 text-xs text-black/50">
                         Business Studies • New message

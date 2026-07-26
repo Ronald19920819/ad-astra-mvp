@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 import { neueHaas } from "@/app/fonts";
 import { Plus, MessageCircle, Clock } from "lucide-react";
 
@@ -81,7 +81,7 @@ export default function TutorLandingPage() {
                 marginTop: "6px",
               }}
             >
-              {learner.name} • Continue your learning projects.
+              <AuthenticatedLearnerName /> • Continue your learning projects.
             </p>
           </div>
         </div>

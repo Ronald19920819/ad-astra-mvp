@@ -1,7 +1,7 @@
 import { neueHaas } from "@/app/fonts";
 import Image from "next/image";
 import { Shadows_Into_Light } from "next/font/google";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 
 const  ShadowsIntoLight =  Shadows_Into_Light({
   weight: "400",
@@ -52,7 +52,7 @@ export default function HeroBanner() {
     fontWeight: 400,
   }}
 >
-  {learner.name}
+  <AuthenticatedLearnerName />
 </h1>
 
 <div

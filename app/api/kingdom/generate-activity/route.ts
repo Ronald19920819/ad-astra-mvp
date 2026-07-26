@@ -1,10 +1,16 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { buildBusinessStudiesKingdomPrompt } from "@/lib/kingdom/author/business-studies/cambridge/promptBuilder";
-import { createSupabaseAdminClient } from "@/lib/supabase/server";
-
-const businessStudiesSubjectId =
-  "c472f3c9-0e6f-40de-a748-3ad9400ac069";
+import {
+  authorizeTeacher,
+  teacherAuthorizationResponse,
+} from "@/lib/supabase/teacherAuth";
+import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import { readingContentToPlainText } from "@/lib/readings/structuredReading";
+import {
+  getSubjectConfiguration,
+  isSubjectKey,
+} from "@/lib/subjects/subjectConfig";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,9 +18,20 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
+    const subjectKey =
+      typeof body.subjectKey === "string" && isSubjectKey(body.subjectKey)
+        ? body.subjectKey
+        : "business-studies";
+    const subject = getSubjectConfiguration(subjectKey);
+    const authorization = await authorizeTeacher(subject.databaseId);
+    if (!authorization.success) {
+      return teacherAuthorizationResponse(authorization);
+    }
 
-    const { linkedLesson, activityTitle, questions } = body;
+    const { linkedLesson, questions } = body;
+    const activityTitle =
+      typeof body.activityTitle === "string" ? body.activityTitle : undefined;
     const lessonId = linkedLesson;
 
     if (typeof lessonId !== "string" || !lessonId.trim()) {
@@ -42,7 +59,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createSupabaseAdminClient();
+    const supabase = authorization.teacher.admin;
     const { data: lesson, error: lessonError } = await supabase
       .from("lessons")
       .select("id, title, subject_id, status")
@@ -76,9 +93,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (lesson.subject_id !== businessStudiesSubjectId) {
+    if (lesson.subject_id !== subject.databaseId) {
       return NextResponse.json(
-        { error: "The selected lesson is not a Business Studies lesson." },
+        { error: `The selected lesson is not a ${subject.displayName} lesson.` },
         { status: 403 },
       );
     }
@@ -105,7 +122,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const lessonReading = readingMaterial?.content_text?.trim();
+    const lessonReading = readingContentToPlainText(
+      readingMaterial?.content_text ?? null,
+    ).trim();
 
     if (!readingMaterial || !lessonReading) {
       return NextResponse.json(
@@ -117,7 +136,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const subjectContext = buildKingdomSubjectContext({
+      subjectKey,
+      role: "Author",
+      taskType: "Generate assessment activity",
+    });
     const prompt = buildBusinessStudiesKingdomPrompt({
+      subjectContext,
       lessonTitle: lesson.title,
       lessonReading,
       activityTitle,

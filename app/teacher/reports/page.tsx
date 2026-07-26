@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { neueHaas } from "@/app/fonts";
+import { AuthenticatedTeacherName } from "@/components/teachers/AuthenticatedTeacherName";
 import {
   FileText,
   Download,
@@ -62,7 +63,7 @@ export default function TeacherReportsPage() {
             </h1>
 
             <p className="mt-1 text-sm font-medium text-[#d0d4dd]">
-              RE Petersen • Generate learner progress reports.
+              <AuthenticatedTeacherName /> • Generate learner progress reports.
             </p>
           </div>
         </div>

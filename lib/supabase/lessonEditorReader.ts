@@ -13,8 +13,10 @@ export type LessonEditorData = {
     id: string;
     lesson_number: string;
     title: string;
-    term_number: number;
-    week_number: number;
+    term_number: number | null;
+    week_number: number | null;
+    topic_id: string | null;
+    expected_completion_date: string | null;
     status: "draft" | "published";
   };
   reading: {
@@ -36,7 +38,8 @@ export type LessonEditorData = {
 };
 
 export async function getLessonEditorData(
-  lessonId: string
+  lessonId: string,
+  subjectId: string,
 ): Promise<LessonEditorData> {
   const supabase = createClient();
 
@@ -45,10 +48,13 @@ export async function getLessonEditorData(
     .select(
       `
       id,
+      subject_id,
       lesson_number,
       title,
       term_number,
       week_number,
+      topic_id,
+      expected_completion_date,
       status
       `
     )
@@ -57,6 +63,9 @@ export async function getLessonEditorData(
 
   if (lessonError) {
     throw new Error(lessonError.message);
+  }
+  if (lesson.subject_id !== subjectId) {
+    throw new Error("The lesson belongs to a different subject.");
   }
 
   const { data: materials, error: materialsError } = await supabase
@@ -126,7 +135,16 @@ export async function getLessonEditorData(
   }
 
   return {
-    lesson,
+    lesson: {
+      id: lesson.id,
+      lesson_number: lesson.lesson_number,
+      title: lesson.title,
+      term_number: lesson.term_number,
+      week_number: lesson.week_number,
+      topic_id: lesson.topic_id,
+      expected_completion_date: lesson.expected_completion_date,
+      status: lesson.status,
+    },
     reading: readingMaterial
       ? {
           id: readingMaterial.id,

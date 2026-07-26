@@ -1,29 +1,22 @@
 "use client";
 
-import { Shadows_Into_Light } from "next/font/google";
-import Image from "next/image";
 import { useState } from "react";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 import { neueHaas } from "@/app/fonts";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-
-const ShadowsIntoLight = Shadows_Into_Light({
-  weight: "400",
-  subsets: ["latin"],
-});
 
 type ChatMessage = {
   role: "learner" | "teacher";
   text: string;
 };
 
-export default function TeacherRonaldChatPage() {
+export default function TeacherChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "teacher",
-      text: "Hi Danielle, remember to review Activity 16 before Friday. Let me know if you need help with the case study questions.",
+      text: "Remember to review Activity 16 before Friday. Let me know if you need help with the case study questions.",
     },
   ]);
 
@@ -56,13 +49,13 @@ export default function TeacherRonaldChatPage() {
       </div>
     </Link>
 
-    <Image
-      src="/re-petersen.png"
-      alt="Teacher Ronald"
-      width={44}
-      height={44}
-      className="rounded-full border border-white/30 object-cover"
-    />
+    <div
+      role="img"
+      aria-label="Teacher profile"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/15 text-sm font-bold text-white"
+    >
+      T
+    </div>
 
     <div>
       <h1
@@ -74,7 +67,7 @@ export default function TeacherRonaldChatPage() {
           lineHeight: 1.1,
         }}
       >
-        Teacher Ronald
+        Teacher
       </h1>
 
       <p
@@ -111,7 +104,11 @@ export default function TeacherRonaldChatPage() {
                   marginBottom: "4px",
                 }}
               >
-                {chatMessage.role === "learner" ? learner.name : "Teacher Ronald"}
+                {chatMessage.role === "learner" ? (
+                  <AuthenticatedLearnerName />
+                ) : (
+                  "Teacher"
+                )}
               </p>
 
               <p
@@ -140,7 +137,7 @@ export default function TeacherRonaldChatPage() {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               className={`${neueHaas.className} flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-slate-800 outline-none focus:border-blue-500`}
-              placeholder="Message Teacher Ronald..."
+              placeholder="Message teacher..."
             />
 
             <button

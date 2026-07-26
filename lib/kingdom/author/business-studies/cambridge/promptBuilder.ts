@@ -1,4 +1,6 @@
-import { businessStudiesKingdomConstitution } from "./constitution";
+import { getKingdomAuthorConstitution } from "./constitution";
+import { buildKingdomPromptPipeline } from "../../../promptPipeline";
+import type { KingdomSubjectContext } from "../../../subjectContext";
 
 type KingdomQuestionPlan = {
   id: number;
@@ -11,6 +13,7 @@ type KingdomQuestionPlan = {
 };
 
 type BuildBusinessStudiesPromptArgs = {
+  subjectContext: KingdomSubjectContext;
   lessonTitle: string;
   lessonReading: string;
   activityTitle?: string;
@@ -18,6 +21,7 @@ type BuildBusinessStudiesPromptArgs = {
 };
 
 export function buildBusinessStudiesKingdomPrompt({
+  subjectContext,
   lessonTitle,
   lessonReading,
   activityTitle,
@@ -33,26 +37,19 @@ export function buildBusinessStudiesKingdomPrompt({
     guidance: question.guidance,
   }));
 
-  return `
-${businessStudiesKingdomConstitution}
-
-ACTIVITY DETAILS
-
-Lesson title:
-${lessonTitle}
-
-Activity title:
-${activityTitle || "Untitled Activity"}
-
-LESSON READING
-
-${lessonReading}
-
-QUESTION PLANS
-
-${JSON.stringify(questionPlans, null, 2)}
-
-FINAL INSTRUCTION
+  return buildKingdomPromptPipeline({
+    subjectContext,
+    roleInstruction:
+      "You are Kingdom Author drafting examination-style activity questions for teacher review.",
+    lessonContext: {
+      lessonTitle,
+      lessonReading,
+    },
+    currentTask: {
+      activityTitle: activityTitle || "Untitled Activity",
+      questionPlans,
+    },
+    prompt: `${getKingdomAuthorConstitution(subjectContext)}
 
 Generate one examination-style question for each question plan.
 
@@ -71,5 +68,6 @@ The returned id must match the id supplied in each question plan.
 Do not include markdown.
 Do not include explanations.
 Do not include answers.
-`;
+`,
+  });
 }

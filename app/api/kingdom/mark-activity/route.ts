@@ -7,9 +7,11 @@ import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
-
-const businessStudiesSubjectId =
-  "c472f3c9-0e6f-40de-a748-3ad9400ac069";
+import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import { readingContentToPlainText } from "@/lib/readings/structuredReading";
+import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
+import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
+import { createActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -20,6 +22,9 @@ type SubmittedAnswer = {
 
 type OfficialActivityQuestion = {
   id: string;
+  question_number: number;
+  display_order: number | null;
+  paper: string | null;
   question_text: string;
   marks: number;
   assessment_objective: string | null;
@@ -144,6 +149,10 @@ async function loadSavedSubmission(
       kingdom_marked_at,
       final_mark,
       reviewed_at,
+      activity_snapshot,
+      submitted_activity_version,
+      original_total_marks,
+      snapshot_created_at,
       activity_submission_answers (
         id,
         question_id,
@@ -227,12 +236,15 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const activityId = body.activityId;
+    const expectedActivityVersion = body.activityVersion;
     const submittedAnswers = body.answers;
     activityIdForLog = typeof activityId === "string" ? activityId : null;
 
     if (
       typeof activityId !== "string" ||
       !uuidPattern.test(activityId) ||
+      !Number.isInteger(expectedActivityVersion) ||
+      Number(expectedActivityVersion) <= 0 ||
       !Array.isArray(submittedAnswers) ||
       submittedAnswers.length === 0 ||
       submittedAnswers.length > 100 ||
@@ -274,7 +286,15 @@ export async function POST(request: Request) {
     const supabase = createSupabaseAdminClient();
     const { data: activity, error: activityError } = await supabase
       .from("activities")
-      .select("id, title, lesson_material_id")
+      .select(`
+        id,
+        title,
+        instructions,
+        total_marks,
+        due_date,
+        lesson_material_id,
+        version
+      `)
       .eq("id", activityId)
       .maybeSingle();
 
@@ -285,10 +305,20 @@ export async function POST(request: Request) {
         { status: 404 },
       );
     }
+    if (activity.version !== expectedActivityVersion) {
+      return NextResponse.json(
+        {
+          error:
+            "This activity was updated by your teacher after you opened it. Reload the activity and review the latest questions before submitting.",
+          code: "ACTIVITY_UPDATED_RELOAD_REQUIRED",
+        },
+        { status: 409 },
+      );
+    }
 
     const { data: material, error: materialError } = await supabase
       .from("lesson_materials")
-      .select("id, lesson_id, material_type, content_text")
+      .select("id, title, lesson_id, material_type, content_text")
       .eq("id", activity.lesson_material_id)
       .maybeSingle();
 
@@ -306,19 +336,46 @@ export async function POST(request: Request) {
 
     const { data: lesson, error: lessonError } = await supabase
       .from("lessons")
-      .select("id, title, subject_id, status")
+      .select(`
+        id,
+        title,
+        lesson_number,
+        term_number,
+        week_number,
+        subject_id,
+        status
+      `)
       .eq("id", material.lesson_id)
       .maybeSingle();
 
     if (lessonError) throw lessonError;
     if (
       !lesson ||
-      lesson.status !== "published" ||
-      lesson.subject_id !== businessStudiesSubjectId
+      lesson.status !== "published"
     ) {
       return NextResponse.json(
         { error: "Activity not found", code: "NOT_FOUND" },
         { status: 404 },
+      );
+    }
+    const subject = getSubjectConfigurationByDatabaseId(lesson.subject_id);
+    if (!subject) {
+      return NextResponse.json(
+        { error: "Activity subject is not supported", code: "INVALID_SUBJECT" },
+        { status: 422 },
+      );
+    }
+    const subjectAccess = await verifyLearnerSubjectAccess(
+      learnerId,
+      lesson.subject_id,
+    );
+    if (!subjectAccess.allowed) {
+      return NextResponse.json(
+        {
+          error: "Learner access to this subject is required",
+          code: "SUBJECT_ACCESS_REQUIRED",
+        },
+        { status: 403 },
       );
     }
 
@@ -330,6 +387,7 @@ export async function POST(request: Request) {
         marks,
         assessment_objective,
         guidance,
+        paper,
         question_type,
         answer_text,
         display_order,
@@ -396,17 +454,58 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
-    const { data: submission, error: submissionError } = await supabase
-      .from("activity_submissions")
-      .insert({
-        activity_id: activityId,
-        learner_id: learnerId,
-        status: "submitted",
-        submitted_at: now,
-        updated_at: now,
-      })
-      .select("id")
-      .single();
+    const snapshot = createActivitySubmissionSnapshot({
+      submittedAt: now,
+      activity: {
+        id: activity.id,
+        version: activity.version,
+        title: activity.title,
+        instructions: activity.instructions,
+        totalMarks: activity.total_marks,
+        dueDate: activity.due_date,
+      },
+      subject: {
+        id: lesson.subject_id,
+        name: subject.displayName,
+      },
+      lesson: {
+        id: lesson.id,
+        title: lesson.title,
+        lessonNumber: lesson.lesson_number,
+        termNumber: lesson.term_number,
+        weekNumber: lesson.week_number,
+      },
+      reading: {
+        id: material.id,
+        title: material.title,
+        contentText: material.content_text,
+      },
+      questions: officialQuestions.map((question) => ({
+        id: question.id,
+        questionNumber: question.question_number,
+        displayOrder:
+          question.display_order ?? question.question_number,
+        paper: question.paper,
+        questionType: question.question_type,
+        questionText: question.question_text,
+        marks: question.marks,
+        assessmentObjective: question.assessment_objective,
+        guidance: question.guidance,
+      })),
+    });
+    const { data: createdSubmissionId, error: submissionError } =
+      await supabase.rpc("create_activity_submission_snapshot", {
+        p_activity_id: activity.id,
+        p_learner_id: learnerId,
+        p_expected_version: activity.version,
+        p_snapshot: snapshot,
+        p_original_total_marks: activity.total_marks,
+        p_answers: submittedAnswers.map((answer) => ({
+          question_id: answer.questionId,
+          answer_text: answer.answerText.trim(),
+        })),
+        p_submitted_at: now,
+      });
 
     if (submissionError) {
       if (submissionError.code === "23505") {
@@ -415,39 +514,44 @@ export async function POST(request: Request) {
           { status: 409 },
         );
       }
+      if (
+        submissionError.code === "P0001" &&
+        submissionError.message.includes("ACTIVITY_VERSION_CHANGED")
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "This activity was updated by your teacher after you opened it. Reload the activity and review the latest questions before submitting.",
+            code: "ACTIVITY_UPDATED_RELOAD_REQUIRED",
+          },
+          { status: 409 },
+        );
+      }
       throw submissionError;
     }
 
-    submissionId = submission.id;
-    const answerRows = submittedAnswers.map((answer) => ({
-      submission_id: submission.id,
-      question_id: answer.questionId,
-      answer_text: answer.answerText.trim(),
-      updated_at: now,
-    }));
+    if (
+      typeof createdSubmissionId !== "string" ||
+      !uuidPattern.test(createdSubmissionId)
+    ) {
+      throw new Error("The activity submission ID was not returned.");
+    }
+    submissionId = createdSubmissionId;
     const { data: savedAnswers, error: answersError } = await supabase
       .from("activity_submission_answers")
-      .insert(answerRows)
-      .select("id, submission_id, question_id, answer_text");
+      .select("id, submission_id, question_id, answer_text")
+      .eq("submission_id", createdSubmissionId);
 
     if (answersError) {
-      const { error: cleanupError } = await supabase
-        .from("activity_submissions")
-        .delete()
-        .eq("id", submission.id);
-
-      if (cleanupError) {
-        console.error("Incomplete activity submission cleanup failed:", {
-          submissionId: submission.id,
-          message: cleanupError.message,
-          code: cleanupError.code,
-        });
-      }
       throw answersError;
     }
 
+    const persistedAnswers = savedAnswers ?? [];
     const learnerAnswers = new Map(
-      savedAnswers.map((answer) => [answer.question_id, answer.answer_text]),
+      persistedAnswers.map((answer) => [
+        answer.question_id,
+        answer.answer_text,
+      ]),
     );
     const markingQuestions: ActivityMarkingQuestion[] = officialQuestions.map(
       (question) => ({
@@ -465,19 +569,25 @@ export async function POST(request: Request) {
     let markingResult;
 
     try {
+      const subjectContext = buildKingdomSubjectContext({
+        subjectKey: subject.key,
+        role: "Examiner",
+        taskType: "Mark learner activity",
+      });
       markingResult = await markBusinessStudiesActivity({
+        subjectContext,
         activityTitle: activity.title,
         lessonTitle: lesson.title,
-        lessonReading: material.content_text,
+        lessonReading: readingContentToPlainText(material.content_text),
         questions: markingQuestions,
       });
     } catch (error) {
       console.error("Kingdom activity preliminary marking failed:", {
         activityId,
-        submissionId: submission.id,
+        submissionId: createdSubmissionId,
         error,
       });
-      await markSubmissionAsFailed(submission.id);
+      await markSubmissionAsFailed(createdSubmissionId);
       const savedSubmission = await loadSavedSubmission(learnerId, activityId);
 
       return NextResponse.json(
@@ -495,7 +605,7 @@ export async function POST(request: Request) {
     const resultByQuestionId = new Map(
       markingResult.results.map((result) => [result.questionId, result]),
     );
-    const markedAnswerRows = savedAnswers.map((answer) => {
+    const markedAnswerRows = persistedAnswers.map((answer) => {
       const result = resultByQuestionId.get(answer.question_id);
 
       if (!result) {
@@ -530,7 +640,7 @@ export async function POST(request: Request) {
         kingdom_marked_at: markedAt,
         updated_at: markedAt,
       })
-      .eq("id", submission.id);
+      .eq("id", createdSubmissionId);
 
     if (submissionUpdateError) throw submissionUpdateError;
 
@@ -539,7 +649,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (submissionId) await markSubmissionAsFailed(submissionId);
 
-    console.error("Unable to submit and mark Business Studies activity:", {
+    console.error("Unable to submit and mark learner activity:", {
       activityId: activityIdForLog,
       learnerId,
       submissionId,

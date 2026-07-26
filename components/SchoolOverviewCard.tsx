@@ -27,13 +27,8 @@ export default function SchoolOverviewCard() {
 
           <div className="mt-3 space-y-2">
             <p className={`${neueHaas.className} text-sm text-slate-700`}>
-              <strong>4</strong> Subjects Active
-            </p>
-            <p className={`${neueHaas.className} text-sm text-slate-700`}>
-              <strong>5</strong> Activities Due
-            </p>
-            <p className={`${neueHaas.className} text-sm text-slate-700`}>
-              <strong>3</strong> Lesson Views Outstanding
+              Open your approved subjects to view current lessons, activities,
+              and progress.
             </p>
           </div>
 

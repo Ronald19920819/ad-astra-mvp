@@ -1,29 +1,29 @@
-import { businessStudiesKingdomConstitution } from "./constitution";
+import { getKingdomAuthorConstitution } from "./constitution";
+import { buildKingdomPromptPipeline } from "../../../promptPipeline";
+import type { KingdomSubjectContext } from "../../../subjectContext";
 
 type BuildLessonQuizPromptArgs = {
+  subjectContext: KingdomSubjectContext;
   readingTitle: string;
   readingText: string;
 };
 
 export function buildLessonQuizPrompt({
+  subjectContext,
   readingTitle,
   readingText,
 }: BuildLessonQuizPromptArgs) {
-  return `
-${businessStudiesKingdomConstitution}
-
-LESSON DETAILS
-
-Lesson title:
-${readingTitle}
-
-LESSON READING
-
-${readingText}
-
-FINAL INSTRUCTION
-
-Generate EXACTLY 10 factual reading-comprehension questions.
+  return buildKingdomPromptPipeline({
+    subjectContext,
+    roleInstruction:
+      "You are Kingdom Author creating a factual lesson reading quiz.",
+    lessonContext: {
+      lessonTitle: readingTitle,
+      lessonReading: readingText,
+    },
+    currentTask:
+      "Generate exactly 10 factual reading-comprehension questions.",
+    prompt: `${getKingdomAuthorConstitution(subjectContext)}
 
 Rules:
 
@@ -32,7 +32,7 @@ Rules:
 - Do NOT test opinion.
 - Do NOT analyse.
 - Do NOT evaluate.
-- Do NOT use Cambridge command words.
+- Do NOT use formal examination command words.
 - Do NOT create examination questions.
 - Questions should simply confirm that the learner has read the lesson.
 
@@ -55,5 +55,6 @@ Requirements:
 - Do not include numbering.
 - Do not include markdown.
 - Do not include explanations.
-`;
+`,
+  });
 }

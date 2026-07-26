@@ -4,49 +4,51 @@ import { neueHaas } from "@/app/fonts";
 import {
   BarChart3,
   BookOpen,
+  Languages,
   ScrollText,
 } from "lucide-react";
+import { getTeacherSubjectSummaryForTeacher } from "@/lib/supabase/subjectTeacherSummary";
+import { subjectConfigurations } from "@/lib/subjects/subjectConfig";
+import { getAuthenticatedTeacherProfile } from "@/lib/supabase/teacherProfile";
 
-const subjects = [
-  {
-    name: "Business Studies",
-    learners: 8,
-    pending: 12,
-    color: "#F97316",
-    bg: "#FFF3E6",
-    icon: BarChart3,
-    href: "/teacher/subjects/business-studies",
-  },
-  {
-    name: "English",
-    learners: 7,
-    pending: 4,
-    color: "#2563EB",
-    bg: "#EEF5FF",
-    icon: BookOpen,
-   href: "/teacher/subjects/english"
-  },
-  {
-    name: "Afrikaans",
-    learners: 6,
-    pending: 2,
-    color: "#eb2525",
-    bg: "#FFF1F1",
-    icon: BookOpen,
-    href: "/teacher/subjects/afrikaans",
-  },
-  {
-    name: "History",
-    learners: 7,
-    pending: 3,
-    color: "#3AAA35",
-    bg: "#EEFBEA",
-    icon: ScrollText,
-    href: "/teacher/subjects/history",
-  },
-];
+const subjectIcons = {
+  "bar-chart": BarChart3,
+  "book-open": BookOpen,
+  languages: Languages,
+  "scroll-text": ScrollText,
+} as const;
 
-export default function TeacherSubjectsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function TeacherSubjectsPage() {
+  const teacherProfile = await getAuthenticatedTeacherProfile();
+  const visibleSubjects = teacherProfile
+    ? Object.values(subjectConfigurations).filter((subject) =>
+        teacherProfile.assignedSubjects.some(
+          (assignedSubject) => assignedSubject.id === subject.databaseId,
+        ),
+      )
+    : Object.values(subjectConfigurations);
+  const summaryResults = await Promise.allSettled(
+    visibleSubjects.map(async (subject) => ({
+      subject,
+      summary: teacherProfile
+        ? await getTeacherSubjectSummaryForTeacher(
+            teacherProfile,
+            subject.databaseId,
+          )
+        : {
+            learnerCount: 0,
+            pendingReviewCount: 0,
+            publishedLessonCount: 0,
+            publishedActivityCount: 0,
+          },
+    })),
+  );
+  const subjects = summaryResults.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+
   return (
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-36`}
@@ -104,26 +106,26 @@ export default function TeacherSubjectsPage() {
                 marginTop: "6px",
               }}
             >
-              RE Petersen • Subject Management
+              {teacherProfile?.displayName ?? "Teacher"} • Subject Management
             </p>
           </div>
         </div>
 
         <div className="space-y-4">
           {subjects.map((subject) => {
-            const Icon = subject.icon;
+            const Icon = subjectIcons[subject.subject.iconKey];
 
             return (
               <Link
-                key={subject.name}
-                href={subject.href}
+                key={subject.subject.key}
+                href={subject.subject.routes.teacherOverview}
                 className="block"
               >
                 <div className="flex items-center gap-4 rounded-[2rem] border border-blue-100 bg-white px-4 py-4 shadow-sm">
                   <div
                     className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.2rem]"
                     style={{
-                      backgroundColor: subject.color,
+                      backgroundColor: subject.subject.colourTheme.primary,
                     }}
                   >
                     <Icon
@@ -141,7 +143,7 @@ export default function TeacherSubjectsPage() {
                         fontWeight: 700,
                       }}
                     >
-                      {subject.name}
+                      {subject.subject.displayName}
                     </h2>
 
                     <p
@@ -152,7 +154,7 @@ export default function TeacherSubjectsPage() {
                       }}
                     >
                       <strong>Learners:</strong>{" "}
-                      {subject.learners}
+                      {subject.summary.learnerCount}
                     </p>
 
                     <p
@@ -163,7 +165,7 @@ export default function TeacherSubjectsPage() {
                       }}
                     >
                       <strong>Pending Reviews:</strong>{" "}
-                      {subject.pending}
+                      {subject.summary.pendingReviewCount}
                     </p>
                   </div>
 

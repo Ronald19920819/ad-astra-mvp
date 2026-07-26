@@ -1,8 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 import { neueHaas } from "@/app/fonts";
-import { CalendarDays, ClipboardCheck, PencilLine, HeartPulse } from "lucide-react";
+import { CalendarDays, ClipboardCheck, HeartPulse } from "lucide-react";
 
 export default function SchedulePage() {
   return (
@@ -64,7 +64,7 @@ export default function SchedulePage() {
                 marginTop: "6px",
               }}
             >
-              {learner.name} • Plan your day with purpose.
+              <AuthenticatedLearnerName /> • Plan your day with purpose.
             </p>
           </div>
         </div>

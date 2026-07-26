@@ -3,7 +3,7 @@ import { Shadows_Into_Light } from "next/font/google";
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 import { neueHaas } from "@/app/fonts";
 import { ArrowLeft } from "lucide-react";
 
@@ -116,9 +116,9 @@ export default function TutorPage() {
                 marginTop: "10px",
               }}
             >
-              Hi {learner.name}. 
+              Hi <AuthenticatedLearnerName />.
 
-I'm Kingdom, your personal tutor.
+I&apos;m Kingdom, your personal tutor.
 
 I can help you understand concepts, revise for tests, practise questions, and improve your confidence across all of your subjects.
 
@@ -144,7 +144,11 @@ What would you like help with today?
                   marginBottom: "4px",
                 }}
               >
-                {chatMessage.role === "user" ? learner.name : "Kingdom"}
+                {chatMessage.role === "user" ? (
+                  <AuthenticatedLearnerName />
+                ) : (
+                  "Kingdom"
+                )}
               </p>
 
               <p

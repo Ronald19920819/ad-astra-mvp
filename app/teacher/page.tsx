@@ -5,15 +5,24 @@ import {
   School,
   ClipboardCheck,
   BookOpen,
-  Users,
   AlertCircle,
-  Upload,
-  FileText,
-  MessageCircle,
   BarChart3,
 } from "lucide-react";
+import { getAuthenticatedTeacherProfileDashboard } from "@/lib/supabase/teacherProfile";
 
-export default function TeacherHomePage() {
+export const dynamic = "force-dynamic";
+
+export default async function TeacherHomePage() {
+  let dashboard = null;
+  try {
+    dashboard = await getAuthenticatedTeacherProfileDashboard();
+  } catch (error) {
+    console.error("Unable to load teacher dashboard profile:", error);
+  }
+  const teacherName = dashboard?.profile.displayName ?? "Teacher";
+  const school = dashboard?.profile.school;
+  const overview = dashboard?.teachingOverview;
+
   return (
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-36`}
@@ -73,7 +82,7 @@ export default function TeacherHomePage() {
                 marginTop: "6px",
               }}
             >
-              RE Petersen • Clift College
+              {teacherName}{school ? ` • ${school}` : ""}
             </p>
           </div>
         </div>
@@ -96,30 +105,38 @@ export default function TeacherHomePage() {
 
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">4</p>
+              <p className="text-2xl font-bold text-[#102A43]">
+                {overview?.subjectsTaught ?? 0}
+              </p>
               <p className="text-xs font-medium text-black/60">
                 Subjects Managed
               </p>
             </div>
 
             <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">28</p>
+              <p className="text-2xl font-bold text-[#102A43]">
+                {overview?.activeLearners ?? 0}
+              </p>
               <p className="text-xs font-medium text-black/60">
                 Learners
               </p>
             </div>
 
             <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#F97316]">12</p>
+              <p className="text-2xl font-bold text-[#F97316]">
+                {overview?.submissionsAwaitingReview ?? 0}
+              </p>
               <p className="text-xs font-medium text-black/60">
-                Pending Reviews
+                Submissions Awaiting Review
               </p>
             </div>
 
             <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-red-500">5</p>
+              <p className="text-2xl font-bold text-[#102A43]">
+                {overview?.publishedLessons ?? 0}
+              </p>
               <p className="text-xs font-medium text-black/60">
-                at-risk learners
+                Published Lessons
               </p>
             </div>
           </div>

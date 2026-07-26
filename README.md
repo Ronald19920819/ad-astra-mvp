@@ -34,3 +34,48 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Developer Utilities
+
+### Development Reset
+
+AD Astra includes a reusable development reset utility for preparing a clean environment before a new academic term or testing cycle.
+
+Run:
+
+```bash
+npm run reset-dev
+```
+
+The utility will:
+
+- Display a summary of records to be removed.
+- Require explicit confirmation before deleting data.
+- Abort automatically if a production environment is detected.
+- Remove development teaching data in a safe foreign-key order.
+
+### Data Removed
+
+- Lessons
+- Lesson Materials
+- Activities
+- Activity Questions
+- Activity Submissions
+- Submission Answers
+- Learner Lesson Progress
+- Learner Lesson Completions
+- Learner Quiz Attempts
+
+### Data Preserved
+
+- Users and Authentication
+- Teachers
+- Administrators
+- Learner Accounts
+- Schools
+- Subjects
+- Teacher Subject Assignments
+- Kingdom Configuration
+- Application Settings
+
+This utility is intended for development and staging environments only.

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 import { neueHaas } from "@/app/fonts";
 import { ArrowLeft } from "lucide-react";
 
@@ -34,7 +34,7 @@ export default function TimetablePage() {
 
           <div>
             <h1 className={`${neueHaas.className} text-lg font-bold text-white`}>
-              {learner.name}
+              <AuthenticatedLearnerName />
             </h1>
             <p className={`${neueHaas.className} text-xs font-medium text-[#d0d4dd]`}>
               Edit Timetable

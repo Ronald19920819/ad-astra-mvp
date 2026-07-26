@@ -1,24 +1,17 @@
 "use client";
 
-import { Shadows_Into_Light } from "next/font/google";
-import Image from "next/image";
 import { useState } from "react";
-import { learner } from "@/data/learners";
 import { neueHaas } from "@/app/fonts";
+import { AuthenticatedTeacherName } from "@/components/teachers/AuthenticatedTeacherName";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-
-const ShadowsIntoLight = Shadows_Into_Light({
-  weight: "400",
-  subsets: ["latin"],
-});
 
 type ChatMessage = {
   role: "teacher" | "learner";
   text: string;
 };
 
-export default function TeacherRonaldChatPage() {
+export default function TeacherLearnerChatPage() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([
    {
@@ -56,13 +49,12 @@ setMessages((previousMessages) => [
       </div>
     </Link>
 
-    <Image
-     src="/learner-profile.png"
-     alt="Danielle Coetzee"
-      width={44}
-      height={44}
-      className="rounded-full border border-white/30 object-cover"
-    />
+    <div
+      aria-label="Learner profile"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/15 text-sm font-bold text-white"
+    >
+      L
+    </div>
 
     <div>
       <h1
@@ -74,7 +66,7 @@ setMessages((previousMessages) => [
           lineHeight: 1.1,
         }}
       >
-        Danielle Coetzee
+        Learner
       </h1>
 
       <p
@@ -112,8 +104,8 @@ setMessages((previousMessages) => [
                 }}
               >
                 {chatMessage.role === "teacher"
-                    ? "RE Petersen"
-                    : "Danielle Coetzee"}
+                    ? <AuthenticatedTeacherName />
+                    : "Learner"}
               </p>
 
               <p
@@ -142,7 +134,7 @@ setMessages((previousMessages) => [
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               className={`${neueHaas.className} flex-1 rounded-2xl border border-slate-300 px-4 py-3 text-slate-800 outline-none focus:border-blue-500`}
-              placeholder="Message Danielle..."
+              placeholder="Message learner..."
             />
 
             <button

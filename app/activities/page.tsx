@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Indie_Flower, Oxanium } from "next/font/google";
-import { learner } from "@/data/learners";
+import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 const indieFlower = Indie_Flower({
   weight: "400",
   subsets: ["latin"],
@@ -30,7 +30,7 @@ export default function ActivitiesPage() {
             </p>
 
             <h1 className={`${indieFlower.className} text-4xl text-black leading-tight`}>
-              {learner.name}
+              <AuthenticatedLearnerName />
             </h1>
 
             <p className="text-sm text-black">Activities</p>

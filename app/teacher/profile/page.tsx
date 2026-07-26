@@ -1,13 +1,25 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Shadows_Into_Light } from "next/font/google";
 import { neueHaas } from "@/app/fonts";
+import { createClient } from "@/lib/supabase/client";
+import { ProfileAvatar } from "@/components/profiles/ProfileAvatar";
+import { PasswordResetButton } from "@/components/profiles/PasswordResetButton";
+import { useAuthenticatedTeacherProfile } from "@/lib/teachers/useAuthenticatedTeacherProfile";
 import {
   User,
   GraduationCap,
   Coins,
-  FileText,
   Settings,
+  Archive,
+  BookOpen,
+  CreditCard,
+  LogOut,
+  UserCheck,
 } from "lucide-react";
 
 const shadowsIntoLight = Shadows_Into_Light({
@@ -16,6 +28,39 @@ const shadowsIntoLight = Shadows_Into_Light({
 });
 
 export default function TeacherProfilePage() {
+  const router = useRouter();
+  const { dashboard, isLoading } = useAuthenticatedTeacherProfile();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const [settingsNotice, setSettingsNotice] = useState("");
+  const profile = dashboard?.profile ?? null;
+  const overview = dashboard?.teachingOverview ?? null;
+
+  async function signOut() {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    setSignOutError("");
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        setSignOutError("Unable to sign out. Please try again.");
+        return;
+      }
+
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      console.error("Teacher sign-out failed:", error);
+      setSignOutError("Unable to sign out. Please try again.");
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
   return (
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-32`}
@@ -41,7 +86,7 @@ export default function TeacherProfilePage() {
           <h1
             className={`${shadowsIntoLight.className} mt-2 text-[34px] text-black leading-tight`}
           >
-            RE Petersen
+            {profile?.displayName ?? "Teacher"}
           </h1>
 
           <p className="mt-1 text-sm font-medium text-black/60">
@@ -50,13 +95,7 @@ export default function TeacherProfilePage() {
 
           <div className="relative mt-5">
             <div className="h-32 w-32 overflow-hidden rounded-full border-4 border-white bg-white shadow-lg">
-              <Image
-                src="/re-petersen.png"
-                alt="Teacher Profile"
-                width={128}
-                height={128}
-                className="h-full w-full object-cover"
-              />
+              <ProfileAvatar profile={profile} role="Teacher" />
             </div>
 
             <div className="absolute bottom-1 right-1 rounded-full bg-[#102A43] px-3 py-1 text-xs font-semibold text-white shadow-sm">
@@ -74,11 +113,38 @@ export default function TeacherProfilePage() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <p><strong>Name:</strong> RE Petersen</p>
-            <p><strong>Teacher ID:</strong> T001</p>
-            <p><strong>School:</strong> Clift College</p>
-            <p><strong>Role:</strong> Faculty Teacher</p>
-            <p><strong>Subjects Managed:</strong> 4</p>
+            <p><strong>Name:</strong> {profile?.displayName ?? "Teacher"}</p>
+            <p className="break-all"><strong>Teacher ID:</strong> {profile?.teacherProfileId ?? (isLoading ? "Loading..." : "Unavailable")}</p>
+            <p><strong>Email:</strong> {profile?.email ?? "Not supplied"}</p>
+            <p><strong>School:</strong> {profile?.school ?? "Not supplied"}</p>
+            <p>
+              <strong>Role:</strong>{" "}
+              {profile
+                ? profile.isAdministrator
+                  ? "Teacher and Administrator"
+                  : "Teacher"
+                : "Teacher"}
+            </p>
+            <p>
+              <strong>Administrator:</strong>{" "}
+              {profile?.isAdministrator ? "Yes" : "No"}
+            </p>
+            <p>
+              <strong>Account status:</strong>{" "}
+              {profile?.accountStatus
+                ? `${profile.accountStatus.charAt(0).toUpperCase()}${profile.accountStatus.slice(1)}`
+                : isLoading
+                  ? "Loading..."
+                  : "Unavailable"}
+            </p>
+            <p>
+              <strong>Assigned subjects:</strong>{" "}
+              {profile?.assignedSubjects.length
+                ? profile.assignedSubjects
+                    .map((subject) => subject.name)
+                    .join(", ")
+                : "None"}
+            </p>
           </div>
         </section>
 
@@ -91,10 +157,11 @@ export default function TeacherProfilePage() {
           </div>
 
           <div className="space-y-2 text-sm">
-            <p><strong>Active Learners:</strong> 28</p>
-            <p><strong>Published Lessons:</strong> 16</p>
-            <p><strong>Activities Uploaded:</strong> 24</p>
-            <p><strong>Reports Generated:</strong> 8</p>
+            <p><strong>Subjects Taught:</strong> {overview?.subjectsTaught ?? 0}</p>
+            <p><strong>Active Learners:</strong> {overview?.activeLearners ?? 0}</p>
+            <p><strong>Published Lessons:</strong> {overview?.publishedLessons ?? 0}</p>
+            <p><strong>Published Activities:</strong> {overview?.publishedActivities ?? 0}</p>
+            <p><strong>Submissions Awaiting Review:</strong> {overview?.submissionsAwaitingReview ?? 0}</p>
           </div>
         </section>
 
@@ -108,7 +175,7 @@ export default function TeacherProfilePage() {
 
           <div className="text-center py-2">
             <p className="text-4xl font-bold text-[#F59E0B]">
-              125
+              Coming soon
             </p>
 
             <p className="mt-1 text-sm font-semibold text-black/70">
@@ -134,21 +201,84 @@ export default function TeacherProfilePage() {
           </div>
 
           <div className="space-y-3 text-sm">
-            <div className="rounded-xl bg-[#F8FBFF] p-3 font-semibold">
-              Change Password
-            </div>
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-black/50">
+              Account
+            </p>
+            <PasswordResetButton className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 text-left font-semibold disabled:opacity-60" />
+            <button
+              type="button"
+              onClick={() =>
+                setSettingsNotice("Subscription plans are not available yet.")
+              }
+              className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 text-left font-semibold"
+            >
+              <CreditCard size={18} aria-hidden="true" />
+              Subscription Plan
+            </button>
 
-            <div className="rounded-xl bg-[#F8FBFF] p-3 font-semibold">
-              Notification Settings
-            </div>
+            <p className="pt-2 text-xs font-bold uppercase tracking-[0.12em] text-black/50">
+              Teaching and Administration
+            </p>
+            <Link
+              href="/teacher/profile/learner-approvals"
+              className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 font-semibold"
+            >
+              <UserCheck size={18} aria-hidden="true" />
+              Learner Approvals
+            </Link>
+            <button
+              type="button"
+              onClick={() =>
+                setSettingsNotice(
+                  "Subject enrolment management is coming in a later phase.",
+                )
+              }
+              className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 text-left font-semibold"
+            >
+              <BookOpen size={18} aria-hidden="true" />
+              Manage Subject Enrolments
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setSettingsNotice(
+                  "Content archiving is coming in the next content phase.",
+                )
+              }
+              className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 text-left font-semibold"
+            >
+              <Archive size={18} aria-hidden="true" />
+              Archived Content
+            </button>
 
-            <div className="rounded-xl bg-[#F8FBFF] p-3 font-semibold"> 
-              Subscription & Plan
-            </div>
+            {settingsNotice && (
+              <p className="rounded-xl bg-[#EEF7FF] p-3 font-medium text-[#102A43]">
+                {settingsNotice}
+              </p>
+            )}
 
-            <div className="rounded-xl bg-[#F8FBFF] p-3 text-red-600 font-semibold">
-              Sign Out
-            </div>
+            <p className="pt-2 text-xs font-bold uppercase tracking-[0.12em] text-black/50">
+              Session
+            </p>
+
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={isSigningOut}
+              className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 text-left font-semibold text-red-600 disabled:cursor-wait disabled:opacity-60"
+            >
+              <LogOut size={18} aria-hidden="true" />
+              {isSigningOut ? "Signing out..." : "Sign Out"}
+            </button>
+
+            {signOutError && (
+              <p
+                role="alert"
+                className="rounded-xl bg-red-50 p-3 font-medium text-red-700"
+              >
+                {signOutError}
+              </p>
+            )}
           </div>
         </section>
       </div>

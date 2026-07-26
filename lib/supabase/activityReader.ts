@@ -67,11 +67,29 @@ lesson_material_id,
 
 export type TeacherPublishedActivity = {
   id: string;
+  version: number;
   title: string;
   total_marks: number;
   due_date: string | null;
   lesson_material_id: string;
   created_at: string;
+  submissionCount: number;
+};
+
+export type TeacherActivityEditorData = {
+  activity: Omit<TeacherPublishedActivity, "submissionCount"> & {
+    instructions: string;
+    lessonId: string;
+  };
+  questions: {
+    id: string;
+    paper: string | null;
+    question_type: string | null;
+    question_text: string;
+    marks: number;
+    assessment_objective: string | null;
+    guidance: string | null;
+  }[];
 };
 
 export async function getTeacherPublishedActivities(
@@ -79,42 +97,83 @@ export async function getTeacherPublishedActivities(
 ): Promise<
   TeacherPublishedActivity[]
 > {
-  const supabase = createClient();
+  const response = await fetch(
+    `/api/teacher/business-studies/activities?subjectId=${encodeURIComponent(subjectId)}`,
+    { cache: "no-store" },
+  );
+  const result = (await response.json()) as {
+    data?: TeacherPublishedActivity[];
+    error?: string;
+  };
 
-  const { data, error } = await supabase
-    .from("activities")
-    .select(`
-      id,
-      title,
-      total_marks,
-      due_date,
-      lesson_material_id,
-      created_at,
-      lesson_materials!inner (
-        material_type,
-        lessons!inner (
-          subject_id,
-          status
-        )
-      )
-    `)
-    .in("lesson_materials.material_type", ["activity", "reading"])
-    .eq("lesson_materials.lessons.subject_id", subjectId)
-    .eq("lesson_materials.lessons.status", "published")
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(error.message);
+  if (!response.ok || !result.data) {
+    throw new Error(result.error || "Published activities could not be loaded.");
   }
 
-  return (data ?? []).map((activity) => ({
-    id: activity.id,
-    title: activity.title,
-    total_marks: activity.total_marks,
-    due_date: activity.due_date,
-    lesson_material_id: activity.lesson_material_id,
-    created_at: activity.created_at,
-  }));
+  return result.data;
+}
+
+export async function getTeacherActivityEditorData(
+  activityId: string,
+  subjectId: string,
+): Promise<TeacherActivityEditorData> {
+  const supabase = createClient();
+  const { data: activity, error: activityError } = await supabase
+    .from("activities")
+    .select(
+      "id, version, title, instructions, total_marks, due_date, lesson_material_id, created_at",
+    )
+    .eq("id", activityId)
+    .single();
+
+  if (activityError) throw new Error(activityError.message);
+
+  const { data: material, error: materialError } = await supabase
+    .from("lesson_materials")
+    .select("lesson_id")
+    .eq("id", activity.lesson_material_id)
+    .single();
+
+  if (materialError) throw new Error(materialError.message);
+
+  const { data: lesson, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id")
+    .eq("id", material.lesson_id)
+    .eq("subject_id", subjectId)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (lessonError) throw new Error(lessonError.message);
+  if (!lesson) {
+    throw new Error("The linked published Business Studies lesson was not found.");
+  }
+
+  const { data: questions, error: questionsError } = await supabase
+    .from("activity_questions")
+    .select(
+      "id, paper, question_type, question_text, marks, assessment_objective, guidance, display_order, question_number",
+    )
+    .eq("activity_id", activityId)
+    .order("display_order", { ascending: true, nullsFirst: false })
+    .order("question_number", { ascending: true });
+
+  if (questionsError) throw new Error(questionsError.message);
+
+  return {
+    activity: {
+      id: activity.id,
+      version: activity.version,
+      title: activity.title,
+      instructions: activity.instructions ?? "",
+      total_marks: activity.total_marks,
+      due_date: activity.due_date,
+      lesson_material_id: activity.lesson_material_id,
+      created_at: activity.created_at,
+      lessonId: lesson.id,
+    },
+    questions: questions ?? [],
+  };
 }
 
 export type LearnerPublishedActivity = {
@@ -124,6 +183,13 @@ export type LearnerPublishedActivity = {
   due_date: string | null;
   created_at: string;
   lesson_material_id: string;
+  isSubmitted: boolean;
+  submissionStatus:
+    | "submitted"
+    | "marking_failed"
+    | "awaiting_review"
+    | "returned"
+    | null;
   lesson: {
     id: string;
     title: string;
@@ -143,6 +209,12 @@ type LearnerActivityRow = {
   lesson_materials: {
     lessons: LearnerPublishedActivity["lesson"];
   };
+};
+
+type LearnerActivitySubmissionRow = {
+  activity_id: string;
+  status: NonNullable<LearnerPublishedActivity["submissionStatus"]>;
+  submitted_at: string;
 };
 
 export async function getLearnerPublishedActivities(
@@ -182,13 +254,53 @@ export async function getLearnerPublishedActivities(
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as unknown as LearnerActivityRow[]).map((activity) => ({
+  const activities = (data ?? []) as unknown as LearnerActivityRow[];
+
+  if (activities.length === 0) return [];
+
+  const { data: submissions, error: submissionsError } = await supabase
+    .from("activity_submissions")
+    .select("activity_id, status, submitted_at")
+    .in(
+      "activity_id",
+      activities.map((activity) => activity.id),
+    )
+    .order("submitted_at", { ascending: false });
+
+  if (submissionsError) {
+    console.error("Supabase learner activity submission loading error:", {
+      message: submissionsError.message,
+      details: submissionsError.details,
+      hint: submissionsError.hint,
+      code: submissionsError.code,
+    });
+    throw new Error(submissionsError.message);
+  }
+
+  const submissionRows = (submissions ?? []) as LearnerActivitySubmissionRow[];
+  const submissionStatusByActivityId = new Map<
+    string,
+    LearnerActivitySubmissionRow["status"]
+  >();
+
+  for (const submission of submissionRows) {
+    if (!submissionStatusByActivityId.has(submission.activity_id)) {
+      submissionStatusByActivityId.set(
+        submission.activity_id,
+        submission.status,
+      );
+    }
+  }
+
+  return activities.map((activity) => ({
     id: activity.id,
     title: activity.title,
     total_marks: activity.total_marks,
     due_date: activity.due_date,
     created_at: activity.created_at,
     lesson_material_id: activity.lesson_material_id,
+    isSubmitted: submissionStatusByActivityId.has(activity.id),
+    submissionStatus: submissionStatusByActivityId.get(activity.id) ?? null,
     lesson: activity.lesson_materials.lessons,
   }));
 }
@@ -207,6 +319,7 @@ export type LearnerActivityWorkspaceQuestion = {
 export type LearnerActivityWorkspaceData = {
   activity: {
     id: string;
+    version: number;
     title: string;
     instructions: string | null;
     total_marks: number;
@@ -259,7 +372,7 @@ export async function getLearnerActivityData(
   const { data: activity, error: activityError } = await supabase
     .from("activities")
     .select(
-      "id, title, instructions, total_marks, due_date, lesson_material_id",
+      "id, version, title, instructions, total_marks, due_date, lesson_material_id",
     )
     .eq("id", activityId)
     .maybeSingle();

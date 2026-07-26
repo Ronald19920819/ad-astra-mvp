@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Minus, Plus, Shield } from "lucide-react";
+import { useEffect, type Dispatch, type SetStateAction } from "react";
+import { Minus, Plus } from "lucide-react";
+import type { SubjectKey } from "@/lib/subjects/subjectConfig";
+import { subjectQuestionPresets } from "@/lib/subjects/questionPresets";
 const questionTypeDetails: Record<
   string,
   {
@@ -70,6 +72,7 @@ const questionTypeDetails: Record<
 };
 export type ActivityQuestion = {
   id: number;
+  databaseId?: string;
   paper: string;
   questionType: string;
   questionText: string;
@@ -80,34 +83,19 @@ export type ActivityQuestion = {
   hasGeneratedQuestion: boolean;
 };
 type ActivityQuestionBuilderProps = {
+  questions: ActivityQuestion[];
+  setQuestions: Dispatch<SetStateAction<ActivityQuestion[]>>;
   onTotalMarksChange?: (total: number) => void;
-  onQuestionsChange?: (questions: ActivityQuestion[]) => void;
-  generatedQuestions?: {
-    id: number;
-    questionText: string;
-  }[];
-  resetKey?: number;
+  subjectKey?: SubjectKey;
 };
 
 export default function ActivityQuestionBuilder({
+  questions,
+  setQuestions,
   onTotalMarksChange,
-  onQuestionsChange,
-  generatedQuestions = [],
-  resetKey = 0,
+  subjectKey = "business-studies",
 }: ActivityQuestionBuilderProps) {
-  const [questions, setQuestions] = useState<ActivityQuestion[]>([
-  {
-  id: 1,
-  paper: "paper-1",
-  questionType: "",
-  questionText: "",
-  marks: "",
-  ao: "",
-  guidance: "",
-  isGenerating: false,
-hasGeneratedQuestion: false,
-},
-]);
+const preset = subjectQuestionPresets[subjectKey];
 const totalMarks = questions.reduce(
   (total, question) => total + Number(question.marks || 0),
   0
@@ -117,45 +105,6 @@ useEffect(() => {
   onTotalMarksChange?.(totalMarks);
 }, [totalMarks, onTotalMarksChange]);
 
-useEffect(() => {
-  onQuestionsChange?.(questions);
-}, [questions, onQuestionsChange]);
-
-
-useEffect(() => {
-  if (generatedQuestions.length === 0) return;
-
-  setQuestions((currentQuestions) =>
-    currentQuestions.map((currentQuestion) => {
-      const generatedQuestion = generatedQuestions.find(
-        (item) => item.id === currentQuestion.id
-      );
-
-      return generatedQuestion
-        ? {
-            ...currentQuestion,
-            questionText: generatedQuestion.questionText,
-          }
-        : currentQuestion;
-    })
-  );
-}, [generatedQuestions]);
-
-useEffect(() => {
-  setQuestions([
-    {
-      id: 1,
-      paper: "paper-1",
-      questionType: "",
-      questionText: "",
-      marks: "",
-      ao: "",
-      guidance: "",
-      isGenerating: false,
-      hasGeneratedQuestion: false,
-    },
-  ]);
-}, [resetKey]);
 return (
   
     <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 p-4">
@@ -213,15 +162,26 @@ return (
     }
     className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-3 outline-none"
   >
-    <option value="paper-1">Paper 1</option>
-    <option value="paper-2">Paper 2</option>
+    {preset.papers.map((paper) => (
+      <option key={paper.value} value={paper.value}>
+        {paper.label}
+      </option>
+    ))}
   </select>
 
   <select
     value={question.questionType}
     onChange={(event) => {
   const selectedType = event.target.value;
-  const details = questionTypeDetails[selectedType];
+  const presetDetails = preset.questionTypes[selectedType];
+  const details = presetDetails
+    ? {
+        marks: presetDetails.marks,
+        ao: presetDetails.assessmentLabel,
+        opening: presetDetails.opening,
+        guidance: presetDetails.guidance,
+      }
+    : questionTypeDetails[selectedType];
 
   setQuestions((currentQuestions) =>
     currentQuestions.map((currentQuestion) =>
@@ -244,8 +204,16 @@ questionText:
     className="min-w-0 w-full rounded-xl border border-slate-200 bg-white p-3 outline-none"
   >
     <option value="">Select question type</option>
+    {subjectKey !== "business-studies" &&
+      Object.entries(preset.questionTypes)
+        .filter(([, details]) => details.paper === question.paper)
+        .map(([value, details]) => (
+          <option key={value} value={value}>
+            {details.label}
+          </option>
+        ))}
 
-    {question.paper === "paper-1" ? (
+    {subjectKey === "business-studies" && (question.paper === "paper-1" ? (
       <>
         <option value="define">Define – 2 marks</option>
         <option value="identify-two">Identify two – 2 marks</option>
@@ -265,7 +233,7 @@ questionText:
           Recommend and justify – 12 marks
         </option>
       </>
-    )}
+    ))}
   </select>
 </div>
 
@@ -331,7 +299,7 @@ questionText:
     ...currentQuestions,
     {
   id: Date.now(),
-  paper: "paper-1",
+  paper: preset.papers[0].value,
   questionType: "",
   questionText: "",
   marks: "",

@@ -1,12 +1,9 @@
 import "server-only";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import {
-  createSupabaseAdminClient,
-  createSupabaseRequestClient,
-} from "@/lib/supabase/server";
-
-const businessStudiesSubjectId =
-  "c472f3c9-0e6f-40de-a748-3ad9400ac069";
+  authorizeTeacher,
+} from "@/lib/supabase/teacherAuth";
 
 export type PublishedContentDeleteResult =
   | { success: true }
@@ -30,61 +27,12 @@ function failure(
   return { success: false, status, code, error };
 }
 
-async function authorizeBusinessStudiesTeacher(): Promise<
+async function authorizeSubjectTeacher(subjectId: string): Promise<
   PublishedContentDeleteResult | { success: true; admin: ReturnType<typeof createSupabaseAdminClient> }
 > {
-  const requestClient = await createSupabaseRequestClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await requestClient.auth.getUser();
-
-  if (userError || !user) {
-    return failure(401, "UNAUTHORIZED", "Teacher sign-in is required.");
-  }
-
-  const admin = createSupabaseAdminClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("id")
-    .eq("auth_user_id", user.id)
-    .eq("role", "teacher")
-    .maybeSingle();
-
-  if (profileError) throw profileError;
-  if (!profile) {
-    return failure(403, "FORBIDDEN", "Teacher access is required.");
-  }
-
-  const { data: teacherProfile, error: teacherProfileError } = await admin
-    .from("teacher_profiles")
-    .select("id")
-    .eq("profile_id", profile.id)
-    .eq("status", "active")
-    .maybeSingle();
-
-  if (teacherProfileError) throw teacherProfileError;
-  if (!teacherProfile) {
-    return failure(403, "FORBIDDEN", "Active teacher access is required.");
-  }
-
-  const { data: assignment, error: assignmentError } = await admin
-    .from("teacher_subjects")
-    .select("id")
-    .eq("teacher_profile_id", teacherProfile.id)
-    .eq("subject_id", businessStudiesSubjectId)
-    .maybeSingle();
-
-  if (assignmentError) throw assignmentError;
-  if (!assignment) {
-    return failure(
-      403,
-      "FORBIDDEN",
-      "Business Studies teacher access is required.",
-    );
-  }
-
-  return { success: true, admin };
+  const authorization = await authorizeTeacher(subjectId);
+  if (!authorization.success) return authorization;
+  return { success: true, admin: authorization.teacher.admin };
 }
 
 function isMissingOptionalTable(error: { code?: string; message?: string }) {
@@ -113,10 +61,11 @@ async function countOptionalLessonDependencies(
   return count ?? 0;
 }
 
-export async function deletePublishedBusinessStudiesActivity(
+export async function deletePublishedSubjectActivity(
+  subjectId: string,
   activityId: string,
 ): Promise<PublishedContentDeleteResult> {
-  const authorization = await authorizeBusinessStudiesTeacher();
+  const authorization = await authorizeSubjectTeacher(subjectId);
   if (!("admin" in authorization)) return authorization;
 
   const { admin } = authorization;
@@ -146,7 +95,7 @@ export async function deletePublishedBusinessStudiesActivity(
     return failure(
       404,
       "NOT_FOUND",
-      "The published Business Studies activity could not be found.",
+      "The published subject activity could not be found.",
     );
   }
 
@@ -159,13 +108,13 @@ export async function deletePublishedBusinessStudiesActivity(
   if (lessonError) throw lessonError;
   if (
     !lesson ||
-    lesson.subject_id !== businessStudiesSubjectId ||
+    lesson.subject_id !== subjectId ||
     lesson.status !== "published"
   ) {
     return failure(
       404,
       "NOT_FOUND",
-      "The published Business Studies activity could not be found.",
+      "The published subject activity could not be found.",
     );
   }
 
@@ -208,10 +157,11 @@ export async function deletePublishedBusinessStudiesActivity(
   return { success: true };
 }
 
-export async function deletePublishedBusinessStudiesLesson(
+export async function deleteDraftSubjectLesson(
+  subjectId: string,
   lessonId: string,
 ): Promise<PublishedContentDeleteResult> {
-  const authorization = await authorizeBusinessStudiesTeacher();
+  const authorization = await authorizeSubjectTeacher(subjectId);
   if (!("admin" in authorization)) return authorization;
 
   const { admin } = authorization;
@@ -219,7 +169,80 @@ export async function deletePublishedBusinessStudiesLesson(
     .from("lessons")
     .select("id")
     .eq("id", lessonId)
-    .eq("subject_id", businessStudiesSubjectId)
+    .eq("subject_id", subjectId)
+    .eq("status", "draft")
+    .maybeSingle();
+
+  if (lessonError) throw lessonError;
+  if (!lesson) {
+    return failure(404, "NOT_FOUND", "The draft lesson could not be found.");
+  }
+
+  const { data: materials, error: materialsError } = await admin
+    .from("lesson_materials")
+    .select("id")
+    .eq("lesson_id", lessonId);
+
+  if (materialsError) throw materialsError;
+  const materialIds = (materials ?? []).map((material) => material.id);
+
+  if (materialIds.length > 0) {
+    const { data: activities, error: activitiesError } = await admin
+      .from("activities")
+      .select("id")
+      .in("lesson_material_id", materialIds);
+
+    if (activitiesError) throw activitiesError;
+    const activityIds = (activities ?? []).map((activity) => activity.id);
+
+    if (activityIds.length > 0) {
+      const { error: questionsError } = await admin
+        .from("activity_questions")
+        .delete()
+        .in("activity_id", activityIds);
+      if (questionsError) throw questionsError;
+
+      const { error: activitiesDeleteError } = await admin
+        .from("activities")
+        .delete()
+        .in("id", activityIds);
+      if (activitiesDeleteError) throw activitiesDeleteError;
+    }
+
+    const { error: materialsDeleteError } = await admin
+      .from("lesson_materials")
+      .delete()
+      .eq("lesson_id", lessonId);
+    if (materialsDeleteError) throw materialsDeleteError;
+  }
+
+  const { data: deletedLesson, error: deleteError } = await admin
+    .from("lessons")
+    .delete()
+    .eq("id", lessonId)
+    .eq("subject_id", subjectId)
+    .eq("status", "draft")
+    .select("id")
+    .maybeSingle();
+
+  if (deleteError) throw deleteError;
+  if (!deletedLesson) throw new Error("The draft lesson was not deleted.");
+  return { success: true };
+}
+
+export async function deletePublishedSubjectLesson(
+  subjectId: string,
+  lessonId: string,
+): Promise<PublishedContentDeleteResult> {
+  const authorization = await authorizeSubjectTeacher(subjectId);
+  if (!("admin" in authorization)) return authorization;
+
+  const { admin } = authorization;
+  const { data: lesson, error: lessonError } = await admin
+    .from("lessons")
+    .select("id")
+    .eq("id", lessonId)
+    .eq("subject_id", subjectId)
     .eq("status", "published")
     .maybeSingle();
 
@@ -228,7 +251,7 @@ export async function deletePublishedBusinessStudiesLesson(
     return failure(
       404,
       "NOT_FOUND",
-      "The published Business Studies lesson could not be found.",
+      "The published subject lesson could not be found.",
     );
   }
 
@@ -320,7 +343,7 @@ export async function deletePublishedBusinessStudiesLesson(
     .from("lessons")
     .delete()
     .eq("id", lessonId)
-    .eq("subject_id", businessStudiesSubjectId)
+    .eq("subject_id", subjectId)
     .eq("status", "published")
     .select("id")
     .maybeSingle();

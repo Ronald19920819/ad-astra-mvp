@@ -4,9 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { neueHaas } from "@/app/fonts";
+import { AuthenticatedTeacherName } from "@/components/teachers/AuthenticatedTeacherName";
 import {
-  ArrowLeft,
-  MessageCircle,
   Send,
   Users,
   User,
@@ -19,7 +18,7 @@ type Announcement = {
 
 export default function TeacherMessagesPage() {
   const [announcement, setAnnouncement] = useState("");
-  const [announcements, setAnnouncements] = useState<Announcement[]>([
+  const [, setAnnouncements] = useState<Announcement[]>([
     {
       className: "Business Studies",
       text: "Remember to complete Activity 16 before Friday.",
@@ -86,7 +85,7 @@ export default function TeacherMessagesPage() {
       </h1>
 
       <p className="mt-1 text-sm font-medium text-[#d0d4dd]">
-        RE Petersen • Talk to your learners.
+        <AuthenticatedTeacherName /> • Talk to your learners.
       </p>
     </div>
   </div>
@@ -117,7 +116,7 @@ export default function TeacherMessagesPage() {
     <div className="flex items-center justify-between">
       <div>
         <p className="text-sm font-bold text-black">
-          Danielle Coetzee
+          Learner
         </p>
         <p className="mt-1 text-xs text-black/50">
           Business Studies • New message
@@ -139,7 +138,7 @@ export default function TeacherMessagesPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-bold text-black">
-                      Bastian Meyer
+                      Learner
                     </p>
                     <p className="mt-1 text-xs text-black/50">
                       History • Yesterday

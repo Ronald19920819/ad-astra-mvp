@@ -1,6 +1,15 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { buildLessonQuizPrompt } from "@/lib/kingdom/author/business-studies/cambridge/lessonQuizPrompt";
+import {
+  authorizeTeacher,
+  teacherAuthorizationResponse,
+} from "@/lib/supabase/teacherAuth";
+import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import {
+  getSubjectConfiguration,
+  isSubjectKey,
+} from "@/lib/subjects/subjectConfig";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -8,9 +17,21 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    const body = (await request.json()) as Record<string, unknown>;
+    const subjectKey =
+      typeof body.subjectKey === "string" && isSubjectKey(body.subjectKey)
+        ? body.subjectKey
+        : "business-studies";
+    const subject = getSubjectConfiguration(subjectKey);
+    const authorization = await authorizeTeacher(subject.databaseId);
+    if (!authorization.success) {
+      return teacherAuthorizationResponse(authorization);
+    }
 
-    const { readingTitle, readingText } = body;
+    const readingTitle =
+      typeof body.readingTitle === "string" ? body.readingTitle : "";
+    const readingText =
+      typeof body.readingText === "string" ? body.readingText : "";
 
     if (!readingTitle?.trim()) {
       return NextResponse.json(
@@ -26,7 +47,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const subjectContext = buildKingdomSubjectContext({
+      subjectKey,
+      role: "Author",
+      taskType: "Generate lesson reading quiz",
+    });
     const prompt = buildLessonQuizPrompt({
+      subjectContext,
       readingTitle: readingTitle.trim(),
       readingText: readingText.trim(),
     });

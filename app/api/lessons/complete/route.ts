@@ -3,6 +3,11 @@ import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
+import {
+  hasPassedLessonQuiz,
+  LESSON_QUIZ_PASS_PERCENT,
+} from "@/lib/lessons/lessonAssessment";
+import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
 
 export async function POST(request: Request) {
   try {
@@ -35,6 +40,32 @@ export async function POST(request: Request) {
     }
 
     const supabase = createSupabaseAdminClient();
+    const { data: lesson, error: lessonError } = await supabase
+      .from("lessons")
+      .select("id, subject_id")
+      .eq("id", lessonId)
+      .eq("status", "published")
+      .maybeSingle();
+
+    if (lessonError) throw new Error(lessonError.message);
+    if (!lesson) {
+      return NextResponse.json(
+        { error: "Published lesson not found." },
+        { status: 404 },
+      );
+    }
+
+    const subjectAccess = await verifyLearnerSubjectAccess(
+      user.id,
+      lesson.subject_id,
+    );
+    if (!subjectAccess.allowed) {
+      return NextResponse.json(
+        { error: "Learner access to this subject is required." },
+        { status: 403 },
+      );
+    }
+
     const { data: attempt, error: attemptError } = await supabase
       .from("learner_quiz_attempts")
       .select("id, learner_id, lesson_id, quiz_score, quiz_total, passed, completed_at")
@@ -47,13 +78,43 @@ export async function POST(request: Request) {
     if (
       !attempt ||
       !attempt.passed ||
-      attempt.quiz_score !== attempt.quiz_total ||
+      !hasPassedLessonQuiz(attempt.quiz_score, attempt.quiz_total) ||
       attempt.completed_at
     ) {
       return NextResponse.json(
-        { error: "A verified 10/10 quiz attempt is required." },
+        {
+          error: `A verified quiz score of at least ${LESSON_QUIZ_PASS_PERCENT}% is required.`,
+        },
         { status: 403 },
       );
+    }
+
+    const { data: videoMaterial, error: videoMaterialError } = await supabase
+      .from("lesson_materials")
+      .select("id")
+      .eq("lesson_id", lessonId)
+      .eq("material_type", "video")
+      .order("display_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (videoMaterialError) throw new Error(videoMaterialError.message);
+
+    if (videoMaterial) {
+      const { data: videoProgress, error: videoProgressError } = await supabase
+        .from("learner_lesson_progress")
+        .select("video_progress_percent")
+        .eq("learner_profile_id", subjectAccess.learnerProfileId)
+        .eq("lesson_id", lessonId)
+        .maybeSingle();
+
+      if (videoProgressError) throw new Error(videoProgressError.message);
+      if (Number(videoProgress?.video_progress_percent ?? 0) < 90) {
+        return NextResponse.json(
+          { error: "Watch at least 90% of the lesson video before completing the lesson." },
+          { status: 403 },
+        );
+      }
     }
 
     const completedAt = new Date().toISOString();
