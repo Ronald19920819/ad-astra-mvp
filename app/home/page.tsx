@@ -1,9 +1,9 @@
 import Link from "next/link";
 import HeroBanner from "@/components/HeroBanner";
-import MotivationalCard from "@/components/MotivationalCard";
 import TutorSuggestion from "@/components/TutorSuggestion";
 import { Next24HoursCard } from "@/components/home/Next24HoursCard";
 import { TeacherAnnouncementsCard } from "@/components/home/TeacherAnnouncementsCard";
+import SchoolOverviewCard from "@/components/SchoolOverviewCard";
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
 import {
   getLearnerHomeCommunications,
@@ -36,7 +36,6 @@ export default async function HomeDashboard() {
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-28">
       <div className="mx-auto max-w-md">
         <HeroBanner />
-        <MotivationalCard />
 
         {profile ? (
           <>
@@ -44,6 +43,7 @@ export default async function HomeDashboard() {
             <TeacherAnnouncementsCard
               announcements={communications.announcements}
             />
+            <SchoolOverviewCard />
           </>
         ) : (
           <p className="mb-5 rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-700 shadow-sm">

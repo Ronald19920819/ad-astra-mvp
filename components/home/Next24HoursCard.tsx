@@ -32,7 +32,7 @@ export function Next24HoursCard({
               fontWeight: 700,
             }}
           >
-            Next 24 Hours
+            Message Board
           </h2>
 
           <p
@@ -44,7 +44,7 @@ export function Next24HoursCard({
               marginTop: "2px",
             }}
           >
-            Upcoming lessons and activities.
+            Next 24 Hours
           </p>
         </div>
       </div>
