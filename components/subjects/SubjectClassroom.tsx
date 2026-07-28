@@ -18,6 +18,7 @@ import {
   type LessonLifecycleStatus,
 } from "@/lib/lessons/lessonLifecycle";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -273,7 +274,7 @@ export function SubjectClassroom({
       <div className="mx-auto w-full min-w-0 max-w-md">
         <div className="mb-6 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg">
           <div className="flex items-center gap-4">
-            <Link href={subject.routes.learnerDashboard}>
+            <Link href={buildSubjectRoute(subject, "learnerDashboard")}>
               <ArrowLeft size={22} />
             </Link>
             <div
@@ -322,7 +323,7 @@ export function SubjectClassroom({
                 lifecycleStatus={lessonLifecycle.statusByLessonId.get(
                   latestLesson.id,
                 )!}
-                classroomHref={subject.routes.learnerClassroom}
+                classroomHref={buildSubjectRoute(subject, "learnerClassroom")}
                 subjectColour={subject.colourTheme.primary}
               />
             </section>
@@ -411,9 +412,10 @@ export function SubjectClassroom({
                                           lesson.id,
                                         )!
                                       }
-                                      classroomHref={
-                                        subject.routes.learnerClassroom
-                                      }
+                                      classroomHref={buildSubjectRoute(
+                                        subject,
+                                        "learnerClassroom",
+                                      )}
                                       subjectColour={
                                         subject.colourTheme.primary
                                       }

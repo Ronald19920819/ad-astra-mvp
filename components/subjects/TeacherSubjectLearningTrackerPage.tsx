@@ -10,6 +10,7 @@ import {
   type TrackerOverallStatus,
 } from "@/lib/supabase/learningTrackerReader";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -211,7 +212,7 @@ export async function TeacherSubjectLearningTrackerPage({
             </div>
             <div className="mt-auto">
               <Link
-                href={subject.routes.teacherOverview}
+                href={buildSubjectRoute(subject, "teacherOverview")}
                 className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur"
               >
                 <ArrowLeft size={16} /> Back to Dashboard

@@ -12,6 +12,7 @@ import {
 } from "@/lib/supabase/activityReader";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -342,7 +343,7 @@ export function SubjectActivityPage({
       >
         <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
           <Link
-            href={subject.routes.learnerActivities}
+            href={buildSubjectRoute(subject, "learnerActivities")}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
           >
             <ArrowLeft size={16} /> Back to Activities
@@ -414,7 +415,7 @@ export function SubjectActivityPage({
       <div className="mx-auto w-full min-w-0 max-w-md">
         <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
           <Link
-            href={subject.routes.learnerActivities}
+            href={buildSubjectRoute(subject, "learnerActivities")}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
           >
             <ArrowLeft size={16} /> Back to Activities
@@ -632,7 +633,7 @@ export function SubjectActivityPage({
 
         {submission && (
           <Link
-            href={subject.routes.learnerActivities}
+            href={buildSubjectRoute(subject, "learnerActivities")}
             className="mb-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--subject-border)] bg-white py-4 font-bold text-[var(--subject-primary)] shadow-sm"
           >
             <ArrowLeft size={18} />

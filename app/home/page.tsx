@@ -1,21 +1,61 @@
 import Link from "next/link";
 import HeroBanner from "@/components/HeroBanner";
-import MessageBoard from "@/components/MessageBoard";
 import MotivationalCard from "@/components/MotivationalCard";
-import SchoolOverviewCard from "@/components/SchoolOverviewCard";
 import TutorSuggestion from "@/components/TutorSuggestion";
+import { Next24HoursCard } from "@/components/home/Next24HoursCard";
+import { TeacherAnnouncementsCard } from "@/components/home/TeacherAnnouncementsCard";
+import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
+import {
+  getLearnerHomeCommunications,
+  type LearnerHomeCommunications,
+} from "@/lib/supabase/subjectCommunications";
+import { logSupabaseError } from "@/lib/supabase/errorDetails";
 
-export default function HomeDashboard() {
+export const dynamic = "force-dynamic";
+
+export default async function HomeDashboard() {
+  const profile = await getAuthenticatedLearnerProfile();
+  let loadError = "";
+  let communications: LearnerHomeCommunications = {
+    next24Hours: [],
+    announcements: [],
+  };
+
+  if (profile) {
+    try {
+      communications = await getLearnerHomeCommunications(profile);
+    } catch (error) {
+      logSupabaseError("Unable to load learner home communications:", error);
+      loadError = "Unable to load the latest dashboard updates.";
+    }
+  } else {
+    loadError = "Unable to load your learner dashboard.";
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-28">
       <div className="mx-auto max-w-md">
         <HeroBanner />
-
         <MotivationalCard />
 
-        <MessageBoard />
+        {profile ? (
+          <>
+            <Next24HoursCard items={communications.next24Hours} />
+            <TeacherAnnouncementsCard
+              announcements={communications.announcements}
+            />
+          </>
+        ) : (
+          <p className="mb-5 rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-700 shadow-sm">
+            {loadError}
+          </p>
+        )}
 
-        <SchoolOverviewCard />
+        {loadError && profile ? (
+          <p className="mb-5 rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-700 shadow-sm">
+            {loadError}
+          </p>
+        ) : null}
 
         <TutorSuggestion />
       </div>

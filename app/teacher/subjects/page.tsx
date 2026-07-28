@@ -8,8 +8,12 @@ import {
   ScrollText,
 } from "lucide-react";
 import { getTeacherSubjectSummaryForTeacher } from "@/lib/supabase/subjectTeacherSummary";
-import { subjectConfigurations } from "@/lib/subjects/subjectConfig";
+import {
+  buildSubjectRoute,
+  subjectConfigurations,
+} from "@/lib/subjects/subjectConfig";
 import { getAuthenticatedTeacherProfile } from "@/lib/supabase/teacherProfile";
+import { TeacherSubjectEnrolmentManager } from "@/components/subjects/TeacherSubjectEnrolmentManager";
 
 const subjectIcons = {
   "bar-chart": BarChart3,
@@ -48,6 +52,12 @@ export default async function TeacherSubjectsPage() {
   const subjects = summaryResults.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : [],
   );
+  const enrolmentSubjects = subjects.map(({ subject }) => ({
+    id: subject.databaseId,
+    name: subject.displayName,
+    colour: subject.colourTheme.primary,
+    familyKey: subject.familyKey,
+  }));
 
   return (
     <main
@@ -118,7 +128,7 @@ export default async function TeacherSubjectsPage() {
             return (
               <Link
                 key={subject.subject.key}
-                href={subject.subject.routes.teacherOverview}
+                href={buildSubjectRoute(subject.subject, "teacherOverview")}
                 className="block"
               >
                 <div className="flex items-center gap-4 rounded-[2rem] border border-blue-100 bg-white px-4 py-4 shadow-sm">
@@ -177,6 +187,10 @@ export default async function TeacherSubjectsPage() {
             );
           })}
         </div>
+
+        {enrolmentSubjects.length > 0 && (
+          <TeacherSubjectEnrolmentManager subjects={enrolmentSubjects} />
+        )}
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">

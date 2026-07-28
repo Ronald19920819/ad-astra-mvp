@@ -6,6 +6,7 @@ import TeacherSubmissionReviewForm from "@/components/activities/TeacherSubmissi
 import { StructuredReadingContent } from "@/components/readings/StructuredReadingContent";
 import { getSubjectSubmissionReview } from "@/lib/supabase/activityReviewReader";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -62,7 +63,7 @@ export async function TeacherSubjectSubmissionReviewPage({
       >
         <div className="mx-auto max-w-2xl rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
           <Link
-            href={subject.routes.teacherReview}
+            href={buildSubjectRoute(subject, "teacherReview")}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
           >
             <ArrowLeft size={16} /> Back to Activity Review
@@ -116,7 +117,7 @@ export async function TeacherSubjectSubmissionReviewPage({
       <div className="mx-auto max-w-2xl px-4 pt-4">
         <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
           <Link
-            href={subject.routes.teacherReview}
+            href={buildSubjectRoute(subject, "teacherReview")}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
           >
             <ArrowLeft size={16} /> Back to Activity Review

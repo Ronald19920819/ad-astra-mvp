@@ -1,5 +1,15 @@
 import { TeacherSubjectClassroomPage } from "@/components/subjects/TeacherSubjectClassroomPage";
+import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
-export default function HistoryClassroomPage() {
-  return <TeacherSubjectClassroomPage subjectKey="history" />;
+export default async function HistoryClassroomPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ subject?: string | string[] }>;
+}) {
+  const subjectKey = resolveSubjectKeyFromSearchParams(
+    "history",
+    await searchParams,
+  );
+
+  return <TeacherSubjectClassroomPage subjectKey={subjectKey} />;
 }

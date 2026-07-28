@@ -24,6 +24,7 @@ import {
   serializeStructuredReading,
 } from "@/lib/readings/structuredReading";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -877,7 +878,7 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
 
     <div className="mt-auto">
       <Link
-        href={subject.routes.teacherOverview}
+                href={buildSubjectRoute(subject, "teacherOverview")}
         className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur"
       >
         <ArrowLeft size={16} />

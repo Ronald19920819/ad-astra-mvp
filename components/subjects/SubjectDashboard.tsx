@@ -9,8 +9,13 @@ import {
   getSubjectLearnerOverview,
   type BusinessStudiesLearnerOverview,
 } from "@/lib/supabase/businessStudiesLearnerOverview";
+import {
+  getLearnerSubjectEvents,
+  type SubjectEventSummary,
+} from "@/lib/supabase/subjectCommunications";
 import { verifyLearnerSubjectAccessForProfile } from "@/lib/supabase/subjectAccess";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -25,6 +30,8 @@ import {
   SquarePen,
 } from "lucide-react";
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
+import { SubjectImportantDatesCard } from "@/components/subjects/SubjectImportantDatesCard";
+import { logSupabaseError } from "@/lib/supabase/errorDetails";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +76,7 @@ export async function SubjectDashboard({
     };
   }
   let overview: BusinessStudiesLearnerOverview | null = null;
+  let events: SubjectEventSummary[] = [];
   let loadError = "";
 
   if (identity.status === "success" && currentLearner) {
@@ -85,11 +93,20 @@ export async function SubjectDashboard({
         subject.databaseId,
       );
     } catch (error) {
-      console.error(
+      logSupabaseError(
         `Unable to load ${subject.displayName} learner overview:`,
         error,
       );
       loadError = `Unable to load your ${subject.displayName} progress.`;
+    }
+
+    try {
+      events = await getLearnerSubjectEvents(currentLearner, subject.databaseId);
+    } catch (error) {
+      logSupabaseError(
+        `Unable to load ${subject.displayName} learner events:`,
+        error,
+      );
     }
   }
   const learnerName =
@@ -174,6 +191,8 @@ export async function SubjectDashboard({
             </p>
           </div>
         </div>
+
+        <SubjectImportantDatesCard events={events} />
 
         <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
@@ -269,7 +288,7 @@ export async function SubjectDashboard({
             Find lesson videos, readings and coursework linked to each activity.
           </p>
 
-          <Link href={subject.routes.learnerClassroom}>
+          <Link href={buildSubjectRoute(subject, "learnerClassroom")}>
             <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
               <div className="flex items-center gap-3">
                <BookOpen size={18} className="text-[var(--subject-primary)]" />
@@ -303,7 +322,7 @@ export async function SubjectDashboard({
   Complete activities, submit your work and keep track of upcoming tasks.
 </p>
 
-<Link href={subject.routes.learnerActivities}>
+<Link href={buildSubjectRoute(subject, "learnerActivities")}>
   <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
     <div className="flex items-center gap-3">
       <SquarePen size={18} className="text-[var(--subject-primary)]" />

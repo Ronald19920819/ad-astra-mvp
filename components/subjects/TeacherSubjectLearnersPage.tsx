@@ -11,6 +11,7 @@ import {
   type TrackerOverallStatus,
 } from "@/lib/supabase/learningTrackerReader";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -99,7 +100,7 @@ export async function TeacherSubjectLearnersPage({
           style={{ borderColor: subject.colourTheme.border }}
         >
           <Link
-            href={subject.routes.teacherOverview}
+            href={buildSubjectRoute(subject, "teacherOverview")}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold"
             style={{ color: subject.colourTheme.primary }}
           >
@@ -221,7 +222,7 @@ export async function TeacherSubjectLearnersPage({
                   </div>
 
                   <Link
-                    href={subject.routes.teacherTracker}
+                    href={buildSubjectRoute(subject, "teacherTracker")}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white"
                     style={{ backgroundColor: subject.colourTheme.primary }}
                   >

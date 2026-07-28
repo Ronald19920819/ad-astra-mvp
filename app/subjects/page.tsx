@@ -13,6 +13,7 @@ import { getLearnerSubjectKeysForProfile } from "@/lib/supabase/subjectAccess";
 import { logSupabaseError } from "@/lib/supabase/errorDetails";
 import { getSubjectCardStatus } from "@/lib/subjects/learnerStatus";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -161,7 +162,7 @@ export default async function SubjectsPage() {
               return (
                 <Link
                   key={subject.key}
-                  href={subject.routes.learnerDashboard}
+                  href={buildSubjectRoute(subject, "learnerDashboard")}
                   className="block"
                 >
                   <div

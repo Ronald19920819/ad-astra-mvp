@@ -183,13 +183,12 @@ export default function LoginPage() {
                 />
                 Remember me
               </label>
-              <button
-                type="button"
-                title="Password recovery will be added later."
+              <Link
+                href="/forgot-password"
                 className="font-semibold text-[#508DB1]"
               >
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             {errorMessage && (

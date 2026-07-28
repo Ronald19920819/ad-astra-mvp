@@ -16,6 +16,7 @@ import {
   type LearnerPublishedActivity,
 } from "@/lib/supabase/activityReader";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -305,7 +306,7 @@ export function SubjectActivities({
       <div className="mx-auto w-full min-w-0 max-w-md">
         <div className="mb-6 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg">
           <div className="flex items-center gap-4">
-            <Link href={subject.routes.learnerDashboard}>
+            <Link href={buildSubjectRoute(subject, "learnerDashboard")}>
               <ArrowLeft size={22} />
             </Link>
             <div
@@ -348,7 +349,7 @@ export function SubjectActivities({
           ) : (
             <ActivityCard
               activity={latestActivity}
-              activitiesHref={subject.routes.learnerActivities}
+              activitiesHref={buildSubjectRoute(subject, "learnerActivities")}
               subjectColour={subject.colourTheme.primary}
             />
           )}
@@ -462,9 +463,10 @@ export function SubjectActivities({
                                   <ActivityCard
                                     key={activity.id}
                                     activity={activity}
-                                    activitiesHref={
-                                      subject.routes.learnerActivities
-                                    }
+                                    activitiesHref={buildSubjectRoute(
+                                      subject,
+                                      "learnerActivities",
+                                    )}
                                     subjectColour={subject.colourTheme.primary}
                                   />
                                 ))}

@@ -21,6 +21,7 @@ import { TrackedYouTubePlayer } from "@/components/lessons/TrackedYouTubePlayer"
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import { LESSON_QUIZ_PASS_PERCENT } from "@/lib/lessons/lessonAssessment";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
@@ -281,7 +282,7 @@ export function SubjectLessonPage({
     return (
       <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`} style={themeStyle}>
         <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
-          <Link href={subject.routes.learnerClassroom} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
+          <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">
@@ -322,7 +323,7 @@ export function SubjectLessonPage({
     <main className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12`} style={themeStyle}>
       <div className="mx-auto w-full min-w-0 max-w-md">
         <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
-          <Link href={subject.routes.learnerClassroom} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
+          <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
           </Link>
           <h1 className="break-words text-3xl font-bold text-slate-900">Lesson {lesson.lesson_number}</h1>
@@ -533,7 +534,9 @@ export function SubjectLessonPage({
                     <button
                       type="button"
                       onClick={() =>
-                        router.push(subject.routes.learnerClassroom)
+                        router.push(
+                          buildSubjectRoute(subject, "learnerClassroom"),
+                        )
                       }
                       className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm"
                     >

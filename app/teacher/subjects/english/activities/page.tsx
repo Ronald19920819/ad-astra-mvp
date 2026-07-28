@@ -1,5 +1,15 @@
 import { TeacherSubjectActivitiesPage } from "@/components/subjects/TeacherSubjectActivitiesPage";
+import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
-export default function EnglishActivitiesPage() {
-  return <TeacherSubjectActivitiesPage subjectKey="english" />;
+export default async function EnglishActivitiesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ subject?: string | string[] }>;
+}) {
+  const subjectKey = resolveSubjectKeyFromSearchParams(
+    "english",
+    await searchParams,
+  );
+
+  return <TeacherSubjectActivitiesPage subjectKey={subjectKey} />;
 }

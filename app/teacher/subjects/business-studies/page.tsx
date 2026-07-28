@@ -1,7 +1,17 @@
 import { TeacherSubjectOverviewPage } from "@/components/subjects/TeacherSubjectOverviewPage";
+import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
 export const dynamic = "force-dynamic";
 
-export default function BusinessStudiesTeacherOverview() {
-  return <TeacherSubjectOverviewPage subjectKey="business-studies" />;
+export default async function BusinessStudiesTeacherOverview({
+  searchParams,
+}: {
+  searchParams?: Promise<{ subject?: string | string[] }>;
+}) {
+  const subjectKey = resolveSubjectKeyFromSearchParams(
+    "business-studies",
+    await searchParams,
+  );
+
+  return <TeacherSubjectOverviewPage subjectKey={subjectKey} />;
 }

@@ -3,11 +3,21 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { neueHaas } from "@/app/fonts";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
+import {
+  getTeacherSubjectAnnouncement,
+  getTeacherSubjectEvents,
+  type SubjectAnnouncementSummary,
+  type SubjectEventSummary,
+} from "@/lib/supabase/subjectCommunications";
 import { getTeacherSubjectSummaryForTeacher } from "@/lib/supabase/subjectTeacherSummary";
 import { getAuthenticatedTeacherProfile } from "@/lib/supabase/teacherProfile";
+import { TeacherSubjectAnnouncementCard } from "@/components/subjects/TeacherSubjectAnnouncementCard";
+import { TeacherSubjectEventsCard } from "@/components/subjects/TeacherSubjectEventsCard";
+import { logSupabaseError } from "@/lib/supabase/errorDetails";
 import {
   ArrowLeft,
   BarChart3,
@@ -44,16 +54,40 @@ export async function TeacherSubjectOverviewPage({
   let summaryError = "";
   if (teacherProfile) {
     try {
-      summary = await getTeacherSubjectSummaryForTeacher(
-        teacherProfile,
-        subject.databaseId,
-      );
+      summary = await getTeacherSubjectSummaryForTeacher(teacherProfile, subject.databaseId);
     } catch (error) {
       console.error(`Unable to load ${subject.displayName} teacher summary:`, error);
       summaryError = "Unable to load the current subject summary.";
     }
   } else {
     summaryError = "Unable to load the current subject summary.";
+  }
+  let initialEvents: SubjectEventSummary[] = [];
+  let initialAnnouncement: SubjectAnnouncementSummary | null = null;
+  if (teacherProfile) {
+    try {
+      initialEvents = await getTeacherSubjectEvents(
+        teacherProfile,
+        subject.databaseId,
+      );
+    } catch (error) {
+      logSupabaseError(
+        `Unable to load ${subject.displayName} events:`,
+        error,
+      );
+    }
+
+    try {
+      initialAnnouncement = await getTeacherSubjectAnnouncement(
+        teacherProfile,
+        subject.databaseId,
+      );
+    } catch (error) {
+      logSupabaseError(
+        `Unable to load ${subject.displayName} announcement:`,
+        error,
+      );
+    }
   }
 
   return (
@@ -207,7 +241,7 @@ export async function TeacherSubjectOverviewPage({
 
           
 
-          <Link href={subject.routes.teacherClassroom}>
+          <Link href={buildSubjectRoute(subject, "teacherClassroom")}>
             <div className="mt-3 flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
               <div className="flex items-center gap-3">
                 <BookOpen size={18} className="text-[#F97316]" />
@@ -242,7 +276,7 @@ export async function TeacherSubjectOverviewPage({
           </p>
 
 
-          <Link href={subject.routes.teacherActivities}>
+          <Link href={buildSubjectRoute(subject, "teacherActivities")}>
             <div className="flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
               <div className="flex items-center gap-3">
                 <SquarePen size={18} className="text-[#F97316]" />
@@ -274,7 +308,7 @@ export async function TeacherSubjectOverviewPage({
 
           
 
-          <Link href={subject.routes.teacherTracker}>
+          <Link href={buildSubjectRoute(subject, "teacherTracker")}>
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Learning Tracker
             </div>
@@ -299,14 +333,24 @@ export async function TeacherSubjectOverviewPage({
 
           
 
-          <Link href={subject.routes.teacherReview}>
+          <Link href={buildSubjectRoute(subject, "teacherReview")}>
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Activity Review
             </div>
           </Link>
         </section>
 
-        <Link href={subject.routes.teacherLearners}>
+        <TeacherSubjectEventsCard
+          subjectId={subject.databaseId}
+          initialEvents={initialEvents.slice(0, 3)}
+        />
+
+        <TeacherSubjectAnnouncementCard
+          subjectId={subject.databaseId}
+          initialAnnouncement={initialAnnouncement}
+        />
+
+        <Link href={buildSubjectRoute(subject, "teacherLearners")}>
           <section className="rounded-[1.5rem] border border-orange-100 bg-white/90 p-4 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
