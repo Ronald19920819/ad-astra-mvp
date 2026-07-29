@@ -16,6 +16,7 @@ import {
   type LearnerPublishedActivity,
 } from "@/lib/supabase/activityReader";
 import {
+  buildSubjectDetailRoute,
   buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
@@ -88,11 +89,11 @@ function ActivityStatusIndicator({
 
 function ActivityCard({
   activity,
-  activitiesHref,
+  activityHref,
   subjectColour,
 }: {
   activity: LearnerPublishedActivity;
-  activitiesHref: string;
+  activityHref: string;
   subjectColour: string;
 }) {
   const scheduleLabel =
@@ -107,7 +108,7 @@ function ActivityCard({
 
   return (
     <Link
-      href={`${activitiesHref}/${activity.id}`}
+      href={activityHref}
       data-activity-id={activity.id}
       className="block w-full min-w-0"
     >
@@ -349,7 +350,11 @@ export function SubjectActivities({
           ) : (
             <ActivityCard
               activity={latestActivity}
-              activitiesHref={buildSubjectRoute(subject, "learnerActivities")}
+              activityHref={buildSubjectDetailRoute(
+                subject,
+                "learnerActivities",
+                latestActivity.id,
+              )}
               subjectColour={subject.colourTheme.primary}
             />
           )}
@@ -463,9 +468,10 @@ export function SubjectActivities({
                                   <ActivityCard
                                     key={activity.id}
                                     activity={activity}
-                                    activitiesHref={buildSubjectRoute(
+                                    activityHref={buildSubjectDetailRoute(
                                       subject,
                                       "learnerActivities",
+                                      activity.id,
                                     )}
                                     subjectColour={subject.colourTheme.primary}
                                   />

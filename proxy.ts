@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
+import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 
 const teacherRoutePrefixes = ["/teacher"] as const;
 const administratorRoutePrefixes = ["/administrator"] as const;
@@ -29,7 +30,8 @@ const learnerRoutePrefixes = [
 ] as const;
 const learnerSubjectRouteRequirements = [
   {
-    subjectId: "c472f3c9-0e6f-40de-a748-3ad9400ac069",
+    familyKey: "business-studies",
+    canonicalSubjectId: "c472f3c9-0e6f-40de-a748-3ad9400ac069",
     prefixes: [
       "/business-studies-activities",
       "/business-studies-classroom",
@@ -37,7 +39,8 @@ const learnerSubjectRouteRequirements = [
     ],
   },
   {
-    subjectId: "0d0f5c7f-23c6-4022-a5c3-f6e1c779b681",
+    familyKey: "english",
+    canonicalSubjectId: "0d0f5c7f-23c6-4022-a5c3-f6e1c779b681",
     prefixes: [
       "/english-activities",
       "/english-classroom",
@@ -45,7 +48,8 @@ const learnerSubjectRouteRequirements = [
     ],
   },
   {
-    subjectId: "e26c1112-3627-4a56-8f6a-4eab5d209b23",
+    familyKey: "afrikaans",
+    canonicalSubjectId: "e26c1112-3627-4a56-8f6a-4eab5d209b23",
     prefixes: [
       "/afrikaans-activities",
       "/afrikaans-classroom",
@@ -53,7 +57,8 @@ const learnerSubjectRouteRequirements = [
     ],
   },
   {
-    subjectId: "dca2600c-932f-46bf-904c-a99be158e7f0",
+    familyKey: "history",
+    canonicalSubjectId: "dca2600c-932f-46bf-904c-a99be158e7f0",
     prefixes: [
       "/history-activities",
       "/history-classroom",
@@ -121,6 +126,7 @@ export async function proxy(request: NextRequest) {
         matchesRoutePrefix(pathname, prefix),
       ),
   );
+  const selectedLearnerSubjectId = request.nextUrl.searchParams.get("subject");
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -374,11 +380,21 @@ export async function proxy(request: NextRequest) {
     }
 
     if (requiredLearnerSubject) {
+      const requestedSubject =
+        selectedLearnerSubjectId
+          ? getSubjectConfigurationByDatabaseId(selectedLearnerSubjectId)
+          : null;
+      const requiredSubjectId =
+        requestedSubject &&
+        requestedSubject.familyKey === requiredLearnerSubject.familyKey
+          ? requestedSubject.databaseId
+          : requiredLearnerSubject.canonicalSubjectId;
+
       const { data: enrolment, error: enrolmentError } = await admin
         .from("learner_subjects")
         .select("id")
         .eq("learner_profile_id", learnerProfile.id)
-        .eq("subject_id", requiredLearnerSubject.subjectId)
+        .eq("subject_id", requiredSubjectId)
         .eq("status", "approved")
         .eq("is_active", true)
         .maybeSingle();
@@ -394,7 +410,8 @@ export async function proxy(request: NextRequest) {
         if (process.env.NODE_ENV === "development") {
           console.info("[learner-subject-route-denied]", {
             pathname,
-            subjectId: requiredLearnerSubject.subjectId,
+            subjectId: requiredSubjectId,
+            selectedSubjectId: selectedLearnerSubjectId,
           });
         }
         return redirectAuthenticatedLearner("/subjects");

@@ -1,6 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
-import { BarChart3, BookOpen, Languages, ScrollText } from "lucide-react";
+import {
+  ArrowLeft,
+  BarChart3,
+  BookOpen,
+  Languages,
+  ScrollText,
+} from "lucide-react";
 import { neueHaas } from "@/app/fonts";
 import {
   type LearnerIdentityResult,
@@ -110,6 +116,13 @@ export default async function SubjectsPage() {
         >
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
           <div className="relative z-10 flex h-full flex-col justify-center p-5">
+            <Link
+              href="/home"
+              className={`${neueHaas.className} mb-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-white`}
+            >
+              <ArrowLeft size={16} />
+              Back to Home
+            </Link>
             <div className="mb-3 flex items-center gap-3">
               <Image
                 src="/ad_astra_logo.png"

@@ -18,6 +18,7 @@ import {
   type LessonLifecycleStatus,
 } from "@/lib/lessons/lessonLifecycle";
 import {
+  buildSubjectDetailRoute,
   buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
@@ -105,12 +106,12 @@ function LessonLifecycleIndicator({
 function LessonCard({
   lesson,
   lifecycleStatus,
-  classroomHref,
+  lessonHref,
   subjectColour,
 }: {
   lesson: LearnerPublishedLesson;
   lifecycleStatus: LessonLifecycleStatus;
-  classroomHref: string;
+  lessonHref: string;
   subjectColour: string;
 }) {
   const scheduleLabel =
@@ -120,7 +121,7 @@ function LessonCard({
 
   return (
     <Link
-      href={`${classroomHref}/${lesson.id}`}
+      href={lessonHref}
       className="block w-full min-w-0 rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] p-4 shadow-sm"
     >
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -323,7 +324,11 @@ export function SubjectClassroom({
                 lifecycleStatus={lessonLifecycle.statusByLessonId.get(
                   latestLesson.id,
                 )!}
-                classroomHref={buildSubjectRoute(subject, "learnerClassroom")}
+                lessonHref={buildSubjectDetailRoute(
+                  subject,
+                  "learnerClassroom",
+                  latestLesson.id,
+                )}
                 subjectColour={subject.colourTheme.primary}
               />
             </section>
@@ -412,9 +417,10 @@ export function SubjectClassroom({
                                           lesson.id,
                                         )!
                                       }
-                                      classroomHref={buildSubjectRoute(
+                                      lessonHref={buildSubjectDetailRoute(
                                         subject,
                                         "learnerClassroom",
+                                        lesson.id,
                                       )}
                                       subjectColour={
                                         subject.colourTheme.primary

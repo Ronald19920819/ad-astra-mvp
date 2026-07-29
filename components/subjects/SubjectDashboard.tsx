@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { neueHaas } from "@/app/fonts";
+import { ArrowLeft } from "lucide-react";
 import {
   type LearnerIdentityResult,
 } from "@/lib/supabase/learnerWorkReader";
@@ -145,6 +146,13 @@ export async function SubjectDashboard({
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
 
           <div className="relative z-10 h-full p-5 flex flex-col justify-center">
+            <Link
+              href="/subjects"
+              className="mb-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-white"
+            >
+              <ArrowLeft size={16} />
+              Back to Subjects
+            </Link>
             <div className="flex items-center gap-3 mb-3">
               <Image
                 src="/ad_astra_logo.png"
