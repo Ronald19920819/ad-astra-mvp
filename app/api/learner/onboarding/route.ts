@@ -4,6 +4,14 @@ import {
 import { createSupabaseRequestClient } from "@/lib/supabase/server";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 
+type SupabaseLikeError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+  status?: number;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -17,7 +25,7 @@ async function readJson(request: Request) {
 }
 
 function onboardingError(
-  error: { code?: string; message?: string } | null,
+  error: SupabaseLikeError | null,
   fallback: string,
 ) {
   if (error?.code === "42501") {
@@ -27,9 +35,25 @@ function onboardingError(
     );
   }
 
+  if (
+    error?.code === "22023" &&
+    error?.message === "COMPLETE_LEARNER_PROFILE_FIRST"
+  ) {
+    return Response.json(
+      {
+        error: "Complete your learner profile before requesting subjects.",
+        code: "PROFILE_INCOMPLETE",
+      },
+      { status: 409 },
+    );
+  }
+
   console.error("Learner onboarding request failed:", {
     code: error?.code,
     message: error?.message,
+    details: error?.details,
+    hint: error?.hint,
+    status: error?.status,
   });
   return Response.json(
     { error: fallback, code: "ONBOARDING_FAILED" },
@@ -51,7 +75,7 @@ export async function GET() {
   } catch (error) {
     return onboardingError(
       error && typeof error === "object"
-        ? (error as { code?: string; message?: string })
+        ? (error as SupabaseLikeError)
         : null,
       "Unable to load learner onboarding.",
     );
@@ -108,7 +132,6 @@ export async function POST(request: Request) {
   if (
     !Array.isArray(subjectIds) ||
     subjectIds.length === 0 ||
-    subjectIds.length > 4 ||
     !subjectIds.every(
       (subjectId) =>
         typeof subjectId === "string" &&

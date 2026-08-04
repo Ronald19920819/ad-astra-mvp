@@ -58,6 +58,7 @@ export default function LearnerSubjectRequestsPage() {
   }, [fetchOnboarding]);
 
   function toggleSubject(subjectId: string) {
+    setErrorMessage("");
     setSelectedSubjectIds((current) =>
       current.includes(subjectId)
         ? current.filter((id) => id !== subjectId)

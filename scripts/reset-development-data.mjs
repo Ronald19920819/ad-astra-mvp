@@ -154,6 +154,14 @@ const resetTargets = [
     table: "activity_submissions",
   },
   {
+    key: "learnerActivityDrafts",
+    table: "learner_activity_drafts",
+  },
+  {
+    key: "learnerActivityDraftAnswers",
+    table: "learner_activity_draft_answers",
+  },
+  {
     key: "learnerLessonProgress",
     table: "learner_lesson_progress",
   },
@@ -168,6 +176,8 @@ const resetTargets = [
 ];
 
 const dependentDeleteOrder = [
+  { table: "learner_activity_draft_answers" },
+  { table: "learner_activity_drafts" },
   { table: "activity_submission_answers" },
   { table: "activity_submissions" },
   { table: "learner_lesson_progress" },
@@ -211,6 +221,7 @@ async function main() {
   console.log(formatSummaryLine("Lessons", counts.lessons));
   console.log(formatSummaryLine("Activities", counts.activities));
   console.log(formatSummaryLine("Submissions", counts.activitySubmissions));
+  console.log(formatSummaryLine("Activity Drafts", counts.learnerActivityDrafts));
   console.log(formatSummaryLine("Progress", counts.learnerLessonProgress));
   console.log(formatSummaryLine("Quiz Attempts", counts.learnerQuizAttempts));
   console.log("");
@@ -239,6 +250,10 @@ async function main() {
   console.log(`✓ Lesson Materials deleted: ${counts.lessonMaterials}`);
   console.log(`✓ Activities deleted: ${counts.activities}`);
   console.log(`✓ Activity Submissions deleted: ${counts.activitySubmissions}`);
+  console.log(`✓ Activity Drafts deleted: ${counts.learnerActivityDrafts}`);
+  console.log(
+    `✓ Activity Draft Answers deleted: ${counts.learnerActivityDraftAnswers}`,
+  );
   console.log(`✓ Lesson Progress deleted: ${counts.learnerLessonProgress}`);
   console.log(`✓ Lesson Completions deleted: ${counts.learnerLessonCompletions}`);
   console.log(`✓ Quiz Attempts deleted: ${counts.learnerQuizAttempts}`);

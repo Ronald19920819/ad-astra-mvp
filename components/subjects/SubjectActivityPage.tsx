@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -21,6 +27,15 @@ import {
   isActivitySubmissionSnapshot,
   type ActivitySubmissionSnapshot,
 } from "@/lib/activities/activitySnapshot";
+import {
+  answersRecordFromDraft,
+  buildActivityDraftCacheKey,
+  choosePreferredDraftSource,
+  parseLocalLearnerActivityDraftCache,
+  reconcileAnswersForQuestionIds,
+  type LearnerActivityDraft,
+  type LocalLearnerActivityDraftCache,
+} from "@/lib/activities/activityDrafts";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -108,6 +123,23 @@ type SavedActivitySubmission = {
   activity_submission_answers: SavedSubmissionAnswer[];
 };
 
+type DraftSaveState =
+  | "idle"
+  | "saving"
+  | "saved"
+  | "error"
+  | "offline"
+  | "newer-draft";
+
+type DraftApiResponse = {
+  learnerId: string;
+  subjectId?: string;
+  currentActivityVersion?: number;
+  draft: LearnerActivityDraft | null;
+  error?: string;
+  code?: string;
+};
+
 export function SubjectActivityPage({
   subjectKey = "business-studies",
 }: {
@@ -128,9 +160,21 @@ export function SubjectActivityPage({
   const [submission, setSubmission] =
     useState<SavedActivitySubmission | null>(null);
   const [isLoadingSubmission, setIsLoadingSubmission] = useState(true);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionMessage, setSubmissionMessage] = useState("");
   const [submissionAccessBlocked, setSubmissionAccessBlocked] = useState(false);
+  const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
+  const [draftNotice, setDraftNotice] = useState("");
+  const [draftLearnerId, setDraftLearnerId] = useState<string | null>(null);
+  const saveTimeoutRef = useRef<number | null>(null);
+  const localDraftCacheKeyRef = useRef<string | null>(null);
+  const latestAnswersRef = useRef<Record<string, string>>({});
+  const latestQuestionIdsRef = useRef<string[]>([]);
+  const latestActivityVersionRef = useRef<number | null>(null);
+  const latestDraftRevisionRef = useRef(0);
+  const hasDirtyLocalDraftRef = useRef(false);
+  const isSavingDraftRef = useRef(false);
   const submissionSnapshot =
     submission && isActivitySubmissionSnapshot(submission.activity_snapshot)
       ? submission.activity_snapshot
@@ -162,6 +206,197 @@ export function SubjectActivityPage({
       ),
     );
   }
+
+  function readLocalDraftCache() {
+    if (
+      typeof window === "undefined" ||
+      !localDraftCacheKeyRef.current
+    ) {
+      return null;
+    }
+
+    return parseLocalLearnerActivityDraftCache(
+      window.localStorage.getItem(localDraftCacheKeyRef.current),
+    );
+  }
+
+  const writeLocalDraftCache = useCallback(
+    (input: {
+      answers: Record<string, string>;
+      revision?: number;
+      activityVersion?: number;
+      dirty: boolean;
+      updatedAt?: string;
+    }) => {
+      if (
+        typeof window === "undefined" ||
+        !localDraftCacheKeyRef.current ||
+        !draftLearnerId
+      ) {
+        return;
+      }
+
+      const activityVersion =
+        input.activityVersion ?? latestActivityVersionRef.current ?? 0;
+      if (activityVersion <= 0) return;
+
+      const nextCache: LocalLearnerActivityDraftCache = {
+        learnerId: draftLearnerId,
+        subjectId: subject.databaseId,
+        activityId,
+        activityVersion,
+        revision: input.revision ?? latestDraftRevisionRef.current,
+        updatedAt: input.updatedAt ?? new Date().toISOString(),
+        answers: reconcileAnswersForQuestionIds(
+          latestQuestionIdsRef.current,
+          input.answers,
+        ),
+        dirty: input.dirty,
+      };
+
+      window.localStorage.setItem(
+        localDraftCacheKeyRef.current,
+        JSON.stringify(nextCache),
+      );
+      hasDirtyLocalDraftRef.current = nextCache.dirty;
+    },
+    [activityId, draftLearnerId, subject.databaseId],
+  );
+
+  const clearLocalDraftCache = useCallback(() => {
+    if (
+      typeof window !== "undefined" &&
+      localDraftCacheKeyRef.current
+    ) {
+      window.localStorage.removeItem(localDraftCacheKeyRef.current);
+    }
+    hasDirtyLocalDraftRef.current = false;
+  }, []);
+
+  const saveDraft = useCallback(
+    async (reason: "debounced" | "blur" | "visibility" | "before-submit") => {
+      if (
+        !activityData ||
+        !draftLearnerId ||
+        submission ||
+        submissionAccessBlocked ||
+        isSavingDraftRef.current
+      ) {
+        return false;
+      }
+
+      if (!navigator.onLine) {
+        setDraftSaveState("offline");
+        writeLocalDraftCache({
+          answers: latestAnswersRef.current,
+          dirty: true,
+        });
+        return false;
+      }
+
+      const normalizedAnswers = reconcileAnswersForQuestionIds(
+        latestQuestionIdsRef.current,
+        latestAnswersRef.current,
+      );
+
+      setDraftSaveState("saving");
+      setDraftNotice("");
+      isSavingDraftRef.current = true;
+
+      try {
+        const response = await fetch("/api/learner/activity-drafts", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            activityId,
+            activityVersion:
+              latestActivityVersionRef.current ?? activityData.activity.version,
+            revision: latestDraftRevisionRef.current,
+            answers: latestQuestionIdsRef.current.map((questionId) => ({
+              questionId,
+              answerText: normalizedAnswers[questionId] ?? "",
+            })),
+          }),
+          keepalive: reason === "visibility",
+        });
+
+        const result = (await response.json()) as DraftApiResponse;
+
+        if (!response.ok) {
+          if (result.code === "DRAFT_REVISION_CONFLICT") {
+            setDraftSaveState("newer-draft");
+            setDraftNotice("A newer draft was found. Reload the activity to continue safely.");
+            writeLocalDraftCache({
+              answers: normalizedAnswers,
+              dirty: true,
+            });
+            return false;
+          }
+
+          if (result.code === "ACTIVITY_UPDATED_RELOAD_REQUIRED") {
+            setDraftSaveState("error");
+            setDraftNotice(result.error ?? "This activity was updated. Reload before continuing.");
+            writeLocalDraftCache({
+              answers: normalizedAnswers,
+              dirty: true,
+            });
+            return false;
+          }
+
+          throw new Error(result.error ?? "Unable to save draft");
+        }
+
+        if (result.draft) {
+          latestDraftRevisionRef.current = result.draft.revision;
+          writeLocalDraftCache({
+            answers: normalizedAnswers,
+            revision: result.draft.revision,
+            activityVersion: result.draft.activityVersion,
+            dirty: false,
+            updatedAt: result.draft.updatedAt,
+          });
+        }
+
+        setDraftSaveState("saved");
+        return true;
+      } catch (error) {
+        console.error("Unable to save learner activity draft:", error);
+        setDraftSaveState(
+          navigator.onLine ? "error" : "offline",
+        );
+        setDraftNotice(
+          navigator.onLine
+            ? "Unable to save draft"
+            : "Offline — saved on this device only",
+        );
+        writeLocalDraftCache({
+          answers: normalizedAnswers,
+          dirty: true,
+        });
+        return false;
+      } finally {
+        isSavingDraftRef.current = false;
+      }
+    },
+    [
+      activityData,
+      activityId,
+      draftLearnerId,
+      submission,
+      submissionAccessBlocked,
+      writeLocalDraftCache,
+    ],
+  );
+
+  const scheduleDraftSave = useCallback(() => {
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = window.setTimeout(() => {
+      void saveDraft("debounced");
+    }, 2000);
+  }, [saveDraft]);
 
   useEffect(() => {
     let isActive = true;
@@ -262,6 +497,184 @@ export function SubjectActivityPage({
     };
   }, [activityId]);
 
+  useEffect(() => {
+    if (!activityData) return;
+    latestQuestionIdsRef.current = activityData.questions.map(
+      (question) => question.id,
+    );
+    latestActivityVersionRef.current = activityData.activity.version;
+  }, [activityData]);
+
+  useEffect(() => {
+    latestAnswersRef.current = answers;
+  }, [answers]);
+
+  useEffect(() => {
+    if (!activityData || isLoadingSubmission) return;
+
+    if (submission) return;
+
+    let isActive = true;
+
+    async function loadDraft() {
+      const currentActivityData = activityData;
+      if (!currentActivityData) {
+        setIsLoadingDraft(false);
+        return;
+      }
+
+      try {
+        setIsLoadingDraft(true);
+        const response = await fetch(
+          `/api/learner/activity-drafts?activityId=${encodeURIComponent(activityId)}`,
+        );
+        const result = (await response.json()) as DraftApiResponse;
+
+        if (!isActive) return;
+
+        if (!response.ok) {
+          if (
+            result.code === "ALREADY_SUBMITTED" ||
+            result.code === "UNAUTHORIZED"
+          ) {
+            return;
+          }
+
+          setDraftSaveState("error");
+          setDraftNotice(result.error ?? "Unable to load activity draft");
+          return;
+        }
+
+        setDraftLearnerId(result.learnerId);
+        const cacheKey = buildActivityDraftCacheKey({
+          learnerId: result.learnerId,
+          subjectId: subject.databaseId,
+          activityId,
+        });
+        localDraftCacheKeyRef.current = cacheKey;
+
+        const localDraft = readLocalDraftCache();
+        const serverDraft = result.draft;
+        const currentQuestionIds = currentActivityData.questions.map(
+          (question) => question.id,
+        );
+
+        let nextAnswers: Record<string, string> = {};
+        let nextRevision = 0;
+
+        const preferred = choosePreferredDraftSource({
+          serverDraft,
+          localDraft,
+        });
+
+        if (
+          serverDraft &&
+          serverDraft.activityVersion !== currentActivityData.activity.version
+        ) {
+          setDraftNotice(
+            "This activity was updated by your teacher. Review your restored answers before submitting.",
+          );
+        }
+        if (
+          localDraft &&
+          localDraft.activityVersion !== currentActivityData.activity.version
+        ) {
+          setDraftNotice(
+            "This activity was updated by your teacher. Review your restored answers before submitting.",
+          );
+        }
+
+        if (preferred.newerDraftFound) {
+          setDraftSaveState("newer-draft");
+        }
+
+        if (preferred.winner === "server" && serverDraft) {
+          nextAnswers = reconcileAnswersForQuestionIds(
+            currentQuestionIds,
+            answersRecordFromDraft(serverDraft.answers),
+          );
+          nextRevision = serverDraft.revision;
+          writeLocalDraftCache({
+            answers: nextAnswers,
+            revision: serverDraft.revision,
+            activityVersion: serverDraft.activityVersion,
+            dirty: false,
+            updatedAt: serverDraft.updatedAt,
+          });
+        } else if (preferred.winner === "local" && localDraft) {
+          nextAnswers = reconcileAnswersForQuestionIds(
+            currentQuestionIds,
+            localDraft.answers,
+          );
+          nextRevision = localDraft.revision;
+          if (localDraft.dirty) {
+            setDraftSaveState(navigator.onLine ? "saving" : "offline");
+            scheduleDraftSave();
+          } else if (!serverDraft) {
+            setDraftSaveState("saved");
+          }
+        }
+
+        latestDraftRevisionRef.current = nextRevision;
+        setAnswers(nextAnswers);
+      } catch (error) {
+        console.error("Unable to hydrate learner activity draft:", error);
+        if (isActive) {
+          setDraftSaveState("error");
+          setDraftNotice("Unable to load activity draft");
+        }
+      } finally {
+        if (isActive) setIsLoadingDraft(false);
+      }
+    }
+
+    void loadDraft();
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    activityData,
+    activityId,
+    isLoadingSubmission,
+    scheduleDraftSave,
+    submission,
+    subject.databaseId,
+    writeLocalDraftCache,
+  ]);
+
+  useEffect(() => {
+    function flushOnHidden() {
+      if (document.visibilityState === "hidden") {
+        void saveDraft("visibility");
+      }
+    }
+
+    function markOfflineState() {
+      setDraftSaveState("offline");
+      setDraftNotice("Offline — saved on this device only");
+    }
+
+    function clearOfflineState() {
+      if (hasDirtyLocalDraftRef.current) {
+        void saveDraft("visibility");
+      }
+    }
+
+    document.addEventListener("visibilitychange", flushOnHidden);
+    window.addEventListener("offline", markOfflineState);
+    window.addEventListener("online", clearOfflineState);
+
+    return () => {
+      document.removeEventListener("visibilitychange", flushOnHidden);
+      window.removeEventListener("offline", markOfflineState);
+      window.removeEventListener("online", clearOfflineState);
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [saveDraft]);
+
   async function submitActivity() {
     if (!activityData || submission || isSubmitting) return;
 
@@ -277,6 +690,11 @@ export function SubjectActivityPage({
     try {
       setIsSubmitting(true);
       setSubmissionMessage("");
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      await saveDraft("before-submit");
       const response = await fetch("/api/kingdom/mark-activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -297,6 +715,11 @@ export function SubjectActivityPage({
       };
 
       if (result.submission) applySavedSubmission(result.submission);
+      if (result.submission) {
+        clearLocalDraftCache();
+        setDraftSaveState("idle");
+        setDraftNotice("");
+      }
 
       if (!response.ok) {
         if (result.code === "UNAUTHORIZED") setSubmissionAccessBlocked(true);
@@ -323,17 +746,17 @@ export function SubjectActivityPage({
     }
   }
 
-  if (isLoading || (!activityData && isLoadingSubmission)) {
+  if (isLoading || (!activityData && isLoadingSubmission) || (!submission && activityData && isLoadingDraft)) {
     return (
       <main
         className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`}
         style={themeStyle}
       >
-        <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-sm text-slate-500 shadow-sm">
+          <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-sm text-slate-500 shadow-sm">
           Loading activity...
-        </div>
-      </main>
-    );
+          </div>
+        </main>
+      );
   }
 
   if ((pageState || !activityData) && !renderData) {
@@ -548,11 +971,27 @@ export function SubjectActivityPage({
                     disabled={Boolean(submission) || isSubmitting}
                     value={answers[question.id] ?? ""}
                     onChange={(event) => {
-                      setAnswers((currentAnswers) => ({
-                        ...currentAnswers,
+                      const nextAnswers = {
+                        ...latestAnswersRef.current,
                         [question.id]: event.target.value,
-                      }));
+                      };
+                      latestAnswersRef.current = nextAnswers;
+                      setAnswers(nextAnswers);
+                      writeLocalDraftCache({
+                        answers: nextAnswers,
+                        dirty: true,
+                      });
+                      setDraftSaveState(
+                        navigator.onLine ? "saving" : "offline",
+                      );
                       setSubmissionMessage("");
+                      setDraftNotice(
+                        navigator.onLine ? "" : "Offline — saved on this device only",
+                      );
+                      scheduleDraftSave();
+                    }}
+                    onBlur={() => {
+                      void saveDraft("blur");
                     }}
                     placeholder="Type your answer here..."
                     className="mt-3 min-h-[120px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100"
@@ -648,6 +1087,20 @@ export function SubjectActivityPage({
         )}
 
         {!submission && (
+          <>
+          <p className="mb-3 text-center text-xs font-semibold text-slate-500">
+            {draftSaveState === "saving"
+              ? "Saving..."
+              : draftSaveState === "saved"
+                ? "Draft saved"
+                : draftSaveState === "error"
+                  ? "Unable to save draft"
+                  : draftSaveState === "offline"
+                    ? "Offline — saved on this device only"
+                    : draftSaveState === "newer-draft"
+                      ? "A newer draft was found"
+                      : "Draft saved automatically"}
+          </p>
           <button
             type="button"
             onClick={submitActivity}
@@ -658,6 +1111,7 @@ export function SubjectActivityPage({
           >
             {isSubmitting ? "Submitting..." : "Submit Activity"}
           </button>
+          </>
         )}
         {isLoadingSubmission && (
           <p className="mt-2 text-center text-xs text-slate-500">
@@ -667,6 +1121,11 @@ export function SubjectActivityPage({
         {submissionMessage && (
           <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">
             {submissionMessage}
+          </p>
+        )}
+        {!submission && draftNotice && (
+          <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+            {draftNotice}
           </p>
         )}
       </div>

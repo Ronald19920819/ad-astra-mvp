@@ -13,6 +13,7 @@ import {
   type TeacherActivityReviewSubmission,
 } from "@/lib/supabase/activityReviewReader";
 import {
+  buildSubjectDetailRoute,
   buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
@@ -35,10 +36,10 @@ function getFinalMark(
 
 function SubmissionRows({
   activity,
-  reviewHref,
+  subject,
 }: {
   activity: TeacherActivityReview;
-  reviewHref: string;
+  subject: ReturnType<typeof getSubjectConfiguration>;
 }) {
   if (activity.submissions.length === 0) {
     return (
@@ -78,7 +79,11 @@ function SubmissionRows({
               {getFinalMark(submission)}
             </span>
             <Link
-              href={`${reviewHref}/${submission.id}`}
+              href={buildSubjectDetailRoute(
+                subject,
+                "teacherReview",
+                submission.id,
+              )}
               className="flex items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-[10px] font-semibold text-white"
             >
               <FileSearch size={13} /> Open
@@ -113,7 +118,11 @@ function SubmissionRows({
               </div>
             </dl>
             <Link
-              href={`${reviewHref}/${submission.id}`}
+              href={buildSubjectDetailRoute(
+                subject,
+                "teacherReview",
+                submission.id,
+              )}
               className="mt-3 flex w-full items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-xs font-semibold text-white"
             >
               <FileSearch size={14} /> Open
@@ -274,7 +283,7 @@ export async function TeacherSubjectActivityReviewPage({
                       </summary>
                       <SubmissionRows
                         activity={activity}
-                        reviewHref={buildSubjectRoute(subject, "teacherReview")}
+                        subject={subject}
                       />
                     </details>
                   ))}

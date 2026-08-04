@@ -11,6 +11,7 @@ import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
 import { readingContentToPlainText } from "@/lib/readings/structuredReading";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
+import { deleteLearnerActivityDraft } from "@/lib/supabase/activityDrafts";
 import { createActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -537,6 +538,18 @@ export async function POST(request: Request) {
       throw new Error("The activity submission ID was not returned.");
     }
     submissionId = createdSubmissionId;
+
+    try {
+      await deleteLearnerActivityDraft(activityId, learnerId);
+    } catch (draftCleanupError) {
+      console.error("Unable to remove learner activity draft after submission:", {
+        activityId,
+        learnerId,
+        submissionId: createdSubmissionId,
+        draftCleanupError,
+      });
+    }
+
     const { data: savedAnswers, error: answersError } = await supabase
       .from("activity_submission_answers")
       .select("id, submission_id, question_id, answer_text")
