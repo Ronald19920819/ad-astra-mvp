@@ -3,7 +3,11 @@
 import { useState, type CSSProperties } from "react";
 
 const TWITCH_CHANNEL = "tothestarsrep";
-const TWITCH_PARENTS = ["adastra.net.za", "localhost"] as const;
+const TWITCH_PARENTS = [
+  "localhost",
+  "adastra.net.za",
+  "www.adastra.net.za",
+] as const;
 
 function buildTwitchEmbedUrl() {
   const params = new URLSearchParams({
@@ -61,3 +65,5 @@ export function LiveClassroomPlayer({
 }
 
 export default LiveClassroomPlayer;
+
+
