@@ -1,14 +1,17 @@
 import { neueHaas } from "@/app/fonts";
 import Image from "next/image";
 import { Shadows_Into_Light } from "next/font/google";
-import { AuthenticatedLearnerName } from "@/components/learners/AuthenticatedLearnerName";
 
 const  ShadowsIntoLight =  Shadows_Into_Light({
   weight: "400",
   subsets: ["latin"],
 });
 
-export default function HeroBanner() {
+export default function HeroBanner({
+  learnerName,
+}: {
+  learnerName: string;
+}) {
   return (
     <div
       className="relative mb-5 w-full overflow-hidden rounded-[2rem] shadow-lg border border-blue-100 bg-black"
@@ -52,7 +55,7 @@ export default function HeroBanner() {
     fontWeight: 400,
   }}
 >
-  <AuthenticatedLearnerName />
+  {learnerName}
 </h1>
 
 <div

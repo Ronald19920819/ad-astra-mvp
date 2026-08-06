@@ -16,6 +16,7 @@ import {
   getLearnerActivityData,
   type LearnerActivityWorkspaceData,
 } from "@/lib/supabase/activityReader";
+import type { LearnerSavedActivitySubmission } from "@/lib/supabase/learnerSubjectPageData";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import {
   buildSubjectDetailRoute,
@@ -94,33 +95,8 @@ function workspaceFromSnapshot(
   };
 }
 
-type SavedSubmissionAnswer = {
-  id: string;
-  question_id: string;
-  answer_text: string;
-  kingdom_mark: number | null;
-  kingdom_feedback: string | null;
-  kingdom_judgement: "correct" | "partially_correct" | "incorrect" | null;
-  teacher_mark: number | null;
-  teacher_feedback: string | null;
-};
-
-type SavedActivitySubmission = {
-  id: string;
-  activity_id: string;
-  status: "submitted" | "marking_failed" | "awaiting_review" | "returned";
-  submitted_at: string;
-  preliminary_mark: number | null;
-  preliminary_total: number | null;
-  preliminary_percentage: number | null;
-  kingdom_marked_at: string | null;
-  final_mark: number | null;
-  reviewed_at: string | null;
+type SavedActivitySubmission = LearnerSavedActivitySubmission & {
   activity_snapshot: ActivitySubmissionSnapshot | null;
-  submitted_activity_version: number | null;
-  original_total_marks: number | null;
-  snapshot_created_at: string | null;
-  activity_submission_answers: SavedSubmissionAnswer[];
 };
 
 type DraftSaveState =
@@ -142,8 +118,16 @@ type DraftApiResponse = {
 
 export function SubjectActivityPage({
   subjectKey = "business-studies",
+  initialActivityData,
+  initialActivityState,
+  initialSubmission,
+  initialSubmissionLoaded = false,
 }: {
   subjectKey?: SubjectKey;
+  initialActivityData?: LearnerActivityWorkspaceData | null;
+  initialActivityState?: ActivityState | null;
+  initialSubmission?: SavedActivitySubmission | null;
+  initialSubmissionLoaded?: boolean;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const themeStyle = {
@@ -152,14 +136,29 @@ export function SubjectActivityPage({
     "--subject-border": subject.colourTheme.border,
   } as CSSProperties;
   const { activityId } = useParams<{ activityId: string }>();
+  const hasInitialActivityState =
+    initialActivityData !== undefined || initialActivityState !== undefined;
   const [activityData, setActivityData] =
-    useState<LearnerActivityWorkspaceData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [pageState, setPageState] = useState<ActivityState | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+    useState<LearnerActivityWorkspaceData | null>(initialActivityData ?? null);
+  const [isLoading, setIsLoading] = useState(!hasInitialActivityState);
+  const [pageState, setPageState] = useState<ActivityState | null>(
+    initialActivityState ?? null,
+  );
+  const [answers, setAnswers] = useState<Record<string, string>>(
+    initialSubmission
+      ? Object.fromEntries(
+          initialSubmission.activity_submission_answers.map((answer) => [
+            answer.question_id,
+            answer.answer_text,
+          ]),
+        )
+      : {},
+  );
   const [submission, setSubmission] =
-    useState<SavedActivitySubmission | null>(null);
-  const [isLoadingSubmission, setIsLoadingSubmission] = useState(true);
+    useState<SavedActivitySubmission | null>(initialSubmission ?? null);
+  const [isLoadingSubmission, setIsLoadingSubmission] = useState(
+    !initialSubmissionLoaded,
+  );
   const [isLoadingDraft, setIsLoadingDraft] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionMessage, setSubmissionMessage] = useState("");
@@ -399,6 +398,10 @@ export function SubjectActivityPage({
   }, [saveDraft]);
 
   useEffect(() => {
+    if (hasInitialActivityState) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadActivity() {
@@ -445,9 +448,13 @@ export function SubjectActivityPage({
     return () => {
       isActive = false;
     };
-  }, [activityId, subject.databaseId, subject.displayName]);
+  }, [activityId, hasInitialActivityState, subject.databaseId, subject.displayName]);
 
   useEffect(() => {
+    if (initialSubmissionLoaded) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadSubmission() {
@@ -495,7 +502,7 @@ export function SubjectActivityPage({
     return () => {
       isActive = false;
     };
-  }, [activityId]);
+  }, [activityId, initialSubmissionLoaded]);
 
   useEffect(() => {
     if (!activityData) return;

@@ -1,4 +1,4 @@
-import { SubjectClassroom } from "@/components/subjects/SubjectClassroom";
+import { SubjectClassroomPage } from "@/components/subjects/SubjectClassroomPage";
 import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
 export default async function BusinessStudiesClassroom({
@@ -11,5 +11,5 @@ export default async function BusinessStudiesClassroom({
     await searchParams,
   );
 
-  return <SubjectClassroom subjectKey={subjectKey} />;
+  return <SubjectClassroomPage subjectKey={subjectKey} />;
 }

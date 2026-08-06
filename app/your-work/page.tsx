@@ -7,6 +7,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
+import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import {
   getCurrentLearnerIdentity,
   getLearnerWorkOverview,
@@ -14,6 +15,12 @@ import {
 } from "@/lib/supabase/learnerWorkReader";
 
 export const dynamic = "force-dynamic";
+
+const fallbackSubjectTheme = {
+  primary: "#F97316",
+  softBackground: "#FFF3E6",
+  border: "#FFEDD5",
+} as const;
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-ZA", {
@@ -25,6 +32,13 @@ function formatDate(value: string) {
 function percentage(mark: number | null, total: number | null) {
   if (mark === null || total === null || total <= 0) return null;
   return Math.round((mark / total) * 1000) / 10;
+}
+
+function getSubjectTheme(subjectId: string) {
+  return (
+    getSubjectConfigurationByDatabaseId(subjectId)?.colourTheme ??
+    fallbackSubjectTheme
+  );
 }
 
 function scheduleLabel(submission: LearnerWorkSummary) {
@@ -86,6 +100,7 @@ function groupWork(submissions: LearnerWorkSummary[]): WorkGroup[] {
 }
 
 function AwaitingCard({ submission }: { submission: LearnerWorkSummary }) {
+  const subjectTheme = getSubjectTheme(submission.subject.id);
   const preliminaryPercentage =
     submission.preliminaryPercentage ??
     percentage(submission.preliminaryMark, submission.preliminaryTotal);
@@ -94,7 +109,13 @@ function AwaitingCard({ submission }: { submission: LearnerWorkSummary }) {
     submission.preliminaryTotal !== null;
 
   return (
-    <article className="min-w-0 rounded-2xl border border-blue-100 bg-[#F8FBFF] p-4">
+    <article
+      className="min-w-0 rounded-2xl border p-4"
+      style={{
+        borderColor: subjectTheme.border,
+        backgroundColor: `${subjectTheme.softBackground}99`,
+      }}
+    >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="break-words font-bold text-[#102A43]">
@@ -118,7 +139,10 @@ function AwaitingCard({ submission }: { submission: LearnerWorkSummary }) {
           <p className="font-semibold">Preliminary marking unavailable</p>
         ) : hasPreliminaryMark ? (
           <p>
-            <span className="font-bold text-orange-500">
+            <span
+              className="font-bold"
+              style={{ color: subjectTheme.primary }}
+            >
               {submission.preliminaryMark}/{submission.preliminaryTotal}
             </span>
             {preliminaryPercentage !== null && (
@@ -143,13 +167,17 @@ function AwaitingCard({ submission }: { submission: LearnerWorkSummary }) {
 }
 
 function ReturnedCard({ submission }: { submission: LearnerWorkSummary }) {
+  const subjectTheme = getSubjectTheme(submission.subject.id);
   const finalPercentage = percentage(
     submission.finalMark,
     submission.activity.totalMarks,
   );
 
   return (
-    <article className="min-w-0 rounded-2xl border border-orange-100 bg-[#FFFDF9] p-4 shadow-sm">
+    <article
+      className="min-w-0 rounded-2xl border bg-[#FFFDF9] p-4 shadow-sm"
+      style={{ borderColor: subjectTheme.border }}
+    >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h4 className="break-words font-bold text-[#102A43]">
@@ -164,14 +192,23 @@ function ReturnedCard({ submission }: { submission: LearnerWorkSummary }) {
         </span>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-orange-50 p-4">
-        <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+      <div
+        className="mt-4 rounded-2xl p-4"
+        style={{ backgroundColor: subjectTheme.softBackground }}
+      >
+        <p
+          className="text-xs font-bold uppercase tracking-wide"
+          style={{ color: subjectTheme.primary }}
+        >
           Activity Mark
         </p>
         <p className="mt-1 text-3xl font-bold text-[#102A43]">
           {submission.finalMark ?? "—"}/{submission.activity.totalMarks}
         </p>
-        <p className="mt-1 text-sm font-bold text-orange-600">
+        <p
+          className="mt-1 text-sm font-bold"
+          style={{ color: subjectTheme.primary }}
+        >
           {finalPercentage === null
             ? "Percentage unavailable"
             : `Percentage: ${finalPercentage}%`}
@@ -197,7 +234,8 @@ function ReturnedCard({ submission }: { submission: LearnerWorkSummary }) {
 
       <Link
         href={`/your-work/${submission.id}`}
-        className="mt-4 flex w-full items-center justify-center rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white"
+        className="mt-4 flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-white"
+        style={{ backgroundColor: subjectTheme.primary }}
       >
         View Work
       </Link>
@@ -237,7 +275,10 @@ function WorkSection({
         <div className="space-y-5">
           {groups.map((subject) => (
             <div key={subject.subjectId}>
-              <h3 className="mb-3 text-sm font-bold text-[#102A43]">
+              <h3
+                className="mb-3 text-sm font-bold"
+                style={{ color: getSubjectTheme(subject.subjectId).primary }}
+              >
                 {subject.subjectName}
               </h3>
               <div className="space-y-4">

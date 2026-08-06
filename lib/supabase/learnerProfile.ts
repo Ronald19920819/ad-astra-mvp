@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { AuthenticatedLearnerProfile } from "@/lib/learners/learnerProfile";
 import {
@@ -182,7 +183,7 @@ async function loadLearnerProfileForUser(
   };
 }
 
-export async function getAuthenticatedLearnerProfile() {
+const getAuthenticatedLearnerProfileCached = cache(async () => {
   const requestClient = await createSupabaseRequestClient();
   const {
     data: { user },
@@ -191,6 +192,10 @@ export async function getAuthenticatedLearnerProfile() {
 
   if (error || !user) return null;
   return loadLearnerProfileForUser(user);
+});
+
+export async function getAuthenticatedLearnerProfile() {
+  return getAuthenticatedLearnerProfileCached();
 }
 
 export async function getLearnerProfileByAuthUserId(authUserId: string) {

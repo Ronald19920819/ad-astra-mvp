@@ -1,15 +1,18 @@
-import { SubjectLessonPage } from "@/components/subjects/SubjectLessonPage";
+import { SubjectLessonRoutePage } from "@/components/subjects/SubjectLessonRoutePage";
 import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
 export default async function EnglishLessonPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ lessonId: string }>;
   searchParams?: Promise<{ subject?: string | string[] }>;
 }) {
+  const { lessonId } = await params;
   const subjectKey = resolveSubjectKeyFromSearchParams(
     "english",
     await searchParams,
   );
 
-  return <SubjectLessonPage subjectKey={subjectKey} />;
+  return <SubjectLessonRoutePage lessonId={lessonId} subjectKey={subjectKey} />;
 }

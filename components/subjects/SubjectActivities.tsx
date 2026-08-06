@@ -28,6 +28,7 @@ import {
   isLearnerActivitySubmittedStatus,
   type LearnerActivityStatus,
 } from "@/lib/activities/learnerActivityStatus";
+import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
 
 type WeekGroup = {
   key: string;
@@ -107,11 +108,12 @@ function ActivityCard({
   });
 
   return (
-    <Link
+    <PendingNavigationLink
       href={activityHref}
       data-activity-id={activity.id}
       className="block w-full min-w-0"
     >
+      {({ isPending }) => (
       <div className="w-full min-w-0 rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] p-4 shadow-sm">
         <div className="flex min-w-0 items-start justify-between gap-3">
           <div className="min-w-0">
@@ -131,6 +133,14 @@ function ActivityCard({
               {scheduleLabel} · {activity.total_marks} marks
             </p>
           </div>
+          {isPending && (
+            <p
+              className="mt-3 text-xs font-semibold"
+              style={{ color: subjectColour }}
+            >
+              Opening activity...
+            </p>
+          )}
           <ActivityStatusIndicator
             status={activityStatus}
             subjectColour={subjectColour}
@@ -149,7 +159,8 @@ function ActivityCard({
           </div>
         )}
       </div>
-    </Link>
+      )}
+    </PendingNavigationLink>
   );
 }
 
@@ -246,17 +257,29 @@ function getWeekStatus(activities: LearnerPublishedActivity[]) {
 
 export function SubjectActivities({
   subjectKey = "business-studies",
+  initialActivities,
+  initialLoadError,
 }: {
   subjectKey?: SubjectKey;
+  initialActivities?: LearnerPublishedActivity[];
+  initialLoadError?: string;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
-  const [activities, setActivities] = useState<LearnerPublishedActivity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const hasInitialState =
+    initialActivities !== undefined || initialLoadError !== undefined;
+  const [activities, setActivities] = useState<LearnerPublishedActivity[]>(
+    initialActivities ?? [],
+  );
+  const [isLoading, setIsLoading] = useState(!hasInitialState);
+  const [loadError, setLoadError] = useState(initialLoadError ?? "");
   const [allActivitiesOpen, setAllActivitiesOpen] = useState(false);
   const [openWeekKey, setOpenWeekKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (hasInitialState) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadActivities() {
@@ -282,7 +305,7 @@ export function SubjectActivities({
     return () => {
       isActive = false;
     };
-  }, [subject.databaseId, subject.displayName]);
+  }, [hasInitialState, subject.databaseId, subject.displayName]);
 
   const latestActivity = [...activities].sort(compareLatestFirst)[0];
   const activityGroups = groupActivities(activities);

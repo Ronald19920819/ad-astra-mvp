@@ -9,12 +9,19 @@ import {
 } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
+import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import {
   getCurrentLearnerIdentity,
   getLearnerWorkDetail,
 } from "@/lib/supabase/learnerWorkReader";
 
 export const dynamic = "force-dynamic";
+
+const fallbackSubjectTheme = {
+  primary: "#F97316",
+  softBackground: "#FFF3E6",
+  border: "#FFEDD5",
+} as const;
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("en-ZA", {
@@ -116,6 +123,9 @@ export default async function LearnerWorkDetailPage({
   const preliminaryPercentage =
     work.preliminaryPercentage ??
     percentage(work.preliminaryMark, work.preliminaryTotal ?? 0);
+  const subjectTheme =
+    getSubjectConfigurationByDatabaseId(work.subject.id)?.colourTheme ??
+    fallbackSubjectTheme;
 
   return (
     <main
@@ -134,7 +144,7 @@ export default async function LearnerWorkDetailPage({
               <h1 className="break-words text-2xl font-bold">
                 {work.activity.title}
               </h1>
-              <p className="mt-1 text-sm text-blue-100">Business Studies</p>
+              <p className="mt-1 text-sm text-blue-100">{work.subject.name}</p>
             </div>
             <span
               className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
@@ -164,22 +174,37 @@ export default async function LearnerWorkDetailPage({
         )}
 
         {isReturned ? (
-          <section className="mb-5 rounded-[2rem] border-2 border-orange-200 bg-white p-5 shadow-sm">
+          <section
+            className="mb-5 rounded-[2rem] border-2 bg-white p-5 shadow-sm"
+            style={{ borderColor: subjectTheme.border }}
+          >
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-orange-50 p-3 text-orange-500">
+              <div
+                className="rounded-2xl p-3"
+                style={{
+                  backgroundColor: subjectTheme.softBackground,
+                  color: subjectTheme.primary,
+                }}
+              >
                 <CheckCircle2 size={24} />
               </div>
               <h2 className="text-xl font-bold text-[#102A43]">
                 Final Teacher Assessment
               </h2>
             </div>
-            <p className="mt-5 text-xs font-bold uppercase tracking-wide text-orange-600">
+            <p
+              className="mt-5 text-xs font-bold uppercase tracking-wide"
+              style={{ color: subjectTheme.primary }}
+            >
               Activity Mark
             </p>
             <p className="mt-1 text-4xl font-bold text-[#102A43]">
               {work.finalMark ?? "—"}/{work.activity.totalMarks}
             </p>
-            <p className="mt-1 text-lg font-bold text-orange-500">
+            <p
+              className="mt-1 text-lg font-bold"
+              style={{ color: subjectTheme.primary }}
+            >
               {finalPercentage === null
                 ? "Percentage unavailable"
                 : `Percentage: ${finalPercentage}%`}
@@ -188,8 +213,14 @@ export default async function LearnerWorkDetailPage({
               Included in the Activity Performance component of your Overall
               Mark
             </p>
-            <div className="mt-5 rounded-2xl bg-orange-50 p-4">
-              <p className="text-xs font-bold uppercase tracking-wide text-orange-600">
+            <div
+              className="mt-5 rounded-2xl p-4"
+              style={{ backgroundColor: subjectTheme.softBackground }}
+            >
+              <p
+                className="text-xs font-bold uppercase tracking-wide"
+                style={{ color: subjectTheme.primary }}
+              >
                 Teacher&apos;s overall comment
               </p>
               <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
@@ -206,9 +237,18 @@ export default async function LearnerWorkDetailPage({
               )}
           </section>
         ) : (
-          <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+          <section
+            className="mb-5 rounded-[2rem] border bg-white p-5 shadow-sm"
+            style={{ borderColor: subjectTheme.border }}
+          >
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl bg-orange-50 p-3 text-orange-500">
+              <div
+                className="rounded-2xl p-3"
+                style={{
+                  backgroundColor: subjectTheme.softBackground,
+                  color: subjectTheme.primary,
+                }}
+              >
                 <Sparkles size={24} />
               </div>
               <h2 className="text-xl font-bold text-[#102A43]">
@@ -221,7 +261,10 @@ export default async function LearnerWorkDetailPage({
                 <p className="mt-5 text-3xl font-bold text-[#102A43]">
                   {work.preliminaryMark}/{work.preliminaryTotal}
                 </p>
-                <p className="mt-1 font-bold text-orange-500">
+                <p
+                  className="mt-1 font-bold"
+                  style={{ color: subjectTheme.primary }}
+                >
                   {preliminaryPercentage === null
                     ? "Percentage unavailable"
                     : `${preliminaryPercentage}%`}
@@ -246,7 +289,13 @@ export default async function LearnerWorkDetailPage({
 
         <section className="mb-5 min-w-0 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex min-w-0 items-center gap-3">
-            <div className="shrink-0 rounded-2xl bg-orange-50 p-3 text-orange-500">
+            <div
+              className="shrink-0 rounded-2xl p-3"
+              style={{
+                backgroundColor: subjectTheme.softBackground,
+                color: subjectTheme.primary,
+              }}
+            >
               <BookOpen size={22} />
             </div>
             <h2 className="min-w-0 break-words text-xl font-bold text-[#102A43]">
@@ -266,7 +315,10 @@ export default async function LearnerWorkDetailPage({
                 <h2 className="min-w-0 font-bold text-[#102A43]">
                   Question {question.questionNumber}
                 </h2>
-                <span className="shrink-0 text-xs font-bold text-orange-500">
+                <span
+                  className="shrink-0 text-xs font-bold"
+                  style={{ color: subjectTheme.primary }}
+                >
                   {question.maximumMarks} marks
                 </span>
               </div>
@@ -274,7 +326,10 @@ export default async function LearnerWorkDetailPage({
                 {question.questionText}
               </p>
               {question.assessmentObjective && (
-                <p className="mt-2 text-xs font-bold uppercase tracking-wide text-orange-500">
+                <p
+                  className="mt-2 text-xs font-bold uppercase tracking-wide"
+                  style={{ color: subjectTheme.primary }}
+                >
                   {question.assessmentObjective}
                 </p>
               )}
@@ -286,8 +341,17 @@ export default async function LearnerWorkDetailPage({
                 </p>
               </div>
 
-              <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                <p className="text-sm font-bold text-orange-600">
+              <div
+                className="mt-4 rounded-2xl border p-4"
+                style={{
+                  borderColor: subjectTheme.border,
+                  backgroundColor: subjectTheme.softBackground,
+                }}
+              >
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: subjectTheme.primary }}
+                >
                   Kingdom Preliminary Assessment
                 </p>
                 <p className="mt-2 font-bold text-[#102A43]">
@@ -300,7 +364,10 @@ export default async function LearnerWorkDetailPage({
                     "No preliminary feedback is available."}
                 </p>
                 {judgementLabel(question.answer.kingdomJudgement) && (
-                  <p className="mt-2 text-xs font-bold capitalize text-orange-600">
+                  <p
+                    className="mt-2 text-xs font-bold capitalize"
+                    style={{ color: subjectTheme.primary }}
+                  >
                     {judgementLabel(question.answer.kingdomJudgement)}
                   </p>
                 )}

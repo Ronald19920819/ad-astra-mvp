@@ -25,6 +25,7 @@ import {
   BookOpen,
   GraduationCap,
   Languages,
+  MonitorPlay,
   PlayCircle,
   FileText,
   ScrollText,
@@ -33,6 +34,7 @@ import {
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
 import { SubjectImportantDatesCard } from "@/components/subjects/SubjectImportantDatesCard";
 import { logSupabaseError } from "@/lib/supabase/errorDetails";
+import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
 
 export const dynamic = "force-dynamic";
 
@@ -89,25 +91,39 @@ export async function SubjectDashboard({
       if (!access.allowed) {
         throw new Error("Learner subject enrolment is required.");
       }
-      overview = await getSubjectLearnerOverview(
-        currentLearner.userId,
-        subject.databaseId,
-      );
+
+      const [overviewResult, eventsResult] = await Promise.allSettled([
+        getSubjectLearnerOverview(
+          currentLearner.userId,
+          subject.databaseId,
+        ),
+        getLearnerSubjectEvents(currentLearner, subject.databaseId),
+      ]);
+
+      if (overviewResult.status === "fulfilled") {
+        overview = overviewResult.value;
+      } else {
+        logSupabaseError(
+          `Unable to load ${subject.displayName} learner overview:`,
+          overviewResult.reason,
+        );
+        loadError = `Unable to load your ${subject.displayName} progress.`;
+      }
+
+      if (eventsResult.status === "fulfilled") {
+        events = eventsResult.value;
+      } else {
+        logSupabaseError(
+          `Unable to load ${subject.displayName} learner events:`,
+          eventsResult.reason,
+        );
+      }
     } catch (error) {
       logSupabaseError(
         `Unable to load ${subject.displayName} learner overview:`,
         error,
       );
       loadError = `Unable to load your ${subject.displayName} progress.`;
-    }
-
-    try {
-      events = await getLearnerSubjectEvents(currentLearner, subject.databaseId);
-    } catch (error) {
-      logSupabaseError(
-        `Unable to load ${subject.displayName} learner events:`,
-        error,
-      );
     }
   }
   const learnerName =
@@ -278,6 +294,68 @@ export async function SubjectDashboard({
 
         <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
+            <div className="rounded-2xl bg-[var(--subject-soft)] p-3 text-[var(--subject-primary)]">
+              <MonitorPlay size={22} />
+            </div>
+
+            <div>
+              <h2 className="text-lg font-bold text-[#102A43]">
+                Live Classroom
+              </h2>
+              <p className="text-xs font-medium text-black/50">
+                Join your teacher&apos;s live lesson when it is in session.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <span className="text-sm font-semibold text-slate-600">
+              Join your teacher&apos;s live lesson when it is in session.
+            </span>
+          </div>
+
+          <PendingNavigationLink
+            href={buildSubjectRoute(subject, "learnerLiveClassroom")}
+            pendingChildren={
+              <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <MonitorPlay
+                    size={18}
+                    className="text-[var(--subject-primary)]"
+                  />
+                  <p className="text-sm font-semibold text-black">
+                    Opening Live Classroom...
+                  </p>
+                </div>
+
+                <PlayCircle
+                  size={18}
+                  className="text-[var(--subject-primary)]"
+                />
+              </div>
+            }
+          >
+            <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
+              <div className="flex items-center gap-3">
+                <MonitorPlay
+                  size={18}
+                  className="text-[var(--subject-primary)]"
+                />
+                <p className="text-sm font-semibold text-black">
+                  Enter Live Classroom
+                </p>
+              </div>
+
+              <PlayCircle
+                size={18}
+                className="text-[var(--subject-primary)]"
+              />
+            </div>
+          </PendingNavigationLink>
+        </section>
+
+        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
            <div className="rounded-2xl bg-[var(--subject-soft)] p-3 text-[var(--subject-primary)]">
            <GraduationCap size={22} />
           </div>
@@ -296,18 +374,44 @@ export async function SubjectDashboard({
             Find lesson videos, readings and coursework linked to each activity.
           </p>
 
-          <Link href={buildSubjectRoute(subject, "learnerClassroom")}>
+          <PendingNavigationLink
+            href={buildSubjectRoute(subject, "learnerClassroom")}
+            pendingChildren={
+              <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <BookOpen
+                    size={18}
+                    className="text-[var(--subject-primary)]"
+                  />
+                  <p className="text-sm font-semibold text-black">
+                    Opening Classroom...
+                  </p>
+                </div>
+
+                <PlayCircle
+                  size={18}
+                  className="text-[var(--subject-primary)]"
+                />
+              </div>
+            }
+          >
             <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
               <div className="flex items-center gap-3">
-               <BookOpen size={18} className="text-[var(--subject-primary)]" />
+                <BookOpen
+                  size={18}
+                  className="text-[var(--subject-primary)]"
+                />
                 <p className="text-sm font-semibold text-black">
                   Open Classroom
                 </p>
               </div>
 
-              <PlayCircle size={18} className="text-[var(--subject-primary)]" />
+              <PlayCircle
+                size={18}
+                className="text-[var(--subject-primary)]"
+              />
             </div>
-          </Link>
+          </PendingNavigationLink>
         </section>
 
         <section className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
@@ -330,7 +434,21 @@ export async function SubjectDashboard({
   Complete activities, submit your work and keep track of upcoming tasks.
 </p>
 
-<Link href={buildSubjectRoute(subject, "learnerActivities")}>
+<PendingNavigationLink
+  href={buildSubjectRoute(subject, "learnerActivities")}
+  pendingChildren={
+    <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
+      <div className="flex items-center gap-3">
+        <SquarePen size={18} className="text-[var(--subject-primary)]" />
+        <p className="text-sm font-semibold text-black">
+          Opening Activities...
+        </p>
+      </div>
+
+      <FileText size={18} className="text-[var(--subject-primary)]" />
+    </div>
+  }
+>
   <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
     <div className="flex items-center gap-3">
       <SquarePen size={18} className="text-[var(--subject-primary)]" />
@@ -341,7 +459,7 @@ export async function SubjectDashboard({
 
     <FileText size={18} className="text-[var(--subject-primary)]" />
   </div>
-</Link>
+</PendingNavigationLink>
         </section>
         <Link href="/your-work">
   <section className="mt-5 rounded-[1.5rem] border border-blue-100 bg-white/90 p-4 shadow-sm">

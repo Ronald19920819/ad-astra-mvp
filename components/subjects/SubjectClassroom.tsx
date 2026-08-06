@@ -23,6 +23,7 @@ import {
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
+import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
 
 type WeekGroup = {
   key: string;
@@ -120,11 +121,31 @@ function LessonCard({
       : `Term ${lesson.term_number} · Week ${lesson.week_number}`;
 
   return (
-    <Link
+    <PendingNavigationLink
       href={lessonHref}
       className="block w-full min-w-0 rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] p-4 shadow-sm"
+      pendingChildren={
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="break-words text-sm font-bold text-black">
+            Lesson {lesson.lesson_number} — {lesson.title}
+            </p>
+            <p className="mt-2 text-sm text-black/60">{scheduleLabel}</p>
+            <p
+              className="mt-3 text-xs font-semibold"
+              style={{ color: subjectColour }}
+            >
+              Opening lesson...
+            </p>
+          </div>
+          <LessonLifecycleIndicator
+            status={lifecycleStatus}
+            subjectColour={subjectColour}
+          />
+        </div>
+      }
     >
-      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-sm font-bold text-black">
             Lesson {lesson.lesson_number} — {lesson.title}
@@ -141,8 +162,8 @@ function LessonCard({
           status={lifecycleStatus}
           subjectColour={subjectColour}
         />
-      </div>
-    </Link>
+        </div>
+    </PendingNavigationLink>
   );
 }
 
@@ -213,17 +234,29 @@ function groupLessons(lessons: LearnerPublishedLesson[]): TermGroup[] {
 
 export function SubjectClassroom({
   subjectKey = "business-studies",
+  initialLessons,
+  initialLoadError,
 }: {
   subjectKey?: SubjectKey;
+  initialLessons?: LearnerPublishedLesson[];
+  initialLoadError?: string;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
-  const [lessons, setLessons] = useState<LearnerPublishedLesson[]>([]);
-  const [lessonsLoading, setLessonsLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const hasInitialState =
+    initialLessons !== undefined || initialLoadError !== undefined;
+  const [lessons, setLessons] = useState<LearnerPublishedLesson[]>(
+    initialLessons ?? [],
+  );
+  const [lessonsLoading, setLessonsLoading] = useState(!hasInitialState);
+  const [loadError, setLoadError] = useState(initialLoadError ?? "");
   const [allLessonsOpen, setAllLessonsOpen] = useState(false);
   const [openWeekKey, setOpenWeekKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (hasInitialState) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadPublishedLessons() {
@@ -249,7 +282,7 @@ export function SubjectClassroom({
     return () => {
       isActive = false;
     };
-  }, [subject.databaseId]);
+  }, [hasInitialState, subject.databaseId]);
 
   const latestLesson = [...lessons].sort(compareLatestFirst)[0];
   const lessonLifecycle = getLessonLifecycle(lessons);

@@ -1,4 +1,4 @@
-import { SubjectActivities } from "@/components/subjects/SubjectActivities";
+import { SubjectActivitiesPage } from "@/components/subjects/SubjectActivitiesPage";
 import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
 export default async function AfrikaansActivities({
@@ -11,5 +11,5 @@ export default async function AfrikaansActivities({
     await searchParams,
   );
 
-  return <SubjectActivities subjectKey={subjectKey} />;
+  return <SubjectActivitiesPage subjectKey={subjectKey} />;
 }

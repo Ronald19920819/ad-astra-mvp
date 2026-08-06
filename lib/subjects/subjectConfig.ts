@@ -35,9 +35,11 @@ export type SubjectConfiguration = {
   teacherPreferences: Readonly<Record<string, string | boolean>>;
   routes: {
     learnerDashboard: string;
+    learnerLiveClassroom: string;
     learnerClassroom: string;
     learnerActivities: string;
     teacherOverview: string;
+    teacherLiveClassroom: string;
     teacherClassroom: string;
     teacherActivities: string;
     teacherReview: string;
@@ -50,9 +52,11 @@ export type SubjectConfiguration = {
 const subjectRouteBases = {
   "business-studies": {
     learnerDashboard: "/business-studies-dashboard",
+    learnerLiveClassroom: "/business-studies-live-classroom",
     learnerClassroom: "/business-studies-classroom",
     learnerActivities: "/business-studies-activities",
     teacherOverview: "/teacher/subjects/business-studies",
+    teacherLiveClassroom: "/teacher/subjects/business-studies/live-classroom",
     teacherClassroom: "/teacher/subjects/business-studies/classroom",
     teacherActivities: "/teacher/subjects/business-studies/activities",
     teacherReview: "/teacher/subjects/business-studies/review",
@@ -61,9 +65,11 @@ const subjectRouteBases = {
   },
   english: {
     learnerDashboard: "/english-dashboard",
+    learnerLiveClassroom: "/english-live-classroom",
     learnerClassroom: "/english-classroom",
     learnerActivities: "/english-activities",
     teacherOverview: "/teacher/subjects/english",
+    teacherLiveClassroom: "/teacher/subjects/english/live-classroom",
     teacherClassroom: "/teacher/subjects/english/classroom",
     teacherActivities: "/teacher/subjects/english/activities",
     teacherReview: "/teacher/subjects/english/review",
@@ -72,9 +78,11 @@ const subjectRouteBases = {
   },
   afrikaans: {
     learnerDashboard: "/afrikaans-dashboard",
+    learnerLiveClassroom: "/afrikaans-live-classroom",
     learnerClassroom: "/afrikaans-classroom",
     learnerActivities: "/afrikaans-activities",
     teacherOverview: "/teacher/subjects/afrikaans",
+    teacherLiveClassroom: "/teacher/subjects/afrikaans/live-classroom",
     teacherClassroom: "/teacher/subjects/afrikaans/classroom",
     teacherActivities: "/teacher/subjects/afrikaans/activities",
     teacherReview: "/teacher/subjects/afrikaans/review",
@@ -83,9 +91,11 @@ const subjectRouteBases = {
   },
   history: {
     learnerDashboard: "/history-dashboard",
+    learnerLiveClassroom: "/history-live-classroom",
     learnerClassroom: "/history-classroom",
     learnerActivities: "/history-activities",
     teacherOverview: "/teacher/subjects/history",
+    teacherLiveClassroom: "/teacher/subjects/history/live-classroom",
     teacherClassroom: "/teacher/subjects/history/classroom",
     teacherActivities: "/teacher/subjects/history/activities",
     teacherReview: "/teacher/subjects/history/review",

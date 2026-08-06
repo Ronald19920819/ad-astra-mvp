@@ -1,15 +1,18 @@
-import { SubjectActivityPage } from "@/components/subjects/SubjectActivityPage";
+import { SubjectActivityRoutePage } from "@/components/subjects/SubjectActivityRoutePage";
 import { resolveSubjectKeyFromSearchParams } from "@/lib/subjects/subjectPage";
 
 export default async function BusinessStudiesActivityPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ activityId: string }>;
   searchParams?: Promise<{ subject?: string | string[] }>;
 }) {
+  const { activityId } = await params;
   const subjectKey = resolveSubjectKeyFromSearchParams(
     "business-studies",
     await searchParams,
   );
 
-  return <SubjectActivityPage subjectKey={subjectKey} />;
+  return <SubjectActivityRoutePage activityId={activityId} subjectKey={subjectKey} />;
 }

@@ -22,12 +22,13 @@ import {
   ArrowLeft,
   BarChart3,
   BookOpen,
-  FileText,
+ FileText,
   SquarePen,
   ClipboardCheck,
   Users,
   Languages,
   ScrollText,
+  MonitorPlay,
 } from "lucide-react";
 
 const subjectIcons = {
@@ -286,6 +287,29 @@ export async function TeacherSubjectOverviewPage({
               </div>
 
               <span className="text-lg font-bold text-[#F97316]">→</span>
+            </div>
+          </Link>
+        </section>
+
+        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-3">
+            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+              <MonitorPlay size={22} />
+            </div>
+
+            <div>
+              <h2 className="text-lg font-bold text-[#102A43]">
+                Live Classroom
+              </h2>
+              <p className="text-xs font-medium text-black/50">
+                Open the live stream and manage learner chat for this subject.
+              </p>
+            </div>
+          </div>
+
+          <Link href={buildSubjectRoute(subject, "teacherLiveClassroom")}>
+            <div className="rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
+              Enter Live Classroom
             </div>
           </Link>
         </section>

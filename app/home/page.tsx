@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomeDashboard() {
   const profile = await getAuthenticatedLearnerProfile();
+  const learnerName = profile?.displayName ?? "Learner";
   let loadError = "";
   let communications: LearnerHomeCommunications = {
     next24Hours: [],
@@ -35,7 +36,7 @@ export default async function HomeDashboard() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-28">
       <div className="mx-auto max-w-md">
-        <HeroBanner />
+        <HeroBanner learnerName={learnerName} />
 
         {profile ? (
           <>

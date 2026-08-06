@@ -95,8 +95,12 @@ function formatCompletionDate(value: string) {
 
 export function SubjectLessonPage({
   subjectKey = "business-studies",
+  initialLessonData,
+  initialLoadError,
 }: {
   subjectKey?: SubjectKey;
+  initialLessonData?: LearnerLessonData | null;
+  initialLoadError?: string;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const themeStyle = {
@@ -106,9 +110,13 @@ export function SubjectLessonPage({
   } as CSSProperties;
   const { lessonId } = useParams<{ lessonId: string }>();
   const router = useRouter();
-  const [lessonData, setLessonData] = useState<LearnerLessonData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState("");
+  const hasInitialState =
+    initialLessonData !== undefined || initialLoadError !== undefined;
+  const [lessonData, setLessonData] = useState<LearnerLessonData | null>(
+    initialLessonData ?? null,
+  );
+  const [isLoading, setIsLoading] = useState(!hasInitialState);
+  const [errorMessage, setErrorMessage] = useState(initialLoadError ?? "");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitMessage, setSubmitMessage] = useState("");
   const [isMarking, setIsMarking] = useState(false);
@@ -121,6 +129,10 @@ export function SubjectLessonPage({
   const [isCelebrating, setIsCelebrating] = useState(false);
 
   useEffect(() => {
+    if (hasInitialState) {
+      return;
+    }
+
     let isActive = true;
 
     async function loadLesson() {
@@ -157,7 +169,7 @@ export function SubjectLessonPage({
     return () => {
       isActive = false;
     };
-  }, [lessonId, subject.databaseId]);
+  }, [hasInitialState, lessonId, subject.databaseId]);
 
   useEffect(() => {
     if (!lessonData?.lesson.id) return;
