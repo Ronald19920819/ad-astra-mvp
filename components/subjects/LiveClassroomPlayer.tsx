@@ -2,24 +2,11 @@
 
 import { useState, type CSSProperties } from "react";
 
-const TWITCH_CHANNEL = "tothestarsrep";
-const TWITCH_PARENTS = [
-  "localhost",
-  "adastra.net.za",
-  "www.adastra.net.za",
-] as const;
+const CLOUDFLARE_STREAM_HOST = "customer-txjjmf9yh6vpwg3s.cloudflarestream.com";
+const CLOUDFLARE_LIVE_INPUT_UID = "c13fb9977d632eecc10c4bc824ed7f40";
 
-function buildTwitchEmbedUrl() {
-  const params = new URLSearchParams({
-    channel: TWITCH_CHANNEL,
-    autoplay: "false",
-  });
-
-  for (const parent of TWITCH_PARENTS) {
-    params.append("parent", parent);
-  }
-
-  return `https://player.twitch.tv/?${params.toString()}`;
+function buildCloudflareEmbedUrl() {
+  return `https://${CLOUDFLARE_STREAM_HOST}/${CLOUDFLARE_LIVE_INPUT_UID}/iframe`;
 }
 
 export function LiveClassroomPlayer({
@@ -35,12 +22,12 @@ export function LiveClassroomPlayer({
     <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-sm">
       <div className="aspect-video w-full">
         <iframe
-          key={buildTwitchEmbedUrl()}
-          src={buildTwitchEmbedUrl()}
+          key={buildCloudflareEmbedUrl()}
+          src={buildCloudflareEmbedUrl()}
           title="AD Astra Live Classroom stream"
           className="h-full w-full"
           allowFullScreen
-          allow="autoplay; fullscreen; picture-in-picture"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
           onError={() => setHasLoadError(true)}
         />
       </div>
@@ -65,5 +52,3 @@ export function LiveClassroomPlayer({
 }
 
 export default LiveClassroomPlayer;
-
-
