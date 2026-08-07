@@ -1,12 +1,17 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
+import CloudflareWebRTCPlayer from "@/components/subjects/CloudflareWebRTCPlayer";
 
 const CLOUDFLARE_STREAM_HOST = "customer-txjjmf9yh6vpwg3s.cloudflarestream.com";
 const CLOUDFLARE_LIVE_INPUT_UID = "c13fb9977d632eecc10c4bc824ed7f40";
 
 function buildCloudflareEmbedUrl() {
   return `https://${CLOUDFLARE_STREAM_HOST}/${CLOUDFLARE_LIVE_INPUT_UID}/iframe`;
+}
+
+function buildCloudflareWhepUrl() {
+  return `https://${CLOUDFLARE_STREAM_HOST}/${CLOUDFLARE_LIVE_INPUT_UID}/webRTC/play`;
 }
 
 export function LiveClassroomPlayer({
@@ -16,23 +21,36 @@ export function LiveClassroomPlayer({
   subjectColour: string;
   subjectSoftBackground: string;
 }) {
-  const [hasLoadError, setHasLoadError] = useState(false);
+  const [hasIframeLoadError, setHasIframeLoadError] = useState(false);
+  const [useHlsFallback, setUseHlsFallback] = useState(false);
+
+  const iframeUrl = useMemo(() => buildCloudflareEmbedUrl(), []);
+  const whepUrl = useMemo(() => buildCloudflareWhepUrl(), []);
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-sm">
-      <div className="aspect-video w-full">
-        <iframe
-          key={buildCloudflareEmbedUrl()}
-          src={buildCloudflareEmbedUrl()}
-          title="AD Astra Live Classroom stream"
-          className="h-full w-full"
-          allowFullScreen
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          onError={() => setHasLoadError(true)}
-        />
+      <div className="aspect-video w-full bg-slate-950">
+        {useHlsFallback ? (
+          <iframe
+            key={iframeUrl}
+            src={iframeUrl}
+            title="AD Astra Live Classroom stream"
+            className="h-full w-full"
+            allowFullScreen
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            onError={() => setHasIframeLoadError(true)}
+          />
+        ) : (
+          <CloudflareWebRTCPlayer
+            whepUrl={whepUrl}
+            onFailure={() => {
+              setUseHlsFallback(true);
+            }}
+          />
+        )}
       </div>
 
-      {hasLoadError && (
+      {hasIframeLoadError ? (
         <div
           className="border-t px-4 py-3 text-sm font-medium"
           style={
@@ -46,7 +64,7 @@ export function LiveClassroomPlayer({
           The live stream could not be loaded. Please refresh the page or try
           again shortly.
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
