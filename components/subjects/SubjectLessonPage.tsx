@@ -222,8 +222,8 @@ export function SubjectLessonPage({
       setCompletionToken(result.completionToken);
       setSubmitMessage(
         result.passed
-          ? `Excellent work — you passed with ${result.score}/${result.total}!`
-          : "Good effort. Review Kingdom’s feedback, then try again.",
+          ? `Excellent work \u2014 you passed with ${result.score}/${result.total}!`
+          : "Good effort. Review Kingdom\u2019s feedback, then try again.",
       );
     } catch (error) {
       setSubmitMessage(
@@ -266,7 +266,7 @@ export function SubjectLessonPage({
 
       setIsCompleted(true);
       setCompletedAt(result.completedAt ?? new Date().toISOString());
-      setCompletionMessage("Lesson complete — excellent work!");
+      setCompletionMessage("Lesson complete \u2014 excellent work!");
       setIsCelebrating(true);
       window.setTimeout(() => setIsCelebrating(false), 1100);
     } catch (error) {
@@ -282,8 +282,8 @@ export function SubjectLessonPage({
 
   if (isLoading) {
     return (
-      <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`} style={themeStyle}>
-        <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-sm text-slate-500 shadow-sm">
+      <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 lg:px-8`} style={themeStyle}>
+        <div className="mx-auto w-full max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-sm text-slate-500 shadow-sm lg:max-w-3xl">
           Loading lesson...
         </div>
       </main>
@@ -292,8 +292,8 @@ export function SubjectLessonPage({
 
   if (errorMessage || !lessonData) {
     return (
-      <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`} style={themeStyle}>
-        <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+      <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 lg:px-8`} style={themeStyle}>
+        <div className="mx-auto w-full max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:max-w-3xl">
           <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
           </Link>
@@ -332,20 +332,20 @@ export function SubjectLessonPage({
     completedAt ?? lessonData.completion?.completed_at ?? null;
 
   return (
-    <main className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12`} style={themeStyle}>
-      <div className="mx-auto w-full min-w-0 max-w-md">
-        <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+    <main className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`} style={themeStyle}>
+      <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-6xl lg:space-y-8">
+        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
           <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
           </Link>
           <h1 className="break-words text-3xl font-bold text-slate-900">Lesson {lesson.lesson_number}</h1>
           <p className="mt-1 break-words text-lg font-semibold text-slate-700">{lesson.title}</p>
-          <p className="mt-2 text-sm font-semibold text-slate-600">Week {lesson.week_number} • Term {lesson.term_number}</p>
+          <p className="mt-2 text-sm font-semibold text-slate-600">Week {lesson.week_number} &middot; Term {lesson.term_number}</p>
           <p className="mt-2 text-sm text-slate-500">{subject.displayName} Lesson Workspace</p>
         </section>
 
         {video && (
-          <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-5xl lg:p-6">
             <div className="mb-4 flex min-w-0 items-center gap-3">
               <div className="rounded-2xl bg-[var(--subject-soft)] p-3"><PlayCircle className="text-[var(--subject-primary)]" size={22} /></div>
               <h2 className="min-w-0 break-words text-xl font-bold text-slate-900">{video.title}</h2>
@@ -364,7 +364,7 @@ export function SubjectLessonPage({
         )}
 
         {reading && (
-          <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-3xl lg:p-6">
             <div className="mb-4 flex min-w-0 items-center gap-3">
               <div className="rounded-2xl bg-[var(--subject-soft)] p-3"><BookOpen className="text-[var(--subject-primary)]" size={22} /></div>
               <h2 className="min-w-0 break-words text-xl font-bold text-slate-900">{reading.title}</h2>
@@ -375,7 +375,7 @@ export function SubjectLessonPage({
 
         {quiz && (
           <>
-            <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+            <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
               <h2 className="mb-4 break-words text-xl font-bold text-slate-900">{quiz.title}</h2>
               <div className="w-full min-w-0 space-y-4">
                 {quiz.questions.map((question) => (
@@ -393,7 +393,7 @@ export function SubjectLessonPage({
                       <textarea disabled={isMarking || Boolean(markingResult)} value={answers[question.id] ?? ""} onChange={(event) => {
                         setAnswers((current) => ({ ...current, [question.id]: event.target.value }));
                         setSubmitMessage("");
-                      }} placeholder="Type your answer here..." className="mt-3 min-h-[100px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100" />
+                      }} placeholder="Type your answer here..." className="mt-3 min-h-[100px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100 lg:min-h-[144px]" />
                     )}
                     {markingResult?.results.find(
                       (result) => result.questionId === question.id,
@@ -452,7 +452,7 @@ export function SubjectLessonPage({
             </section>
 
             {quizHasBeenPassed ? (
-              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm">
+              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
                 <Sparkles className="mx-auto text-[var(--subject-primary)]" size={24} />
                 <h2 className="mt-2 text-xl font-bold text-slate-900">
                   {isCompleted ? "Lesson Completed" : "Ready to Complete"}
@@ -563,7 +563,7 @@ export function SubjectLessonPage({
                 )}
               </section>
             ) : (
-              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm">
+              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
                 <LockKeyhole className="mx-auto text-slate-400" size={22} />
                 <p className="mt-2 text-sm font-semibold text-slate-500">
                   Achieve at least {LESSON_QUIZ_PASS_PERCENT}% to complete this lesson.

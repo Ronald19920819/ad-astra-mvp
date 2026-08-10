@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import type { ActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
 import type {
@@ -29,6 +29,12 @@ type LearnerActivitySubmissionRow = {
   activity_id: string;
   status: NonNullable<LearnerPublishedActivity["submissionStatus"]>;
   submitted_at: string;
+  preliminary_mark: number | null;
+  preliminary_total: number | null;
+  preliminary_percentage: number | null;
+  final_mark: number | null;
+  original_total_marks: number | null;
+  activity_snapshot: ActivitySubmissionSnapshot | null;
 };
 
 export type LearnerActivitySubmissionAnswer = {
@@ -73,6 +79,13 @@ function ensureLearnerSubjectAccess(subjectId: string) {
 
     return profile;
   });
+}
+
+function getSnapshotTotalMarks(snapshot: ActivitySubmissionSnapshot | null) {
+  const totalMarks = snapshot?.activity?.totalMarks;
+  return typeof totalMarks === "number" && Number.isFinite(totalMarks)
+    ? totalMarks
+    : null;
 }
 
 export async function getLearnerPublishedLessonsWithCompletionServer(
@@ -170,7 +183,9 @@ export async function getLearnerPublishedActivitiesServer(
 
   const { data: submissions, error: submissionsError } = await supabase
     .from("activity_submissions")
-    .select("activity_id, status, submitted_at")
+    .select(
+      "activity_id, status, submitted_at, preliminary_mark, preliminary_total, preliminary_percentage, final_mark, original_total_marks, activity_snapshot",
+    )
     .eq("learner_id", profile.userId)
     .in(
       "activity_id",
@@ -181,31 +196,37 @@ export async function getLearnerPublishedActivitiesServer(
   if (submissionsError) throw new Error(submissionsError.message);
 
   const submissionRows = (submissions ?? []) as LearnerActivitySubmissionRow[];
-  const submissionStatusByActivityId = new Map<
-    string,
-    LearnerActivitySubmissionRow["status"]
-  >();
+  const submissionByActivityId = new Map<string, LearnerActivitySubmissionRow>();
 
   for (const submission of submissionRows) {
-    if (!submissionStatusByActivityId.has(submission.activity_id)) {
-      submissionStatusByActivityId.set(
-        submission.activity_id,
-        submission.status,
-      );
+    if (!submissionByActivityId.has(submission.activity_id)) {
+      submissionByActivityId.set(submission.activity_id, submission);
     }
   }
 
-  return activities.map((activity) => ({
-    id: activity.id,
-    title: activity.title,
-    total_marks: activity.total_marks,
-    due_date: activity.due_date,
-    created_at: activity.created_at,
-    lesson_material_id: activity.lesson_material_id,
-    isSubmitted: submissionStatusByActivityId.has(activity.id),
-    submissionStatus: submissionStatusByActivityId.get(activity.id) ?? null,
-    lesson: activity.lesson_materials.lessons,
-  }));
+  return activities.map((activity) => {
+    const submission = submissionByActivityId.get(activity.id);
+
+    return {
+      id: activity.id,
+      title: activity.title,
+      total_marks: activity.total_marks,
+      due_date: activity.due_date,
+      created_at: activity.created_at,
+      lesson_material_id: activity.lesson_material_id,
+      isSubmitted: Boolean(submission),
+      submissionStatus: submission?.status ?? null,
+      preliminaryMark: submission?.preliminary_mark ?? null,
+      preliminaryTotal: submission?.preliminary_total ?? null,
+      preliminaryPercentage: submission?.preliminary_percentage ?? null,
+      finalMark: submission?.final_mark ?? null,
+      originalTotalMarks: submission?.original_total_marks ?? null,
+      snapshotTotalMarks: getSnapshotTotalMarks(
+        submission?.activity_snapshot ?? null,
+      ),
+      lesson: activity.lesson_materials.lessons,
+    };
+  });
 }
 
 export async function getLearnerLessonDataServer(

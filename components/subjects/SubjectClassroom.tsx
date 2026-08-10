@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -24,6 +24,9 @@ import {
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
 import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
+
+const LESSON_TITLE_SEPARATOR = "\u2014";
+const SCHEDULE_SEPARATOR = "\u00B7";
 
 type WeekGroup = {
   key: string;
@@ -54,6 +57,35 @@ function compareLatestFirst(
   );
 
   return lessonNumberDifference || lessonA.id.localeCompare(lessonB.id);
+}
+
+function compareProgrammeOrder(
+  lessonA: LearnerPublishedLesson,
+  lessonB: LearnerPublishedLesson,
+) {
+  const termA = lessonA.term_number ?? Number.MAX_SAFE_INTEGER;
+  const termB = lessonB.term_number ?? Number.MAX_SAFE_INTEGER;
+  if (termA !== termB) return termA - termB;
+
+  const weekA = lessonA.week_number ?? Number.MAX_SAFE_INTEGER;
+  const weekB = lessonB.week_number ?? Number.MAX_SAFE_INTEGER;
+  if (weekA !== weekB) return weekA - weekB;
+
+  const displayOrderA = lessonA.display_order ?? Number.MAX_SAFE_INTEGER;
+  const displayOrderB = lessonB.display_order ?? Number.MAX_SAFE_INTEGER;
+  if (displayOrderA !== displayOrderB) return displayOrderA - displayOrderB;
+
+  const lessonNumberDifference = lessonA.lesson_number.localeCompare(
+    lessonB.lesson_number,
+    undefined,
+    { numeric: true },
+  );
+  if (lessonNumberDifference !== 0) return lessonNumberDifference;
+
+  const createdAtDifference =
+    new Date(lessonA.created_at).getTime() -
+    new Date(lessonB.created_at).getTime();
+  return createdAtDifference || lessonA.id.localeCompare(lessonB.id);
 }
 
 function LessonLifecycleIndicator({
@@ -118,17 +150,17 @@ function LessonCard({
   const scheduleLabel =
     lesson.term_number === null || lesson.week_number === null
       ? "Term or week not set"
-      : `Term ${lesson.term_number} · Week ${lesson.week_number}`;
+      : `Term ${lesson.term_number} ${SCHEDULE_SEPARATOR} Week ${lesson.week_number}`;
 
   return (
     <PendingNavigationLink
       href={lessonHref}
-      className="block w-full min-w-0 rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] p-4 shadow-sm"
+      className="block w-full min-w-0 rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] p-4 shadow-sm lg:p-5"
       pendingChildren={
-        <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start justify-between gap-3 lg:gap-4">
           <div className="min-w-0">
-            <p className="break-words text-sm font-bold text-black">
-            Lesson {lesson.lesson_number} — {lesson.title}
+            <p className="break-words text-sm font-bold text-black lg:text-base">
+              Lesson {lesson.lesson_number} {LESSON_TITLE_SEPARATOR} {lesson.title}
             </p>
             <p className="mt-2 text-sm text-black/60">{scheduleLabel}</p>
             <p
@@ -145,10 +177,10 @@ function LessonCard({
         </div>
       }
     >
-        <div className="flex min-w-0 items-start justify-between gap-3">
+      <div className="flex min-w-0 items-start justify-between gap-3 lg:gap-4">
         <div className="min-w-0">
-          <p className="break-words text-sm font-bold text-black">
-            Lesson {lesson.lesson_number} — {lesson.title}
+          <p className="break-words text-sm font-bold text-black lg:text-base">
+            Lesson {lesson.lesson_number} {LESSON_TITLE_SEPARATOR} {lesson.title}
           </p>
           <p className="mt-2 text-sm text-black/60">{scheduleLabel}</p>
           <p
@@ -162,7 +194,78 @@ function LessonCard({
           status={lifecycleStatus}
           subjectColour={subjectColour}
         />
+      </div>
+    </PendingNavigationLink>
+  );
+}
+
+function LessonProgressRow({
+  lesson,
+  lifecycleStatus,
+  lessonHref,
+  subjectColour,
+  pendingLabel,
+  metadataLabel,
+}: {
+  lesson: LearnerPublishedLesson;
+  lifecycleStatus: LessonLifecycleStatus;
+  lessonHref: string;
+  subjectColour: string;
+  pendingLabel: string;
+  metadataLabel: string;
+}) {
+  const scheduleLabel =
+    lesson.term_number === null || lesson.week_number === null
+      ? "Term or week not set"
+      : `Term ${lesson.term_number} ${SCHEDULE_SEPARATOR} Week ${lesson.week_number}`;
+
+  return (
+    <PendingNavigationLink
+      href={lessonHref}
+      className="block w-full min-w-0 rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] px-4 py-3 shadow-sm lg:px-5"
+      pendingChildren={
+        <div className="flex min-w-0 items-start justify-between gap-3 lg:gap-4">
+          <div className="min-w-0">
+            <p className="break-words text-sm font-bold text-black">
+              Lesson {lesson.lesson_number} {LESSON_TITLE_SEPARATOR} {lesson.title}
+            </p>
+            <p className="mt-1 text-xs font-medium text-black/60">
+              {scheduleLabel}
+            </p>
+            <p
+              className="mt-2 text-xs font-semibold"
+              style={{ color: subjectColour }}
+            >
+              {pendingLabel}
+            </p>
+          </div>
+          <LessonLifecycleIndicator
+            status={lifecycleStatus}
+            subjectColour={subjectColour}
+          />
         </div>
+      }
+    >
+      <div className="flex min-w-0 items-start justify-between gap-3 lg:gap-4">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-bold text-black">
+            Lesson {lesson.lesson_number} {LESSON_TITLE_SEPARATOR} {lesson.title}
+          </p>
+          <p className="mt-1 text-xs font-medium text-black/60">
+            {scheduleLabel}
+          </p>
+          <p
+            className="mt-2 text-xs font-semibold"
+            style={{ color: subjectColour }}
+          >
+            {metadataLabel}
+          </p>
+        </div>
+        <LessonLifecycleIndicator
+          status={lifecycleStatus}
+          subjectColour={subjectColour}
+        />
+      </div>
     </PendingNavigationLink>
   );
 }
@@ -249,6 +352,7 @@ export function SubjectClassroom({
   );
   const [lessonsLoading, setLessonsLoading] = useState(!hasInitialState);
   const [loadError, setLoadError] = useState(initialLoadError ?? "");
+  const [completedLessonsOpen, setCompletedLessonsOpen] = useState(false);
   const [allLessonsOpen, setAllLessonsOpen] = useState(false);
   const [openWeekKey, setOpenWeekKey] = useState<string | null>(null);
 
@@ -288,6 +392,29 @@ export function SubjectClassroom({
   const lessonLifecycle = getLessonLifecycle(lessons);
   const termGroups = groupLessons(lessons);
 
+  const toCompleteLessons = useMemo(
+    () =>
+      [...lessons]
+        .filter(
+          (lesson) =>
+            !lesson.isCompleted && lesson.id !== latestLesson?.id,
+        )
+        .sort(compareProgrammeOrder),
+    [lessons, latestLesson?.id],
+  );
+
+  const completedLessons = useMemo(
+    () =>
+      [...lessons]
+        .filter((lesson) => lesson.isCompleted)
+        .sort(compareProgrammeOrder),
+    [lessons],
+  );
+
+  const currentLessonIsIncomplete = Boolean(
+    latestLesson && !latestLesson.isCompleted,
+  );
+
   function toggleAllLessons() {
     if (allLessonsOpen) setOpenWeekKey(null);
     setAllLessonsOpen((isOpen) => !isOpen);
@@ -295,7 +422,7 @@ export function SubjectClassroom({
 
   return (
     <main
-      className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12`}
+      className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`}
       style={
         {
           "--subject-primary": subject.colourTheme.primary,
@@ -305,8 +432,8 @@ export function SubjectClassroom({
         } as CSSProperties
       }
     >
-      <div className="mx-auto w-full min-w-0 max-w-md">
-        <div className="mb-6 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg">
+      <div className="mx-auto w-full min-w-0 max-w-md lg:max-w-6xl">
+        <div className="mb-6 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg lg:mb-8 lg:p-6">
           <div className="flex items-center gap-4">
             <Link href={buildSubjectRoute(subject, "learnerDashboard")}>
               <ArrowLeft size={22} />
@@ -319,7 +446,7 @@ export function SubjectClassroom({
               T
             </div>
             <div>
-              <h1 className="text-lg font-bold">
+              <h1 className="text-lg font-bold lg:text-xl">
                 {subject.displayName} Classroom
               </h1>
               <p className="text-sm text-blue-100">Teacher</p>
@@ -340,8 +467,8 @@ export function SubjectClassroom({
             No lessons have been published yet.
           </div>
         ) : (
-          <>
-            <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-5 lg:gap-8">
+            <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
               <div className="mb-4 flex w-full min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h2 className="text-lg font-bold text-[#102A43]">
@@ -352,21 +479,127 @@ export function SubjectClassroom({
                   </p>
                 </div>
               </div>
-              <LessonCard
-                lesson={latestLesson}
-                lifecycleStatus={lessonLifecycle.statusByLessonId.get(
-                  latestLesson.id,
-                )!}
-                lessonHref={buildSubjectDetailRoute(
-                  subject,
-                  "learnerClassroom",
-                  latestLesson.id,
-                )}
-                subjectColour={subject.colourTheme.primary}
-              />
+              <div className="lg:max-w-3xl">
+                <LessonCard
+                  lesson={latestLesson}
+                  lifecycleStatus={lessonLifecycle.statusByLessonId.get(
+                    latestLesson.id,
+                  )!}
+                  lessonHref={buildSubjectDetailRoute(
+                    subject,
+                    "learnerClassroom",
+                    latestLesson.id,
+                  )}
+                  subjectColour={subject.colourTheme.primary}
+                />
+              </div>
             </section>
 
-            <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+            <section className="rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
+              <div className="mb-5">
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Your Progress
+                </h2>
+                <p className="text-sm text-black/60">
+                  Keep track of outstanding and completed lesson work.
+                </p>
+              </div>
+
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-base font-bold text-[#102A43]">
+                    To Complete {SCHEDULE_SEPARATOR} {toCompleteLessons.length}
+                  </h3>
+                </div>
+
+                {toCompleteLessons.length > 0 ? (
+                  <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+                    {toCompleteLessons.map((lesson) => (
+                      <LessonProgressRow
+                        key={lesson.id}
+                        lesson={lesson}
+                        lifecycleStatus={
+                          lessonLifecycle.statusByLessonId.get(lesson.id)!
+                        }
+                        lessonHref={buildSubjectDetailRoute(
+                          subject,
+                          "learnerClassroom",
+                          lesson.id,
+                        )}
+                        subjectColour={subject.colourTheme.primary}
+                        pendingLabel="Opening lesson..."
+                        metadataLabel="Outstanding lesson"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] px-4 py-4 text-sm font-semibold text-slate-600 shadow-sm">
+                    {currentLessonIsIncomplete
+                      ? "No outstanding catch-up work."
+                      : "You're all caught up!"}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 border-t border-[var(--subject-border)] pt-5">
+                <button
+                  type="button"
+                  onClick={() => setCompletedLessonsOpen((isOpen) => !isOpen)}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                  aria-expanded={completedLessonsOpen}
+                >
+                  <div>
+                    <h3 className="text-base font-bold text-[#102A43]">
+                      Completed {SCHEDULE_SEPARATOR} {completedLessons.length}
+                    </h3>
+                    <p className="text-sm text-black/60">
+                      Review lessons you have already completed.
+                    </p>
+                  </div>
+                  {completedLessonsOpen ? (
+                    <ChevronDown
+                      size={20}
+                      className="text-[var(--subject-primary)]"
+                    />
+                  ) : (
+                    <ChevronRight
+                      size={20}
+                      className="text-[var(--subject-primary)]"
+                    />
+                  )}
+                </button>
+
+                {completedLessonsOpen && (
+                  <div className="mt-4 space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+                    {completedLessons.length > 0 ? (
+                      completedLessons.map((lesson) => (
+                        <LessonProgressRow
+                          key={lesson.id}
+                          lesson={lesson}
+                          lifecycleStatus={
+                            lessonLifecycle.statusByLessonId.get(lesson.id)!
+                          }
+                          lessonHref={buildSubjectDetailRoute(
+                            subject,
+                            "learnerClassroom",
+                            lesson.id,
+                          )}
+                          subjectColour={subject.colourTheme.primary}
+                          pendingLabel="Opening completed lesson..."
+                          metadataLabel="Completed lesson"
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-2xl border border-[var(--subject-border)] bg-[var(--subject-card)] px-4 py-4 text-sm font-semibold text-slate-600 shadow-sm">
+                        No completed lessons yet.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
               <button
                 type="button"
                 onClick={toggleAllLessons}
@@ -388,15 +621,15 @@ export function SubjectClassroom({
               </button>
 
               {allLessonsOpen && (
-                <div className="mt-5 space-y-5">
+                <div className="mt-5 space-y-6 lg:mt-6 lg:space-y-7">
                   {termGroups.map((term) => (
                     <div key={term.key} className="min-w-0">
-                      <h3 className="mb-2 px-1 text-sm font-bold uppercase tracking-wide text-[#102A43]">
+                      <h3 className="mb-3 px-1 text-sm font-bold uppercase tracking-wide text-[#102A43] lg:mb-4">
                         {term.termNumber === null
                           ? "Term not set"
                           : `Term ${term.termNumber}`}
                       </h3>
-                      <div className="space-y-3">
+                      <div className="space-y-4 lg:space-y-5">
                         {term.weeks.map((week) => {
                           const weekIsOpen = openWeekKey === week.key;
 
@@ -412,7 +645,7 @@ export function SubjectClassroom({
                                     currentKey === week.key ? null : week.key,
                                   )
                                 }
-                                className="flex w-full items-center justify-between bg-[var(--subject-card)] p-4 text-left"
+                                className="flex w-full items-center justify-between bg-[var(--subject-card)] p-4 text-left lg:p-5"
                               >
                                 <div>
                                   <p className="font-bold text-[#102A43]">
@@ -440,26 +673,28 @@ export function SubjectClassroom({
                                 )}
                               </button>
                               {weekIsOpen && (
-                                <div className="w-full min-w-0 space-y-3 border-t border-[var(--subject-border)] p-3">
-                                  {week.lessons.map((lesson) => (
-                                    <LessonCard
-                                      key={lesson.id}
-                                      lesson={lesson}
-                                      lifecycleStatus={
-                                        lessonLifecycle.statusByLessonId.get(
+                                <div className="w-full min-w-0 border-t border-[var(--subject-border)] p-3 lg:p-5">
+                                  <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
+                                    {week.lessons.map((lesson) => (
+                                      <LessonCard
+                                        key={lesson.id}
+                                        lesson={lesson}
+                                        lifecycleStatus={
+                                          lessonLifecycle.statusByLessonId.get(
+                                            lesson.id,
+                                          )!
+                                        }
+                                        lessonHref={buildSubjectDetailRoute(
+                                          subject,
+                                          "learnerClassroom",
                                           lesson.id,
-                                        )!
-                                      }
-                                      lessonHref={buildSubjectDetailRoute(
-                                        subject,
-                                        "learnerClassroom",
-                                        lesson.id,
-                                      )}
-                                      subjectColour={
-                                        subject.colourTheme.primary
-                                      }
-                                    />
-                                  ))}
+                                        )}
+                                        subjectColour={
+                                          subject.colourTheme.primary
+                                        }
+                                      />
+                                    ))}
+                                  </div>
                                 </div>
                               )}
                             </div>
@@ -471,7 +706,7 @@ export function SubjectClassroom({
                 </div>
               )}
             </section>
-          </>
+          </div>
         )}
       </div>
     </main>
@@ -481,3 +716,5 @@ export function SubjectClassroom({
 export default function BusinessStudiesClassroom() {
   return <SubjectClassroom />;
 }
+
+

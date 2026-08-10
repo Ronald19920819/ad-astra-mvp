@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/client";
+﻿import { createClient } from "@/lib/supabase/client";
 
 export type PublishedActivityQuestion = {
   id: string;
@@ -15,13 +15,13 @@ export type PublishedActivity = {
   title: string;
   instructions: string | null;
   total_marks: number;
-due_date: string | null;
-lesson_material_id: string;
+  due_date: string | null;
+  lesson_material_id: string;
   activity_questions: PublishedActivityQuestion[];
 };
 
 export async function getPublishedActivity(
-  lessonMaterialId: string
+  lessonMaterialId: string,
 ): Promise<PublishedActivity | null> {
   const supabase = createClient();
 
@@ -32,8 +32,8 @@ export async function getPublishedActivity(
       title,
       instructions,
       total_marks,
-due_date,
-lesson_material_id,
+      due_date,
+      lesson_material_id,
       activity_questions (
         id,
         question_number,
@@ -60,7 +60,7 @@ lesson_material_id,
   return {
     ...data,
     activity_questions: [...data.activity_questions].sort(
-      (a, b) => a.question_number - b.question_number
+      (a, b) => a.question_number - b.question_number,
     ),
   };
 }
@@ -94,9 +94,7 @@ export type TeacherActivityEditorData = {
 
 export async function getTeacherPublishedActivities(
   subjectId: string,
-): Promise<
-  TeacherPublishedActivity[]
-> {
+): Promise<TeacherPublishedActivity[]> {
   const response = await fetch(
     `/api/teacher/business-studies/activities?subjectId=${encodeURIComponent(subjectId)}`,
     { cache: "no-store" },
@@ -190,6 +188,12 @@ export type LearnerPublishedActivity = {
     | "awaiting_review"
     | "returned"
     | null;
+  preliminaryMark?: number | null;
+  preliminaryTotal?: number | null;
+  preliminaryPercentage?: number | null;
+  finalMark?: number | null;
+  originalTotalMarks?: number | null;
+  snapshotTotalMarks?: number | null;
   lesson: {
     id: string;
     title: string;
@@ -215,7 +219,26 @@ type LearnerActivitySubmissionRow = {
   activity_id: string;
   status: NonNullable<LearnerPublishedActivity["submissionStatus"]>;
   submitted_at: string;
+  preliminary_mark: number | null;
+  preliminary_total: number | null;
+  preliminary_percentage: number | null;
+  final_mark: number | null;
+  original_total_marks: number | null;
+  activity_snapshot: {
+    activity?: {
+      totalMarks?: number;
+    };
+  } | null;
 };
+
+function getSnapshotTotalMarks(
+  snapshot: LearnerActivitySubmissionRow["activity_snapshot"],
+) {
+  const totalMarks = snapshot?.activity?.totalMarks;
+  return typeof totalMarks === "number" && Number.isFinite(totalMarks)
+    ? totalMarks
+    : null;
+}
 
 export async function getLearnerPublishedActivities(
   subjectId: string,
@@ -260,7 +283,9 @@ export async function getLearnerPublishedActivities(
 
   const { data: submissions, error: submissionsError } = await supabase
     .from("activity_submissions")
-    .select("activity_id, status, submitted_at")
+    .select(
+      "activity_id, status, submitted_at, preliminary_mark, preliminary_total, preliminary_percentage, final_mark, original_total_marks, activity_snapshot",
+    )
     .in(
       "activity_id",
       activities.map((activity) => activity.id),
@@ -278,31 +303,37 @@ export async function getLearnerPublishedActivities(
   }
 
   const submissionRows = (submissions ?? []) as LearnerActivitySubmissionRow[];
-  const submissionStatusByActivityId = new Map<
-    string,
-    LearnerActivitySubmissionRow["status"]
-  >();
+  const submissionByActivityId = new Map<string, LearnerActivitySubmissionRow>();
 
   for (const submission of submissionRows) {
-    if (!submissionStatusByActivityId.has(submission.activity_id)) {
-      submissionStatusByActivityId.set(
-        submission.activity_id,
-        submission.status,
-      );
+    if (!submissionByActivityId.has(submission.activity_id)) {
+      submissionByActivityId.set(submission.activity_id, submission);
     }
   }
 
-  return activities.map((activity) => ({
-    id: activity.id,
-    title: activity.title,
-    total_marks: activity.total_marks,
-    due_date: activity.due_date,
-    created_at: activity.created_at,
-    lesson_material_id: activity.lesson_material_id,
-    isSubmitted: submissionStatusByActivityId.has(activity.id),
-    submissionStatus: submissionStatusByActivityId.get(activity.id) ?? null,
-    lesson: activity.lesson_materials.lessons,
-  }));
+  return activities.map((activity) => {
+    const submission = submissionByActivityId.get(activity.id);
+
+    return {
+      id: activity.id,
+      title: activity.title,
+      total_marks: activity.total_marks,
+      due_date: activity.due_date,
+      created_at: activity.created_at,
+      lesson_material_id: activity.lesson_material_id,
+      isSubmitted: Boolean(submission),
+      submissionStatus: submission?.status ?? null,
+      preliminaryMark: submission?.preliminary_mark ?? null,
+      preliminaryTotal: submission?.preliminary_total ?? null,
+      preliminaryPercentage: submission?.preliminary_percentage ?? null,
+      finalMark: submission?.final_mark ?? null,
+      originalTotalMarks: submission?.original_total_marks ?? null,
+      snapshotTotalMarks: getSnapshotTotalMarks(
+        submission?.activity_snapshot ?? null,
+      ),
+      lesson: activity.lesson_materials.lessons,
+    };
+  });
 }
 
 export type LearnerActivityWorkspaceQuestion = {

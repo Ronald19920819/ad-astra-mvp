@@ -46,7 +46,7 @@ function scheduleLabel(submission: LearnerWorkSummary) {
   if (termNumber === null && weekNumber === null) return "Schedule not set";
   if (termNumber === null) return `Week ${weekNumber}`;
   if (weekNumber === null) return `Term ${termNumber}`;
-  return `Term ${termNumber} · Week ${weekNumber}`;
+  return `Term ${termNumber} \u00B7 Week ${weekNumber}`;
 }
 
 type WorkGroup = {
@@ -122,7 +122,7 @@ function AwaitingCard({ submission }: { submission: LearnerWorkSummary }) {
             {submission.activity.title}
           </h4>
           <p className="mt-1 text-xs font-semibold text-slate-500">
-            {submission.subject.name} · {scheduleLabel(submission)}
+            {submission.subject.name} {"\u00B7"} {scheduleLabel(submission)}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
@@ -184,7 +184,7 @@ function ReturnedCard({ submission }: { submission: LearnerWorkSummary }) {
             {submission.activity.title}
           </h4>
           <p className="mt-1 text-xs font-semibold text-slate-500">
-            {submission.subject.name} · {scheduleLabel(submission)}
+            {submission.subject.name} {"\u00B7"} {scheduleLabel(submission)}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-700">
@@ -203,7 +203,7 @@ function ReturnedCard({ submission }: { submission: LearnerWorkSummary }) {
           Activity Mark
         </p>
         <p className="mt-1 text-3xl font-bold text-[#102A43]">
-          {submission.finalMark ?? "—"}/{submission.activity.totalMarks}
+          {submission.finalMark ?? "\u2014"}/{submission.activity.totalMarks}
         </p>
         <p
           className="mt-1 text-sm font-bold"
@@ -259,8 +259,8 @@ function WorkSection({
   const groups = groupWork(submissions);
 
   return (
-    <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-center gap-3">
+    <section className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:p-6">
+      <div className="mb-4 flex items-center gap-3 lg:mb-5">
         <div className="rounded-2xl bg-[#FFF3E6] p-3 text-orange-500">
           {icon}
         </div>
@@ -272,24 +272,24 @@ function WorkSection({
           {emptyMessage}
         </p>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6 lg:space-y-8">
           {groups.map((subject) => (
             <div key={subject.subjectId}>
               <h3
-                className="mb-3 text-sm font-bold"
+                className="mb-3 text-sm font-bold lg:mb-4"
                 style={{ color: getSubjectTheme(subject.subjectId).primary }}
               >
                 {subject.subjectName}
               </h3>
-              <div className="space-y-4">
+              <div className="space-y-5 lg:space-y-6">
                 {subject.terms.map((term) => (
                   <div key={term.key}>
-                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 lg:mb-3">
                       {term.termNumber === null
                         ? "Term not set"
                         : `Term ${term.termNumber}`}
                     </p>
-                    <div className="space-y-3">
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                       {term.submissions.map((submission) =>
                         returned ? (
                           <ReturnedCard
@@ -352,15 +352,15 @@ export default async function YourWorkPage() {
       ? identity.fullName?.trim().split(/\s+/)[0] ?? ""
       : "";
   const heading = learnerFirstName
-    ? `Here’s your work, ${learnerFirstName}`
-    : "Here’s your work";
+    ? `Here's your work, ${learnerFirstName}`
+    : "Here's your work";
 
   return (
     <main
-      className={`${neueHaas.className} min-h-screen overflow-x-hidden bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6`}
+      className={`${neueHaas.className} min-h-screen overflow-x-hidden bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6 lg:px-8`}
     >
-      <div className="mx-auto w-full max-w-md min-w-0">
-        <section className="mb-5 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg">
+      <div className="mx-auto flex w-full max-w-md min-w-0 flex-col gap-5 lg:max-w-6xl lg:gap-8">
+        <section className="rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg lg:p-6">
           <Link
             href="/home"
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-100"
@@ -382,34 +382,34 @@ export default async function YourWorkPage() {
         </section>
 
         {identity.status === "error" ? (
-          <section className="rounded-[2rem] border border-blue-100 bg-white p-5 text-sm font-semibold text-slate-600 shadow-sm">
+          <section className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 text-sm font-semibold text-slate-600 shadow-sm lg:max-w-3xl">
             {identity.message}
           </section>
         ) : loadError ? (
-          <section className="rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-600 shadow-sm">
+          <section className="mx-auto w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-600 shadow-sm lg:max-w-3xl">
             {loadError}
           </section>
         ) : submissions.length === 0 ? (
-          <section className="rounded-[2rem] border border-blue-100 bg-white p-5 text-sm text-slate-500 shadow-sm">
+          <section className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 text-sm text-slate-500 shadow-sm lg:max-w-3xl">
             No submitted work yet.
           </section>
         ) : (
           <>
             {identity.isDevelopmentFallback && (
-              <p className="mb-5 rounded-2xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+              <p className="mx-auto w-full max-w-md rounded-2xl bg-amber-50 p-3 text-xs font-semibold text-amber-800 lg:max-w-4xl">
                 Development testing mode: showing work for the configured test
                 learner.
               </p>
             )}
             <WorkSection
-              title="Awaiting Teacher Review"
+              title={`Awaiting Teacher Review \u00B7 ${awaiting.length}`}
               icon={<Sparkles size={22} />}
               submissions={awaiting}
               emptyMessage="No work is currently awaiting review."
               returned={false}
             />
             <WorkSection
-              title="Returned Work"
+              title={`Returned Work \u00B7 ${returned.length}`}
               icon={<CheckCircle2 size={22} />}
               submissions={returned}
               emptyMessage="No work has been returned yet."

@@ -66,9 +66,9 @@ export default async function LearnerWorkDetailPage({
   if (identity.status === "error") {
     return (
       <main
-        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 sm:p-6`}
+        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6 lg:px-8`}
       >
-        <div className="mx-auto max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+        <div className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:max-w-3xl">
           <Link
             href="/your-work"
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
@@ -96,9 +96,9 @@ export default async function LearnerWorkDetailPage({
 
     return (
       <main
-        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 sm:p-6`}
+        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6 lg:px-8`}
       >
-        <div className="mx-auto max-w-md rounded-[2rem] border border-red-100 bg-white p-5 shadow-sm">
+        <div className="mx-auto w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-5 shadow-sm lg:max-w-3xl">
           <Link
             href="/your-work"
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
@@ -116,10 +116,7 @@ export default async function LearnerWorkDetailPage({
   if (!work) notFound();
 
   const isReturned = work.status === "returned";
-  const finalPercentage = percentage(
-    work.finalMark,
-    work.activity.totalMarks,
-  );
+  const finalPercentage = percentage(work.finalMark, work.activity.totalMarks);
   const preliminaryPercentage =
     work.preliminaryPercentage ??
     percentage(work.preliminaryMark, work.preliminaryTotal ?? 0);
@@ -129,10 +126,10 @@ export default async function LearnerWorkDetailPage({
 
   return (
     <main
-      className={`${neueHaas.className} min-h-screen overflow-x-hidden bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6`}
+      className={`${neueHaas.className} min-h-screen overflow-x-hidden bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6 lg:px-8`}
     >
-      <div className="mx-auto w-full max-w-md min-w-0">
-        <section className="mb-5 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg">
+      <div className="mx-auto flex w-full max-w-md min-w-0 flex-col gap-5 lg:max-w-6xl lg:gap-8">
+        <section className="rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg lg:p-6">
           <Link
             href="/your-work"
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-100"
@@ -167,7 +164,7 @@ export default async function LearnerWorkDetailPage({
         </section>
 
         {identity.isDevelopmentFallback && (
-          <p className="mb-5 rounded-2xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+          <p className="mx-auto w-full max-w-md rounded-2xl bg-amber-50 p-3 text-xs font-semibold text-amber-800 lg:max-w-4xl">
             Development testing mode: showing work for the configured test
             learner.
           </p>
@@ -175,7 +172,7 @@ export default async function LearnerWorkDetailPage({
 
         {isReturned ? (
           <section
-            className="mb-5 rounded-[2rem] border-2 bg-white p-5 shadow-sm"
+            className="rounded-[2rem] border-2 bg-white p-5 shadow-sm lg:mx-auto lg:w-full lg:max-w-4xl lg:p-6"
             style={{ borderColor: subjectTheme.border }}
           >
             <div className="flex items-center gap-3">
@@ -238,7 +235,7 @@ export default async function LearnerWorkDetailPage({
           </section>
         ) : (
           <section
-            className="mb-5 rounded-[2rem] border bg-white p-5 shadow-sm"
+            className="rounded-[2rem] border bg-white p-5 shadow-sm lg:mx-auto lg:w-full lg:max-w-4xl lg:p-6"
             style={{ borderColor: subjectTheme.border }}
           >
             <div className="flex items-center gap-3">
@@ -287,7 +284,7 @@ export default async function LearnerWorkDetailPage({
           </section>
         )}
 
-        <section className="mb-5 min-w-0 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+        <section className="min-w-0 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:mx-auto lg:w-full lg:max-w-3xl lg:p-6">
           <div className="mb-4 flex min-w-0 items-center gap-3">
             <div
               className="shrink-0 rounded-2xl p-3"
@@ -305,11 +302,11 @@ export default async function LearnerWorkDetailPage({
           <ProtectedReading content={work.reading.contentText} />
         </section>
 
-        <section className="space-y-4">
+        <section className="space-y-4 lg:mx-auto lg:w-full lg:max-w-4xl">
           {work.questions.map((question) => (
             <article
               key={question.id}
-              className="min-w-0 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm"
+              className="min-w-0 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:p-6"
             >
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <h2 className="min-w-0 font-bold text-[#102A43]">

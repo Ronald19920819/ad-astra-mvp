@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { neueHaas } from "@/app/fonts";
 import type { SubjectAnnouncementSummary } from "@/lib/supabase/subjectCommunications";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
@@ -26,9 +27,19 @@ export function TeacherAnnouncementsCard({
       </div>
 
       {announcements.length === 0 ? (
-        <p className="text-sm font-medium text-slate-500">
-          No announcements today.
-        </p>
+        <div className="flex items-center justify-center py-2">
+          <div className="relative w-full max-w-[18rem] sm:max-w-[20rem]">
+            <Image
+              src="/home/leon-announcements-empty.png"
+              alt="Teacher Announcements empty state"
+              width={640}
+              height={640}
+              className="h-auto w-full object-contain"
+              sizes="(min-width: 1024px) 18rem, (min-width: 640px) 20rem, 75vw"
+              unoptimized
+            />
+          </div>
+        </div>
       ) : (
         <div className="space-y-3">
           {announcements.map((announcement) => {

@@ -19,7 +19,6 @@ import {
 import type { LearnerSavedActivitySubmission } from "@/lib/supabase/learnerSubjectPageData";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import {
-  buildSubjectDetailRoute,
   buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
@@ -366,7 +365,7 @@ export function SubjectActivityPage({
         setDraftNotice(
           navigator.onLine
             ? "Unable to save draft"
-            : "Offline — saved on this device only",
+            : "Offline \u2014 saved on this device only",
         );
         writeLocalDraftCache({
           answers: normalizedAnswers,
@@ -659,7 +658,7 @@ export function SubjectActivityPage({
 
     function markOfflineState() {
       setDraftSaveState("offline");
-      setDraftNotice("Offline — saved on this device only");
+      setDraftNotice("Offline \u2014 saved on this device only");
     }
 
     function clearOfflineState() {
@@ -756,10 +755,10 @@ export function SubjectActivityPage({
   if (isLoading || (!activityData && isLoadingSubmission) || (!submission && activityData && isLoadingDraft)) {
     return (
       <main
-        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`}
+        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 lg:px-8`}
         style={themeStyle}
       >
-          <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-sm text-slate-500 shadow-sm">
+          <div className="mx-auto w-full max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-sm text-slate-500 shadow-sm lg:max-w-3xl">
           Loading activity...
           </div>
         </main>
@@ -769,10 +768,10 @@ export function SubjectActivityPage({
   if ((pageState || !activityData) && !renderData) {
     return (
       <main
-        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`}
+        className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 lg:px-8`}
         style={themeStyle}
       >
-        <div className="mx-auto max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+        <div className="mx-auto w-full max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:max-w-3xl">
           <Link
             href={buildSubjectRoute(subject, "learnerActivities")}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
@@ -837,24 +836,20 @@ export function SubjectActivityPage({
   const hasSchedule =
     displayedLesson.term_number !== null &&
     displayedLesson.week_number !== null;
-  const lessonHref = buildSubjectDetailRoute(
-    subject,
-    "learnerClassroom",
-    displayedLesson.id,
-  );
+  const activitiesHref = buildSubjectRoute(subject, "learnerActivities");
 
   return (
     <main
-      className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12`}
+      className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`}
       style={themeStyle}
     >
-      <div className="mx-auto w-full min-w-0 max-w-md">
-        <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+      <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-6xl lg:space-y-8">
+        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
           <Link
-            href={lessonHref}
+            href={activitiesHref}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
           >
-            <ArrowLeft size={16} /> Back to Lesson
+            <ArrowLeft size={16} /> Back to Activities
           </Link>
           <h1 className="break-words text-3xl font-bold text-slate-900">
             {displayedActivity.title}
@@ -865,10 +860,7 @@ export function SubjectActivityPage({
           </p>
           <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold text-slate-600">
             {hasSchedule && (
-              <span>
-                Term {displayedLesson.term_number} &middot; Week{" "}
-                {displayedLesson.week_number}
-              </span>
+              <span>Week {displayedLesson.week_number} &middot; Term {displayedLesson.term_number}</span>
             )}
             <span>{displayedActivity.total_marks} marks</span>
             {displayedActivity.due_date && (
@@ -887,14 +879,14 @@ export function SubjectActivityPage({
         </section>
 
         {isDevelopment && (
-          <p className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-800 lg:mx-auto lg:max-w-4xl">
             Development testing mode: activity submissions are being recorded
             against the configured test learner.
           </p>
         )}
 
         {subjectKey === "business-studies" && (
-        <section className="mb-5 w-full min-w-0 overflow-hidden rounded-[2rem] border border-[var(--subject-border)] bg-black shadow-sm">
+        <section className="w-full min-w-0 overflow-hidden rounded-[2rem] border border-[var(--subject-border)] bg-black shadow-sm lg:mx-auto lg:max-w-5xl">
           <Image
             src="/kingdom-business-studies.png"
             alt="Business Studies activity"
@@ -906,7 +898,7 @@ export function SubjectActivityPage({
         </section>
         )}
 
-        <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-3xl lg:p-6">
           <div className="mb-4 flex min-w-0 items-center gap-3">
             <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
               <BookOpen className="text-[var(--subject-primary)]" size={22} />
@@ -923,7 +915,7 @@ export function SubjectActivityPage({
           <ProtectedReading content={displayedReading.content_text} scrollable />
         </section>
 
-        <section className="mb-5 w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
           <div className="mb-4 flex items-center gap-3">
             <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
               <SquarePen className="text-[var(--subject-primary)]" size={22} />
@@ -993,7 +985,7 @@ export function SubjectActivityPage({
                       );
                       setSubmissionMessage("");
                       setDraftNotice(
-                        navigator.onLine ? "" : "Offline — saved on this device only",
+                        navigator.onLine ? "" : "Offline \u2014 saved on this device only",
                       );
                       scheduleDraftSave();
                     }}
@@ -1001,7 +993,7 @@ export function SubjectActivityPage({
                       void saveDraft("blur");
                     }}
                     placeholder="Type your answer here..."
-                    className="mt-3 min-h-[120px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100"
+                    className="mt-3 min-h-[120px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100 lg:min-h-[144px]"
                   />
                   {submission?.activity_submission_answers.find(
                     (answer) => answer.question_id === question.id,
@@ -1027,7 +1019,7 @@ export function SubjectActivityPage({
         </section>
 
         {submission?.status === "awaiting_review" && (
-          <section className="mb-5 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm">
+          <section className="rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
             <h2 className="text-xl font-bold text-slate-900">
               Preliminary Kingdom Assessment
             </h2>
@@ -1049,7 +1041,7 @@ export function SubjectActivityPage({
         )}
 
         {submission && submission.status !== "awaiting_review" && (
-          <section className="mb-5 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm">
+          <section className="rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
             <h2 className="text-xl font-bold text-slate-900">
               Activity Submitted
             </h2>
@@ -1066,7 +1058,7 @@ export function SubjectActivityPage({
                   Activity Mark
                 </p>
                 <p className="mt-1 text-3xl font-bold text-slate-900">
-                  {submission.final_mark ?? "—"}/
+                  {submission.final_mark ?? "\u2014"}/
                   {submittedTotalMarks}
                 </p>
                 <p className="mt-1 font-bold text-orange-600">
@@ -1085,17 +1077,17 @@ export function SubjectActivityPage({
 
         {submission && (
           <Link
-            href={lessonHref}
-            className="mb-5 flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--subject-border)] bg-white py-4 font-bold text-[var(--subject-primary)] shadow-sm"
+            href={activitiesHref}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--subject-border)] bg-white py-4 font-bold text-[var(--subject-primary)] shadow-sm lg:mx-auto lg:max-w-4xl"
           >
             <ArrowLeft size={18} />
-            Return to Lesson
+            Back to Activities
           </Link>
         )}
 
         {!submission && (
           <>
-          <p className="mb-3 text-center text-xs font-semibold text-slate-500">
+          <p className="text-center text-xs font-semibold text-slate-500 lg:mx-auto lg:max-w-4xl">
             {draftSaveState === "saving"
               ? "Saving..."
               : draftSaveState === "saved"
@@ -1103,7 +1095,7 @@ export function SubjectActivityPage({
                 : draftSaveState === "error"
                   ? "Unable to save draft"
                   : draftSaveState === "offline"
-                    ? "Offline — saved on this device only"
+                    ? "Offline \u2014 saved on this device only"
                     : draftSaveState === "newer-draft"
                       ? "A newer draft was found"
                       : "Draft saved automatically"}
@@ -1114,24 +1106,24 @@ export function SubjectActivityPage({
             disabled={
               isSubmitting || isLoadingSubmission || submissionAccessBlocked
             }
-            className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 text-lg font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 text-lg font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60 lg:mx-auto lg:block lg:max-w-4xl"
           >
             {isSubmitting ? "Submitting..." : "Submit Activity"}
           </button>
           </>
         )}
         {isLoadingSubmission && (
-          <p className="mt-2 text-center text-xs text-slate-500">
+          <p className="text-center text-xs text-slate-500 lg:mx-auto lg:max-w-4xl">
             Checking submission status...
           </p>
         )}
         {submissionMessage && (
-          <p className="mt-3 rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+          <p className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700 lg:mx-auto lg:max-w-4xl">
             {submissionMessage}
           </p>
         )}
         {!submission && draftNotice && (
-          <p className="mt-3 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+          <p className="rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800 lg:mx-auto lg:max-w-4xl">
             {draftNotice}
           </p>
         )}

@@ -48,10 +48,10 @@ export default async function SubjectsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-48">
-      <div className="mx-auto max-w-md">
+    <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] px-6 py-6 pb-48 lg:px-8">
+      <div className="mx-auto max-w-md lg:max-w-6xl">
         <div
-          className="relative mb-6 h-[190px] overflow-hidden rounded-[2rem] border border-blue-100 bg-black shadow-lg"
+          className="relative mb-6 h-[190px] overflow-hidden rounded-[2rem] border border-blue-100 bg-black shadow-lg lg:h-[230px]"
           style={{
             backgroundImage: "url('/hero-banner.png')",
             backgroundSize: "cover",
@@ -59,7 +59,7 @@ export default async function SubjectsPage() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
-          <div className="relative z-10 flex h-full flex-col justify-center p-5">
+          <div className="relative z-10 flex h-full flex-col justify-center p-5 lg:p-7">
             <Link
               href="/home"
               className={`${neueHaas.className} mb-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-white`}
@@ -81,14 +81,14 @@ export default async function SubjectsPage() {
                 width={180}
                 height={47}
                 priority
-                className="h-auto w-[180px]"
+                className="h-auto w-[180px] lg:w-[210px]"
               />
             </div>
-            <h1 className={`${neueHaas.className} text-xl font-bold text-white`}>
+            <h1 className={`${neueHaas.className} text-xl font-bold text-white lg:text-2xl`}>
               Subjects
             </h1>
             <p
-              className={`${neueHaas.className} mt-1.5 text-sm font-medium text-[#d0d4dd]`}
+              className={`${neueHaas.className} mt-1.5 text-sm font-medium text-[#d0d4dd] lg:text-base`}
             >
               {learnerName} &bull; Choose a subject
             </p>
@@ -104,7 +104,7 @@ export default async function SubjectsPage() {
             No enrolled subjects are available yet.
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
             {subjectCards.map(({ subjectKey, approvedStatusLabel, currentTopic }) => {
               const subject = getSubjectConfiguration(subjectKey);
               const Icon = subjectIcons[subject.iconKey];
@@ -113,10 +113,10 @@ export default async function SubjectsPage() {
                 <PendingNavigationLink
                   key={subject.key}
                   href={buildSubjectRoute(subject, "learnerDashboard")}
-                  className="block"
+                  className="block h-full"
                   pendingChildren={
                     <div
-                      className="flex items-center gap-4 rounded-[2rem] border bg-white px-4 py-4 shadow-sm"
+                      className="flex h-full items-center gap-4 rounded-[2rem] border bg-white px-4 py-4 shadow-sm lg:px-5 lg:py-5"
                       style={{ borderColor: subject.colourTheme.border }}
                     >
                       <div
@@ -127,7 +127,7 @@ export default async function SubjectsPage() {
                       </div>
 
                       <div className="min-w-0 flex-1 text-xs text-slate-900">
-                        <h2 className="text-lg font-bold leading-tight">
+                        <h2 className="text-lg font-bold leading-tight lg:text-xl">
                           {subject.displayName}
                         </h2>
                         <p className="mt-2">
@@ -165,7 +165,7 @@ export default async function SubjectsPage() {
                   }
                 >
                   <div
-                    className="flex items-center gap-4 rounded-[2rem] border bg-white px-4 py-4 shadow-sm"
+                    className="flex h-full items-center gap-4 rounded-[2rem] border bg-white px-4 py-4 shadow-sm lg:px-5 lg:py-5"
                     style={{ borderColor: subject.colourTheme.border }}
                   >
                     <div
@@ -176,7 +176,7 @@ export default async function SubjectsPage() {
                     </div>
 
                     <div className="min-w-0 flex-1 text-xs text-slate-900">
-                      <h2 className="text-lg font-bold leading-tight">
+                      <h2 className="text-lg font-bold leading-tight lg:text-xl">
                         {subject.displayName}
                       </h2>
                       <p className="mt-2">
@@ -219,7 +219,7 @@ export default async function SubjectsPage() {
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm font-semibold text-black">
+        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm font-semibold text-black lg:max-w-6xl">
           <Link href="/home">
             <div className="py-4">Home</div>
           </Link>
