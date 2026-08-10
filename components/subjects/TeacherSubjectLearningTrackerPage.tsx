@@ -1,13 +1,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown } from "lucide-react";
 import {
   getSubjectLearningTracker,
   getLearningTrackerErrorDetails,
   type LearningTrackerLesson,
   type TrackerContentState,
-  type TrackerOverallStatus,
+  type TrackerLessonStatus,
 } from "@/lib/supabase/learningTrackerReader";
 import {
   buildSubjectRoute,
@@ -29,13 +29,35 @@ type TrackerTermGroup = {
   weeks: TrackerWeekGroup[];
 };
 
-function progressIndicator(value: TrackerContentState, label: string) {
-  const display = {
-    complete: { symbol: "✓", description: "Complete", className: "text-green-600" },
-    partial: { symbol: "!", description: "Started, under 90%", className: "text-amber-500" },
-    not_started: { symbol: "✗", description: "Not started", className: "text-red-500" },
-    unavailable: { symbol: "—", description: "Not attached", className: "text-slate-400" },
-  }[value];
+function progressIndicator(
+  value: TrackerContentState,
+  label: string,
+  isOverdue: boolean,
+) {
+  const display =
+    value === "complete"
+      ? {
+          symbol: "\u2713",
+          description: "Complete",
+          className: "text-green-600",
+        }
+      : value === "unavailable"
+        ? {
+            symbol: "\u2014",
+            description: "Not attached",
+            className: "text-slate-400",
+          }
+        : isOverdue
+          ? {
+              symbol: "!",
+              description: "Incomplete, deadline passed",
+              className: "text-red-500",
+            }
+          : {
+              symbol: "-",
+              description: "Incomplete, deadline not passed",
+              className: "text-slate-500",
+            };
 
   return (
     <span
@@ -48,10 +70,24 @@ function progressIndicator(value: TrackerContentState, label: string) {
   );
 }
 
-function statusClasses(status: TrackerOverallStatus) {
+function statusClasses(status: TrackerLessonStatus) {
   if (status === "Complete") return "bg-green-100 text-green-700";
-  if (status === "Needs Support") return "bg-yellow-100 text-yellow-700";
+  if (status === "Incomplete") return "bg-slate-100 text-slate-600";
   return "bg-red-100 text-red-700";
+}
+
+function statusSymbol(status: TrackerLessonStatus) {
+  if (status === "Complete") {
+    return <Check size={14} strokeWidth={3} aria-hidden="true" />;
+  }
+
+  return status === "Incomplete" ? "-" : "!";
+}
+
+function statusLabel(status: TrackerLessonStatus) {
+  if (status === "Complete") return "Complete";
+  if (status === "Incomplete") return "Incomplete";
+  return "Attention Required";
 }
 
 function formatLastActive(timestamp: string | null) {
@@ -126,12 +162,13 @@ function LearnerRows({
               <td className="max-w-56 break-words p-3 font-semibold text-slate-900">
                 {learner.name}
               </td>
-              <td className="p-3 text-center">{progressIndicator(learner.video, "Video")}</td>
-              <td className="p-3 text-center">{progressIndicator(learner.reading, "Reading")}</td>
-              <td className="p-3 text-center">{progressIndicator(learner.quiz, "Quiz")}</td>
+              <td className="p-3 text-center">{progressIndicator(learner.video, "Video", learner.status === "Overdue")}</td>
+              <td className="p-3 text-center">{progressIndicator(learner.reading, "Reading", learner.status === "Overdue")}</td>
+              <td className="p-3 text-center">{progressIndicator(learner.quiz, "Quiz", learner.status === "Overdue")}</td>
               <td className="p-3 text-center">
-                <span className={`mx-auto inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold ${statusClasses(learner.status)}`}>
-                  {learner.status}
+                <span className={`mx-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold ${statusClasses(learner.status)}`}>
+                  {statusSymbol(learner.status)}
+                  <span>{statusLabel(learner.status)}</span>
                 </span>
               </td>
               <td className="whitespace-nowrap p-3 font-medium text-slate-600">

@@ -4,6 +4,7 @@ import type { AuthenticatedLearnerProfile } from "@/lib/learners/learnerProfile"
 import type { AuthenticatedTeacherProfile } from "@/lib/teachers/teacherProfile";
 import { getLearnerActivityStatus } from "@/lib/activities/learnerActivityStatus";
 import { logSupabaseError } from "@/lib/supabase/errorDetails";
+import { getTeacherNamesByProfileIds } from "@/lib/supabase/subjectTeacherNames";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 
@@ -52,23 +53,6 @@ type ActivityRow = {
 type SubmissionRow = {
   activity_id: string;
   status: "submitted" | "marking_failed" | "awaiting_review" | "returned";
-};
-
-type TeacherProfileNameRow = {
-  id: string;
-  faculty_name: string | null;
-  profile:
-    | {
-        full_name: string | null;
-        first_name?: string | null;
-        surname?: string | null;
-      }
-    | {
-        full_name: string | null;
-        first_name?: string | null;
-        surname?: string | null;
-      }[]
-    | null;
 };
 
 export type SubjectEventSummary = {
@@ -141,49 +125,6 @@ function formatDateLabel(dateValue: string) {
 function subjectName(subjectId: string) {
   return (
     getSubjectConfigurationByDatabaseId(subjectId)?.displayName ?? "Subject"
-  );
-}
-
-function teacherName(row: TeacherProfileNameRow | undefined) {
-  if (!row) return null;
-  const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
-  if (!profile) return row.faculty_name ?? null;
-
-  const fullName = profile.full_name?.trim();
-  if (fullName) return fullName;
-
-  const composed = [profile.first_name?.trim(), profile.surname?.trim()]
-    .filter(Boolean)
-    .join(" ");
-  return composed || row.faculty_name || null;
-}
-
-async function getTeacherNames(teacherProfileIds: string[]) {
-  if (teacherProfileIds.length === 0) return new Map<string, string | null>();
-
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("teacher_profiles")
-    .select(
-      `
-      id,
-      faculty_name,
-      profile:profiles!teacher_profiles_profile_id_fkey(
-        full_name,
-        first_name,
-        surname
-      )
-      `,
-    )
-    .in("id", teacherProfileIds);
-
-  if (error) throw error;
-
-  return new Map(
-    ((data ?? []) as TeacherProfileNameRow[]).map((row) => [
-      row.id,
-      teacherName(row),
-    ]),
   );
 }
 
@@ -272,7 +213,7 @@ export async function getTeacherSubjectAnnouncement(
   if (!data) return null;
 
   const [namesByTeacher] = await Promise.all([
-    getTeacherNames([data.teacher_profile_id]),
+    getTeacherNamesByProfileIds([data.teacher_profile_id]),
   ]);
 
   return {
@@ -425,7 +366,7 @@ export async function getLearnerHomeCommunications(
     }
 
     const announcements = (announcementResult.data ?? []) as SubjectAnnouncementRow[];
-    const namesByTeacher = await getTeacherNames(
+    const namesByTeacher = await getTeacherNamesByProfileIds(
       [...new Set(announcements.map((announcement) => announcement.teacher_profile_id))],
     );
 
@@ -444,7 +385,7 @@ export async function getLearnerHomeCommunications(
   }
 
   const announcements = (announcementResult.data ?? []) as SubjectAnnouncementRow[];
-  const namesByTeacher = await getTeacherNames(
+  const namesByTeacher = await getTeacherNamesByProfileIds(
     [...new Set(announcements.map((announcement) => announcement.teacher_profile_id))],
   );
 

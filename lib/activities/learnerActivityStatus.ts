@@ -1,3 +1,5 @@
+﻿import { isDateOverdue } from "@/lib/dates/deadlineStatus";
+
 export type LearnerActivitySubmissionStatus =
   | "submitted"
   | "marking_failed"
@@ -7,30 +9,13 @@ export type LearnerActivitySubmissionStatus =
 export type LearnerActivityStatus =
   | LearnerActivitySubmissionStatus
   | "current"
+  | "incomplete"
   | "not_submitted";
 
 export type LearnerActivityStatusTone =
   | "submitted"
   | "current"
   | "attention_required";
-
-function dateKeyInTimeZone(date: Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-ZA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const values = Object.fromEntries(
-    parts.map((part) => [part.type, part.value]),
-  );
-
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function dueDateKey(dueDate: string | null) {
-  return dueDate?.slice(0, 10) ?? null;
-}
 
 export function isLearnerActivitySubmittedStatus(
   status: LearnerActivityStatus,
@@ -55,12 +40,25 @@ export function getLearnerActivityStatus({
   timeZone?: string;
 }): LearnerActivityStatus {
   if (submissionStatus) return submissionStatus;
+  return isDateOverdue(dueDate, now, timeZone) ? "not_submitted" : "current";
+}
 
-  const dueKey = dueDateKey(dueDate);
-  if (!dueKey) return "current";
-
-  const today = dateKeyInTimeZone(now, timeZone);
-  return dueKey < today ? "not_submitted" : "current";
+export function getLearnerIncompleteActivityStatus({
+  submissionStatus,
+  dueDate,
+  isCurrent,
+  now = new Date(),
+  timeZone = "Africa/Johannesburg",
+}: {
+  submissionStatus: LearnerActivitySubmissionStatus | null;
+  dueDate: string | null;
+  isCurrent: boolean;
+  now?: Date;
+  timeZone?: string;
+}): LearnerActivityStatus {
+  if (submissionStatus) return submissionStatus;
+  if (isDateOverdue(dueDate, now, timeZone)) return "not_submitted";
+  return isCurrent ? "current" : "incomplete";
 }
 
 export function getLearnerActivityStatusLabel(
@@ -76,6 +74,8 @@ export function getLearnerActivityStatusLabel(
       return "Returned";
     case "current":
       return "Current";
+    case "incomplete":
+      return "Incomplete";
     case "not_submitted":
       return "Not Submitted";
   }
@@ -84,7 +84,8 @@ export function getLearnerActivityStatusLabel(
 export function getLearnerActivityStatusTone(
   status: LearnerActivityStatus,
 ): LearnerActivityStatusTone {
-  if (status === "current") return "current";
+  if (status === "current" || status === "incomplete") return "current";
   if (status === "not_submitted") return "attention_required";
   return "submitted";
 }
+

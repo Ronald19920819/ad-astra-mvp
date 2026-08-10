@@ -1,4 +1,4 @@
-import {
+﻿import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
@@ -105,7 +105,9 @@ export async function GET(request: Request) {
         profile:profiles(first_name, surname, full_name)
       )
     `)
-    .eq("subject_id", subjectId);
+    .eq("subject_id", subjectId)
+    .eq("status", "approved")
+    .eq("is_active", true);
 
   if (error) {
     console.error("Unable to load teacher subject enrolments:", error);
@@ -393,3 +395,4 @@ export async function POST(request: Request) {
         : "Learner assigned successfully.",
   });
 }
+

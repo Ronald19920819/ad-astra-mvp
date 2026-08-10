@@ -36,6 +36,7 @@ import {
   type LearnerActivityDraft,
   type LocalLearnerActivityDraftCache,
 } from "@/lib/activities/activityDrafts";
+import { formatSubjectTeacherLabel } from "@/lib/subjects/subjectTeacherPresentation";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -121,12 +122,14 @@ export function SubjectActivityPage({
   initialActivityState,
   initialSubmission,
   initialSubmissionLoaded = false,
+  initialTeacherNames,
 }: {
   subjectKey?: SubjectKey;
   initialActivityData?: LearnerActivityWorkspaceData | null;
   initialActivityState?: ActivityState | null;
   initialSubmission?: SavedActivitySubmission | null;
   initialSubmissionLoaded?: boolean;
+  initialTeacherNames?: string[];
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const themeStyle = {
@@ -189,6 +192,7 @@ export function SubjectActivityPage({
           submittedTotalMarks,
         )
       : null;
+  const teacherLabel = formatSubjectTeacherLabel(initialTeacherNames);
   const renderData =
     activityData ??
     (submissionSnapshot ? workspaceFromSnapshot(submissionSnapshot) : null);
@@ -873,8 +877,8 @@ export function SubjectActivityPage({
               </span>
             )}
           </div>
-          <p className="mt-2 text-sm text-slate-500">
-            {subject.displayName} Activity Workspace
+          <p className="mt-2 break-words text-sm text-slate-500">
+            {subject.displayName} Activity Workspace &middot; {teacherLabel}
           </p>
         </section>
 

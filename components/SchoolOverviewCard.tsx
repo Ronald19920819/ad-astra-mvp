@@ -1,11 +1,22 @@
-import { neueHaas } from "@/app/fonts";
+﻿import { neueHaas } from "@/app/fonts";
 import { GraduationCap } from "lucide-react";
 import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
 
-export default function SchoolOverviewCard() {
+export default function SchoolOverviewCard({
+  href = "/subjects",
+  description =
+    "Open your approved subjects to view current lessons, activities, and progress.",
+  openLabel = "Open Subjects",
+  pendingLabel = "Opening Subjects...",
+}: {
+  href?: string;
+  description?: string;
+  openLabel?: string;
+  pendingLabel?: string;
+}) {
   return (
     <PendingNavigationLink
-      href="/subjects"
+      href={href}
       className="mb-5 block"
       pendingChildren={
         <div className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
@@ -28,8 +39,7 @@ export default function SchoolOverviewCard() {
 
               <div className="mt-3 space-y-2">
                 <p className={`${neueHaas.className} text-sm text-slate-700`}>
-                  Open your approved subjects to view current lessons,
-                  activities, and progress.
+                  {description}
                 </p>
               </div>
 
@@ -40,7 +50,7 @@ export default function SchoolOverviewCard() {
                   color: "#ffffff",
                 }}
               >
-                Opening Subjects...
+                {pendingLabel}
               </div>
             </div>
           </div>
@@ -67,8 +77,7 @@ export default function SchoolOverviewCard() {
 
             <div className="mt-3 space-y-2">
               <p className={`${neueHaas.className} text-sm text-slate-700`}>
-                Open your approved subjects to view current lessons, activities,
-                and progress.
+                {description}
               </p>
             </div>
 
@@ -79,7 +88,7 @@ export default function SchoolOverviewCard() {
                 color: "#ffffff",
               }}
             >
-              Open Subjects
+              {openLabel}
             </div>
           </div>
         </div>

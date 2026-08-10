@@ -3,6 +3,7 @@ import {
   getLearnerActivityDataServer,
   getLearnerSavedActivitySubmissionServer,
 } from "@/lib/supabase/learnerSubjectPageData";
+import { getSubjectTeacherNames } from "@/lib/supabase/subjectTeacherNames";
 import { getSubjectConfiguration, type SubjectKey } from "@/lib/subjects/subjectConfig";
 
 export async function SubjectActivityRoutePage({
@@ -14,10 +15,12 @@ export async function SubjectActivityRoutePage({
 }) {
   const subject = getSubjectConfiguration(subjectKey);
 
-  const [activityResult, submissionResult] = await Promise.allSettled([
-    getLearnerActivityDataServer(activityId, subject.databaseId),
-    getLearnerSavedActivitySubmissionServer(activityId, subject.databaseId),
-  ]);
+  const [activityResult, submissionResult, teacherNamesResult] =
+    await Promise.allSettled([
+      getLearnerActivityDataServer(activityId, subject.databaseId),
+      getLearnerSavedActivitySubmissionServer(activityId, subject.databaseId),
+      getSubjectTeacherNames(subject.databaseId),
+    ]);
 
   const initialActivityData =
     activityResult.status === "fulfilled" && activityResult.value.status === "success"
@@ -32,6 +35,8 @@ export async function SubjectActivityRoutePage({
   const initialSubmissionLoaded = submissionResult.status === "fulfilled";
   const initialSubmission =
     submissionResult.status === "fulfilled" ? submissionResult.value : null;
+  const initialTeacherNames =
+    teacherNamesResult.status === "fulfilled" ? teacherNamesResult.value : [];
 
   if (activityResult.status === "rejected") {
     console.error(
@@ -47,6 +52,13 @@ export async function SubjectActivityRoutePage({
     );
   }
 
+  if (teacherNamesResult.status === "rejected") {
+    console.error(
+      `Unable to load learner ${subject.displayName} teacher names:`,
+      teacherNamesResult.reason,
+    );
+  }
+
   return (
     <SubjectActivityPage
       subjectKey={subjectKey}
@@ -54,6 +66,7 @@ export async function SubjectActivityRoutePage({
       initialActivityState={initialActivityState}
       initialSubmission={initialSubmission}
       initialSubmissionLoaded={initialSubmissionLoaded}
+      initialTeacherNames={initialTeacherNames}
     />
   );
 }

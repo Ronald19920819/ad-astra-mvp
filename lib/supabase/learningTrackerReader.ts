@@ -1,10 +1,15 @@
 import "server-only";
 
 import {
+  isLearnerActivitySubmittedStatus,
+  type LearnerActivitySubmissionStatus,
+} from "@/lib/activities/learnerActivityStatus";
+import { isDateOverdue } from "@/lib/dates/deadlineStatus";
+import { hasPassedLessonQuiz } from "@/lib/lessons/lessonAssessment";
+import {
   authorizeTeacher,
   businessStudiesSubjectId,
 } from "@/lib/supabase/teacherAuth";
-import { hasPassedLessonQuiz } from "@/lib/lessons/lessonAssessment";
 
 export type TrackerContentState =
   | "complete"
@@ -12,7 +17,7 @@ export type TrackerContentState =
   | "not_started"
   | "unavailable";
 
-export type TrackerOverallStatus = "Complete" | "Needs Support" | "At Risk";
+export type TrackerLessonStatus = "Complete" | "Incomplete" | "Overdue";
 
 export type LearningTrackerLearner = {
   learnerProfileId: string;
@@ -20,7 +25,8 @@ export type LearningTrackerLearner = {
   video: TrackerContentState;
   reading: TrackerContentState;
   quiz: TrackerContentState;
-  status: TrackerOverallStatus;
+  status: TrackerLessonStatus;
+  overdueItemCount: number;
   lastActiveAt: string | null;
 };
 
@@ -31,6 +37,7 @@ export type LearningTrackerLesson = {
   termNumber: number | null;
   weekNumber: number | null;
   displayOrder: number | null;
+  expectedCompletionDate: string | null;
   learners: LearningTrackerLearner[];
 };
 
@@ -41,6 +48,7 @@ type LessonRow = {
   term_number: number | null;
   week_number: number | null;
   display_order: number | null;
+  expected_completion_date: string | null;
 };
 
 type MaterialRow = { id: string; lesson_id: string; material_type: string };
@@ -62,10 +70,11 @@ type QuizAttemptRow = {
   completed_at: string | null;
 };
 type CompletionRow = { learner_id: string; lesson_id: string; completed_at: string };
-type ActivityRow = { id: string; lesson_material_id: string };
+type ActivityRow = { id: string; lesson_material_id: string; due_date: string | null };
 type ActivitySubmissionRow = {
   activity_id: string;
   learner_id: string;
+  status: LearnerActivitySubmissionStatus;
   submitted_at: string;
 };
 type ProfileRow = { id: string; auth_user_id: string; full_name: string };
@@ -142,11 +151,21 @@ function latestTimestamp(values: Array<string | null | undefined>) {
     : null;
 }
 
+function lessonLearnerKey(lessonId: string, learnerId: string) {
+  return `${lessonId}:${learnerId}`;
+}
+
+function pushGroupedValue<T>(
+  map: Map<string, T[]>,
+  key: string,
+  value: T,
+) {
+  map.set(key, [...(map.get(key) ?? []), value]);
+}
+
 export async function getSubjectLearningTracker(
   subjectId: string,
-): Promise<
-  LearningTrackerLesson[]
-> {
+): Promise<LearningTrackerLesson[]> {
   let authorization: Awaited<ReturnType<typeof authorizeTeacher>>;
 
   try {
@@ -160,7 +179,9 @@ export async function getSubjectLearningTracker(
   const supabase = authorization.teacher.admin;
   const { data: lessonData, error: lessonError } = await supabase
     .from("lessons")
-    .select("id, lesson_number, title, term_number, week_number, display_order")
+    .select(
+      "id, lesson_number, title, term_number, week_number, display_order, expected_completion_date",
+    )
     .eq("subject_id", subjectId)
     .eq("status", "published")
     .order("term_number", { ascending: false })
@@ -226,7 +247,7 @@ export async function getSubjectLearningTracker(
   if (materialIds.length > 0) {
     const { data, error } = await supabase
       .from("activities")
-      .select("id, lesson_material_id")
+      .select("id, lesson_material_id, due_date")
       .in("lesson_material_id", materialIds);
     if (error) rethrowSupabaseQueryError("linked activities query failed", error);
     activities = (data ?? []) as ActivityRow[];
@@ -235,7 +256,7 @@ export async function getSubjectLearningTracker(
   if (activities.length > 0) {
     const { data, error } = await supabase
       .from("activity_submissions")
-      .select("activity_id, learner_id, submitted_at")
+      .select("activity_id, learner_id, status, submitted_at")
       .in(
         "activity_id",
         activities.map((activity) => activity.id),
@@ -244,13 +265,6 @@ export async function getSubjectLearningTracker(
     activitySubmissions = (data ?? []) as ActivitySubmissionRow[];
   }
 
-  const evidenceAuthUserIds = [
-    ...new Set([
-      ...attempts.map((attempt) => attempt.learner_id),
-      ...completions.map((completion) => completion.learner_id),
-      ...activitySubmissions.map((submission) => submission.learner_id),
-    ]),
-  ];
   let { data: enrolments, error: enrolmentsError } = await supabase
     .from("learner_subjects")
     .select("learner_profile_id")
@@ -272,71 +286,43 @@ export async function getSubjectLearningTracker(
   if (enrolmentsError) {
     rethrowSupabaseQueryError("subject enrolments query failed", enrolmentsError);
   }
-  const progressLearnerProfileIds = [
-    ...new Set([
-      ...progressRows.map((progress) => progress.learner_profile_id),
-      ...(enrolments ?? []).map(
-        (enrolment) => enrolment.learner_profile_id,
-      ),
-    ]),
+
+  const currentLearnerProfileIds = [
+    ...new Set(
+      (enrolments ?? []).map((enrolment) => enrolment.learner_profile_id),
+    ),
   ];
   let learnerProfiles: LearnerProfileRow[] = [];
   let profiles: ProfileRow[] = [];
 
-  if (progressLearnerProfileIds.length > 0) {
-    const { data, error } = await supabase
+  if (currentLearnerProfileIds.length > 0) {
+    const { data: learnerData, error: learnerError } = await supabase
       .from("learner_profiles")
       .select("id, profile_id, status")
       .eq("status", "active")
-      .in("id", progressLearnerProfileIds);
-    if (error) rethrowSupabaseQueryError("learner profiles by progress query failed", error);
-    learnerProfiles = (data ?? []) as LearnerProfileRow[];
+      .in("id", currentLearnerProfileIds);
+
+    if (learnerError) {
+      rethrowSupabaseQueryError("active learner profiles query failed", learnerError);
+    }
+
+    learnerProfiles = (learnerData ?? []) as LearnerProfileRow[];
   }
 
-  if (evidenceAuthUserIds.length > 0) {
-    const { data, error } = await supabase
+  const profileIdsToLoad = learnerProfiles.map((profile) => profile.profile_id);
+
+  if (profileIdsToLoad.length > 0) {
+    const { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("id, auth_user_id, full_name")
       .eq("role", "learner")
-      .in("auth_user_id", evidenceAuthUserIds);
-    if (error) rethrowSupabaseQueryError("learner profiles by auth user query failed", error);
-    profiles = (data ?? []) as ProfileRow[];
-  }
+      .in("id", profileIdsToLoad);
 
-  const profileIdsToLoad = [
-    ...new Set([
-      ...learnerProfiles.map((profile) => profile.profile_id),
-      ...profiles.map((profile) => profile.id),
-    ]),
-  ];
+    if (profileError) {
+      rethrowSupabaseQueryError("learner identity profiles query failed", profileError);
+    }
 
-  if (profileIdsToLoad.length > 0) {
-    const [{ data: profileData, error: profileError }, { data: learnerData, error: learnerError }] =
-      await Promise.all([
-        supabase
-          .from("profiles")
-          .select("id, auth_user_id, full_name")
-          .eq("role", "learner")
-          .in("id", profileIdsToLoad),
-        supabase
-          .from("learner_profiles")
-          .select("id, profile_id, status")
-          .eq("status", "active")
-          .in("profile_id", profileIdsToLoad),
-      ]);
-
-    if (profileError) logSupabaseQueryError("learner identity profiles query failed", profileError);
-    if (learnerError) logSupabaseQueryError("active learner profiles query failed", learnerError);
-    if (profileError) throw profileError;
-    if (learnerError) throw learnerError;
-
-    const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
-    for (const profile of (profileData ?? []) as ProfileRow[]) profilesById.set(profile.id, profile);
-    profiles = [...profilesById.values()];
-
-    const learnersById = new Map(learnerProfiles.map((profile) => [profile.id, profile]));
-    for (const learner of (learnerData ?? []) as LearnerProfileRow[]) learnersById.set(learner.id, learner);
-    learnerProfiles = [...learnersById.values()];
+    profiles = (profileData ?? []) as ProfileRow[];
   }
 
   const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
@@ -353,40 +339,94 @@ export async function getSubjectLearningTracker(
   );
 
   const materialsByLesson = new Map<string, MaterialRow[]>();
+  const materialLessonIds = new Map<string, string>();
   for (const material of materials) {
+    materialLessonIds.set(material.id, material.lesson_id);
     materialsByLesson.set(material.lesson_id, [
       ...(materialsByLesson.get(material.lesson_id) ?? []),
       material,
     ]);
   }
 
-  const activityLessonIds = new Map<string, string>();
-  const materialLessonIds = new Map(materials.map((material) => [material.id, material.lesson_id]));
+  const activitiesByLesson = new Map<string, ActivityRow[]>();
   for (const activity of activities) {
     const lessonId = materialLessonIds.get(activity.lesson_material_id);
-    if (lessonId) activityLessonIds.set(activity.id, lessonId);
+    if (!lessonId) continue;
+    activitiesByLesson.set(lessonId, [
+      ...(activitiesByLesson.get(lessonId) ?? []),
+      activity,
+    ]);
+  }
+
+  const progressByLessonLearner = new Map<string, ProgressRow>();
+  for (const progress of progressRows) {
+    progressByLessonLearner.set(
+      lessonLearnerKey(progress.lesson_id, progress.learner_profile_id),
+      progress,
+    );
+  }
+
+  const attemptsByLessonLearner = new Map<string, QuizAttemptRow[]>();
+  for (const attempt of attempts) {
+    pushGroupedValue(
+      attemptsByLessonLearner,
+      lessonLearnerKey(attempt.lesson_id, attempt.learner_id),
+      attempt,
+    );
+  }
+
+  const completionsByLessonLearner = new Map<string, CompletionRow[]>();
+  for (const completion of completions) {
+    pushGroupedValue(
+      completionsByLessonLearner,
+      lessonLearnerKey(completion.lesson_id, completion.learner_id),
+      completion,
+    );
+  }
+
+  const submissionsByActivityLearner = new Map<string, ActivitySubmissionRow[]>();
+  for (const submission of activitySubmissions) {
+    pushGroupedValue(
+      submissionsByActivityLearner,
+      lessonLearnerKey(submission.activity_id, submission.learner_id),
+      submission,
+    );
   }
 
   return lessons.map((lesson) => {
     const lessonMaterials = materialsByLesson.get(lesson.id) ?? [];
+    const lessonActivities = activitiesByLesson.get(lesson.id) ?? [];
     const hasVideo = lessonMaterials.some((material) => material.material_type === "video");
     const hasReading = lessonMaterials.some((material) => material.material_type === "reading");
     const hasQuiz = lessonMaterials.some((material) => material.material_type === "quiz");
 
     const learners = cohort.map(({ learnerProfile, profile }) => {
-      const progress = progressRows.find(
-        (row) => row.lesson_id === lesson.id && row.learner_profile_id === learnerProfile.id,
+      const progress = progressByLessonLearner.get(
+        lessonLearnerKey(lesson.id, learnerProfile.id),
       );
-      const learnerAttempts = attempts.filter(
-        (attempt) => attempt.lesson_id === lesson.id && attempt.learner_id === profile.auth_user_id,
+      const learnerAttempts = attemptsByLessonLearner.get(
+        lessonLearnerKey(lesson.id, profile.auth_user_id),
+      ) ?? [];
+      const learnerCompletions = completionsByLessonLearner.get(
+        lessonLearnerKey(lesson.id, profile.auth_user_id),
+      ) ?? [];
+      const submittedActivityIds = new Set(
+        lessonActivities.flatMap((activity) => {
+          const submissions = submissionsByActivityLearner.get(
+            lessonLearnerKey(activity.id, profile.auth_user_id),
+          ) ?? [];
+          return submissions.some((submission) =>
+            isLearnerActivitySubmittedStatus(submission.status),
+          )
+            ? [activity.id]
+            : [];
+        }),
       );
-      const learnerCompletions = completions.filter(
-        (completion) => completion.lesson_id === lesson.id && completion.learner_id === profile.auth_user_id,
-      );
-      const learnerActivitySubmissions = activitySubmissions.filter(
-        (submission) =>
-          submission.learner_id === profile.auth_user_id &&
-          activityLessonIds.get(submission.activity_id) === lesson.id,
+      const learnerActivitySubmissions = lessonActivities.flatMap(
+        (activity) =>
+          submissionsByActivityLearner.get(
+            lessonLearnerKey(activity.id, profile.auth_user_id),
+          ) ?? [],
       );
       const videoPercentage = Number(progress?.video_progress_percent ?? 0);
       const quizCompleted = learnerAttempts.length > 0;
@@ -410,20 +450,20 @@ export async function getSubjectLearningTracker(
         : quizCompleted
           ? "complete"
           : "not_started";
-      const attachedCompletion = [
-        ...(hasVideo ? [video === "complete"] : []),
-        ...(hasReading ? [reading === "complete"] : []),
-        ...(hasQuiz ? [quizSuccessful] : []),
-      ];
-      const isComplete = attachedCompletion.every(Boolean);
-      const hasEngaged = Boolean(
-        progress || learnerAttempts.length || learnerCompletions.length || learnerActivitySubmissions.length,
-      );
-      const status: TrackerOverallStatus = isComplete
+      const isLessonComplete = learnerCompletions.length > 0;
+      const isLessonOverdue =
+        !isLessonComplete &&
+        isDateOverdue(lesson.expected_completion_date);
+      const overdueActivityCount = lessonActivities.filter(
+        (activity) =>
+          isDateOverdue(activity.due_date) &&
+          !submittedActivityIds.has(activity.id),
+      ).length;
+      const status: TrackerLessonStatus = isLessonComplete
         ? "Complete"
-        : hasEngaged
-          ? "Needs Support"
-          : "At Risk";
+        : isLessonOverdue
+          ? "Overdue"
+          : "Incomplete";
       const lastActiveAt = latestTimestamp([
         progress?.last_engaged_at,
         progress?.video_updated_at,
@@ -439,6 +479,7 @@ export async function getSubjectLearningTracker(
         reading,
         quiz,
         status,
+        overdueItemCount: (isLessonOverdue ? 1 : 0) + overdueActivityCount,
         lastActiveAt,
       };
     });
@@ -450,6 +491,7 @@ export async function getSubjectLearningTracker(
       termNumber: lesson.term_number,
       weekNumber: lesson.week_number,
       displayOrder: lesson.display_order,
+      expectedCompletionDate: lesson.expected_completion_date,
       learners,
     };
   });
@@ -458,3 +500,5 @@ export async function getSubjectLearningTracker(
 export function getBusinessStudiesLearningTracker() {
   return getSubjectLearningTracker(businessStudiesSubjectId);
 }
+
+

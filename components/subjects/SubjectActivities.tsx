@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -22,13 +22,16 @@ import {
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
 import {
-  getLearnerActivityStatus,
   getLearnerActivityStatusLabel,
-  getLearnerActivityStatusTone,
+  getLearnerIncompleteActivityStatus,
   isLearnerActivitySubmittedStatus,
   type LearnerActivityStatus,
 } from "@/lib/activities/learnerActivityStatus";
 import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
+import {
+  formatSubjectTeacherLabel,
+  getSubjectTeacherInitials,
+} from "@/lib/subjects/subjectTeacherPresentation";
 
 const LESSON_TITLE_SEPARATOR = "\u2014";
 const SCHEDULE_SEPARATOR = "\u00B7";
@@ -97,14 +100,18 @@ function ActivityStatusIndicator({
   subjectColour: string;
   labelOverride?: string;
 }) {
-  const tone = getLearnerActivityStatusTone(status);
   const label = labelOverride ?? getLearnerActivityStatusLabel(status);
   const colours =
-    tone === "submitted"
+    status === "submitted" ||
+    status === "marking_failed" ||
+    status === "awaiting_review" ||
+    status === "returned"
       ? "bg-green-100 text-green-700"
-      : tone === "current"
+      : status === "current"
         ? "bg-[var(--subject-soft)] text-[var(--subject-primary)]"
-        : "bg-red-100 text-red-600";
+        : status === "incomplete"
+          ? "bg-slate-100 text-slate-500"
+          : "bg-red-100 text-red-600";
 
   return (
     <div
@@ -115,14 +122,21 @@ function ActivityStatusIndicator({
       <span
         className={`flex h-8 w-8 items-center justify-center rounded-full ${colours}`}
       >
-        {tone === "submitted" ? (
+        {status === "submitted" ||
+        status === "marking_failed" ||
+        status === "awaiting_review" ||
+        status === "returned" ? (
           <Check size={18} strokeWidth={3} aria-hidden="true" />
-        ) : tone === "current" ? (
+        ) : status === "current" ? (
           <span
             className="h-3 w-3 rounded-full"
             style={{ backgroundColor: subjectColour }}
             aria-hidden="true"
           />
+        ) : status === "incomplete" ? (
+          <span className="text-lg font-black leading-none" aria-hidden="true">
+            -
+          </span>
         ) : (
           <span className="text-lg font-black leading-none" aria-hidden="true">
             !
@@ -138,20 +152,18 @@ function ActivityCard({
   activity,
   activityHref,
   subjectColour,
+  status,
 }: {
   activity: LearnerPublishedActivity;
   activityHref: string;
   subjectColour: string;
+  status: LearnerActivityStatus;
 }) {
   const scheduleLabel =
     activity.lesson.term_number === null ||
     activity.lesson.week_number === null
       ? "Term or week not set"
       : `Term ${activity.lesson.term_number} ${SCHEDULE_SEPARATOR} Week ${activity.lesson.week_number}`;
-  const activityStatus = getLearnerActivityStatus({
-    submissionStatus: activity.submissionStatus,
-    dueDate: activity.due_date,
-  });
 
   return (
     <PendingNavigationLink
@@ -188,7 +200,7 @@ function ActivityCard({
               )}
             </div>
             <ActivityStatusIndicator
-              status={activityStatus}
+              status={status}
               subjectColour={subjectColour}
             />
           </div>
@@ -216,22 +228,20 @@ function ActivityProgressRow({
   subjectColour,
   pendingLabel,
   metadataLabel,
+  status,
 }: {
   activity: LearnerPublishedActivity;
   activityHref: string;
   subjectColour: string;
   pendingLabel: string;
   metadataLabel: string;
+  status: LearnerActivityStatus;
 }) {
   const scheduleLabel =
     activity.lesson.term_number === null ||
     activity.lesson.week_number === null
       ? "Term or week not set"
       : `Term ${activity.lesson.term_number} ${SCHEDULE_SEPARATOR} Week ${activity.lesson.week_number}`;
-  const activityStatus = getLearnerActivityStatus({
-    submissionStatus: activity.submissionStatus,
-    dueDate: activity.due_date,
-  });
   const markSummary = resolveCompletedActivityMark(activity);
 
   return (
@@ -259,7 +269,7 @@ function ActivityProgressRow({
             </p>
           </div>
           <ActivityStatusIndicator
-            status={activityStatus}
+            status={status}
             subjectColour={subjectColour}
           />
         </div>
@@ -302,7 +312,7 @@ function ActivityProgressRow({
           </div>
         </div>
         <ActivityStatusIndicator
-          status={activityStatus}
+          status={status}
           subjectColour={subjectColour}
         />
       </div>
@@ -409,33 +419,50 @@ function groupActivities(
     });
 }
 
-function getWeekStatus(activities: LearnerPublishedActivity[]) {
+function resolveActivityStatus(
+  activity: LearnerPublishedActivity,
+  isCurrent: boolean,
+) {
+  return getLearnerIncompleteActivityStatus({
+    submissionStatus: activity.submissionStatus,
+    dueDate: activity.due_date,
+    isCurrent,
+  });
+}
+
+function getWeekStatus(
+  activities: LearnerPublishedActivity[],
+  currentActivityId: string | null,
+) {
   const statuses = activities.map((activity) =>
-    getLearnerActivityStatus({
-      submissionStatus: activity.submissionStatus,
-      dueDate: activity.due_date,
-    }),
+    resolveActivityStatus(activity, activity.id === currentActivityId),
   );
 
   if (statuses.every((status) => isLearnerActivitySubmittedStatus(status))) {
     return "submitted" as const;
   }
 
+  if (statuses.some((status) => status === "not_submitted")) {
+    return "not_submitted" as const;
+  }
+
   if (statuses.some((status) => status === "current")) {
     return "current" as const;
   }
 
-  return "not_submitted" as const;
+  return "incomplete" as const;
 }
 
 export function SubjectActivities({
   subjectKey = "business-studies",
   initialActivities,
   initialLoadError,
+  initialTeacherNames,
 }: {
   subjectKey?: SubjectKey;
   initialActivities?: LearnerPublishedActivity[];
   initialLoadError?: string;
+  initialTeacherNames?: string[];
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const hasInitialState =
@@ -448,6 +475,8 @@ export function SubjectActivities({
   const [completedActivitiesOpen, setCompletedActivitiesOpen] = useState(false);
   const [allActivitiesOpen, setAllActivitiesOpen] = useState(false);
   const [openWeekKey, setOpenWeekKey] = useState<string | null>(null);
+  const teacherLabel = formatSubjectTeacherLabel(initialTeacherNames);
+  const teacherInitials = getSubjectTeacherInitials(initialTeacherNames);
 
   useEffect(() => {
     if (hasInitialState) {
@@ -482,26 +511,19 @@ export function SubjectActivities({
   }, [hasInitialState, subject.databaseId, subject.displayName]);
 
   const latestActivity = [...activities].sort(compareLatestFirst)[0];
+  const latestActivityId = latestActivity?.id ?? null;
   const activityGroups = groupActivities(activities);
 
-  const toCompleteActivities = useMemo(
-    () =>
-      [...activities]
-        .filter(
-          (activity) =>
-            activity.submissionStatus === null && activity.id !== latestActivity?.id,
-        )
-        .sort(compareProgrammeOrder),
-    [activities, latestActivity?.id],
-  );
+  const toCompleteActivities = [...activities]
+    .filter(
+      (activity) =>
+        activity.submissionStatus === null && activity.id !== latestActivityId,
+    )
+    .sort(compareProgrammeOrder);
 
-  const completedActivities = useMemo(
-    () =>
-      [...activities]
-        .filter((activity) => activity.submissionStatus !== null)
-        .sort(compareProgrammeOrder),
-    [activities],
-  );
+  const completedActivities = [...activities]
+    .filter((activity) => activity.submissionStatus !== null)
+    .sort(compareProgrammeOrder);
 
   const currentActivityIsIncomplete = Boolean(
     latestActivity && latestActivity.submissionStatus === null,
@@ -532,16 +554,16 @@ export function SubjectActivities({
             </Link>
             <div
               role="img"
-              aria-label="Teacher profile"
+              aria-label="Assigned teacher profile"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-white/15 font-bold"
             >
-              T
+              {teacherInitials}
             </div>
             <div>
               <h1 className="text-lg font-bold lg:text-xl">
                 {subject.displayName} Activities
               </h1>
-              <p className="text-sm text-blue-100">Teacher</p>
+              <p className="break-words text-sm text-blue-100">{teacherLabel}</p>
             </div>
           </div>
         </div>
@@ -578,6 +600,7 @@ export function SubjectActivities({
                     latestActivity.id,
                   )}
                   subjectColour={subject.colourTheme.primary}
+                  status={resolveActivityStatus(latestActivity, true)}
                 />
               </div>
             )}
@@ -614,6 +637,7 @@ export function SubjectActivities({
                       subjectColour={subject.colourTheme.primary}
                       pendingLabel="Opening activity..."
                       metadataLabel="Outstanding activity"
+                      status={resolveActivityStatus(activity, false)}
                     />
                   ))}
                 </div>
@@ -669,6 +693,7 @@ export function SubjectActivities({
                         subjectColour={subject.colourTheme.primary}
                         pendingLabel="Opening completed activity..."
                         metadataLabel="Completed activity"
+                        status={resolveActivityStatus(activity, false)}
                       />
                     ))
                   ) : (
@@ -731,7 +756,7 @@ export function SubjectActivities({
                       <div className="space-y-4 lg:space-y-5">
                         {term.weeks.map((week) => {
                           const weekIsOpen = openWeekKey === week.key;
-                          const weekStatus = getWeekStatus(week.activities);
+                          const weekStatus = getWeekStatus(week.activities, latestActivityId);
 
                           return (
                             <div
@@ -796,6 +821,10 @@ export function SubjectActivities({
                                           activity.id,
                                         )}
                                         subjectColour={subject.colourTheme.primary}
+                                        status={resolveActivityStatus(
+                                          activity,
+                                          activity.id === latestActivityId,
+                                        )}
                                       />
                                     ))}
                                   </div>

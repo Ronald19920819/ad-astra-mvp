@@ -1,4 +1,4 @@
-import Image from "next/image";
+﻿import Image from "next/image";
 import Link from "next/link";
 import { neueHaas } from "@/app/fonts";
 import {
@@ -9,6 +9,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { getAuthenticatedTeacherProfileDashboard } from "@/lib/supabase/teacherProfile";
+import SchoolOverviewCard from "@/components/SchoolOverviewCard";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +83,7 @@ export default async function TeacherHomePage() {
                 marginTop: "6px",
               }}
             >
-              {teacherName}{school ? ` • ${school}` : ""}
+              {teacherName}{school ? ` â€¢ ${school}` : ""}
             </p>
           </div>
         </div>
@@ -141,6 +142,14 @@ export default async function TeacherHomePage() {
             </div>
           </div>
         </section>
+
+        <SchoolOverviewCard
+          href="/teacher/subjects"
+          description="Open your subjects to manage lessons, activities, learners, and review work."
+          openLabel="Open Subjects"
+          pendingLabel="Opening Subjects..."
+        />
+
 
         <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
@@ -255,3 +264,6 @@ export default async function TeacherHomePage() {
     </main>
   );
 }
+
+
+

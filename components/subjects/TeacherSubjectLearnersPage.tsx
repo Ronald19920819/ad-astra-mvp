@@ -1,30 +1,22 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import {
   ArrowLeft,
   BookOpenCheck,
   Clock,
   Eye,
+  TriangleAlert,
   UserRound,
 } from "lucide-react";
 import {
   getSubjectLearningTracker,
-  type TrackerOverallStatus,
+  type TrackerLessonStatus,
 } from "@/lib/supabase/learningTrackerReader";
+import { getLearnerSupportStatus } from "@/lib/teachers/learnerSupport";
 import {
   buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
-
-function overallLearnerStatus(statuses: TrackerOverallStatus[]) {
-  if (statuses.length > 0 && statuses.every((status) => status === "Complete")) {
-    return "On Track";
-  }
-  if (statuses.some((status) => status === "Needs Support")) {
-    return "Needs Support";
-  }
-  return "At Risk";
-}
 
 function latestTimestamp(values: Array<string | null>) {
   const timestamps = values
@@ -63,9 +55,9 @@ export async function TeacherSubjectLearnersPage({
     {
       id: string;
       name: string;
-      statuses: TrackerOverallStatus[];
+      statuses: TrackerLessonStatus[];
       completeLessons: number;
-      engagedLessons: number;
+      overdueItems: number;
       lastActiveValues: Array<string | null>;
     }
   >();
@@ -77,12 +69,12 @@ export async function TeacherSubjectLearnersPage({
         name: learner.name,
         statuses: [],
         completeLessons: 0,
-        engagedLessons: 0,
+        overdueItems: 0,
         lastActiveValues: [],
       };
       current.statuses.push(learner.status);
       if (learner.status === "Complete") current.completeLessons += 1;
-      if (learner.status !== "At Risk") current.engagedLessons += 1;
+      current.overdueItems += learner.overdueItemCount;
       current.lastActiveValues.push(learner.lastActiveAt);
       learnerMap.set(learner.learnerProfileId, current);
     }
@@ -124,7 +116,7 @@ export async function TeacherSubjectLearnersPage({
             Learner subject overview
           </h2>
           <p className="text-sm leading-relaxed text-slate-600">
-            View real lesson engagement and completion evidence for this
+            View real lesson engagement and overdue support needs for this
             subject.
           </p>
         </div>
@@ -143,7 +135,7 @@ export async function TeacherSubjectLearnersPage({
         ) : (
           <div className="space-y-4">
             {learners.map((learner) => {
-              const status = overallLearnerStatus(learner.statuses);
+              const supportStatus = getLearnerSupportStatus(learner.overdueItems);
               return (
                 <div
                   key={learner.id}
@@ -172,14 +164,14 @@ export async function TeacherSubjectLearnersPage({
                     </div>
                     <span
                       className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-                        status === "On Track"
+                        supportStatus === "On Track"
                           ? "bg-green-100 text-green-700"
-                          : status === "Needs Support"
+                          : supportStatus === "Needs Support"
                             ? "bg-yellow-100 text-yellow-700"
                             : "bg-red-100 text-red-700"
                       }`}
                     >
-                      {status}
+                      {supportStatus}
                     </span>
                   </div>
 
@@ -197,13 +189,13 @@ export async function TeacherSubjectLearnersPage({
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-3">
                       <div className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
-                        <Eye size={16} /> Engaged
+                        <TriangleAlert size={16} /> Missed Items
                       </div>
                       <p
                         className="text-lg font-bold"
                         style={{ color: subject.colourTheme.primary }}
                       >
-                        {learner.engagedLessons} of {lessons.length}
+                        {learner.overdueItems}
                       </p>
                     </div>
                     <div className="col-span-2 rounded-2xl bg-slate-50 p-3">
@@ -238,3 +230,4 @@ export async function TeacherSubjectLearnersPage({
     </main>
   );
 }
+

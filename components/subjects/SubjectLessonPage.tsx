@@ -25,6 +25,7 @@ import {
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
+import { formatSubjectTeacherLabel } from "@/lib/subjects/subjectTeacherPresentation";
 
 type QuizResult = {
   questionId: string;
@@ -97,10 +98,12 @@ export function SubjectLessonPage({
   subjectKey = "business-studies",
   initialLessonData,
   initialLoadError,
+  initialTeacherNames,
 }: {
   subjectKey?: SubjectKey;
   initialLessonData?: LearnerLessonData | null;
   initialLoadError?: string;
+  initialTeacherNames?: string[];
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const themeStyle = {
@@ -127,6 +130,7 @@ export function SubjectLessonPage({
   const [completedAt, setCompletedAt] = useState<string | null>(null);
   const [completionMessage, setCompletionMessage] = useState("");
   const [isCelebrating, setIsCelebrating] = useState(false);
+  const teacherLabel = formatSubjectTeacherLabel(initialTeacherNames);
 
   useEffect(() => {
     if (hasInitialState) {
@@ -341,7 +345,7 @@ export function SubjectLessonPage({
           <h1 className="break-words text-3xl font-bold text-slate-900">Lesson {lesson.lesson_number}</h1>
           <p className="mt-1 break-words text-lg font-semibold text-slate-700">{lesson.title}</p>
           <p className="mt-2 text-sm font-semibold text-slate-600">Week {lesson.week_number} &middot; Term {lesson.term_number}</p>
-          <p className="mt-2 text-sm text-slate-500">{subject.displayName} Lesson Workspace</p>
+          <p className="mt-2 break-words text-sm text-slate-500">{subject.displayName} Lesson Workspace &middot; {teacherLabel}</p>
         </section>
 
         {video && (

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isDateOverdue } from "@/lib/dates/deadlineStatus";
 import { businessStudiesSubject } from "@/lib/subjects/subjectConfig";
 import { authorizeTeacher } from "@/lib/supabase/teacherAuth";
 import {
@@ -20,6 +21,21 @@ export type TeacherActivityReviewSubmission = {
   originalTotalMarks: number;
 };
 
+export type TeacherActivityReviewMonitorStatus =
+  | "submitted"
+  | "marking_failed"
+  | "awaiting_review"
+  | "returned"
+  | "not_submitted"
+  | "overdue";
+
+export type TeacherActivityReviewLearner = {
+  learnerProfileId: string;
+  learnerName: string;
+  status: TeacherActivityReviewMonitorStatus;
+  submission: TeacherActivityReviewSubmission | null;
+};
+
 export type TeacherActivityReview = {
   id: string;
   title: string;
@@ -27,7 +43,8 @@ export type TeacherActivityReview = {
   termNumber: number | null;
   weekNumber: number | null;
   createdAt: string;
-  submissions: TeacherActivityReviewSubmission[];
+  dueDate: string | null;
+  learners: TeacherActivityReviewLearner[];
 };
 
 export type TeacherSubmissionReviewQuestion = {
@@ -68,6 +85,7 @@ export type TeacherSubmissionReview = {
 type ActivityReviewRow = {
   id: string;
   title: string;
+  due_date: string | null;
   created_at: string;
   activity_questions: { marks: number }[];
   lesson_materials: {
@@ -90,6 +108,18 @@ type SubmissionRow = {
   activity_snapshot: ActivitySubmissionSnapshot | null;
 };
 
+type LearnerProfileRow = {
+  id: string;
+  profile_id: string;
+  status: string;
+};
+
+type ProfileRow = {
+  id: string;
+  auth_user_id: string;
+  full_name: string;
+};
+
 export async function getSubjectActivityReviews(
   subjectId: string,
 ): Promise<
@@ -103,6 +133,7 @@ export async function getSubjectActivityReviews(
     .select(`
       id,
       title,
+      due_date,
       created_at,
       activity_questions (
         marks
@@ -149,39 +180,87 @@ export async function getSubjectActivityReviews(
     submissions = data ?? [];
   }
 
-  const learnerIds = [
-    ...new Set(submissions.map((submission) => submission.learner_id)),
-  ];
-  const learnerNames = new Map<string, string>();
+  let { data: enrolments, error: enrolmentsError } = await supabase
+    .from("learner_subjects")
+    .select("learner_profile_id")
+    .eq("subject_id", subjectId)
+    .eq("status", "approved")
+    .eq("is_active", true);
 
-  if (learnerIds.length > 0) {
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("auth_user_id, full_name")
-      .eq("role", "learner")
-      .in("auth_user_id", learnerIds);
-
-    if (profilesError) throw profilesError;
-
-    for (const profile of profiles ?? []) {
-      learnerNames.set(profile.auth_user_id, profile.full_name);
-    }
+  if (
+    enrolmentsError?.code === "42703" ||
+    enrolmentsError?.code === "PGRST204"
+  ) {
+    const fallback = await supabase
+      .from("learner_subjects")
+      .select("learner_profile_id")
+      .eq("subject_id", subjectId);
+    enrolments = fallback.data;
+    enrolmentsError = fallback.error;
   }
 
-  const submissionsByActivity = new Map<
-    string,
-    TeacherActivityReviewSubmission[]
-  >();
+  if (enrolmentsError) throw enrolmentsError;
+
+  const currentLearnerProfileIds = [
+    ...new Set((enrolments ?? []).map((enrolment) => enrolment.learner_profile_id)),
+  ];
+
+  let learnerProfiles: LearnerProfileRow[] = [];
+  let profiles: ProfileRow[] = [];
+
+  if (currentLearnerProfileIds.length > 0) {
+    const { data: learnerData, error: learnerError } = await supabase
+      .from("learner_profiles")
+      .select("id, profile_id, status")
+      .eq("status", "active")
+      .in("id", currentLearnerProfileIds);
+
+    if (learnerError) throw learnerError;
+    learnerProfiles = (learnerData ?? []) as LearnerProfileRow[];
+  }
+
+  const profileIdsToLoad = learnerProfiles.map((profile) => profile.profile_id);
+
+  if (profileIdsToLoad.length > 0) {
+    const { data: profileData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, auth_user_id, full_name")
+      .eq("role", "learner")
+      .in("id", profileIdsToLoad);
+
+    if (profilesError) throw profilesError;
+    profiles = (profileData ?? []) as ProfileRow[];
+  }
+
+  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const currentLearners = learnerProfiles
+    .flatMap((learnerProfile) => {
+      const profile = profileById.get(learnerProfile.profile_id);
+      return profile
+        ? [
+            {
+              learnerProfileId: learnerProfile.id,
+              learnerAuthUserId: profile.auth_user_id,
+              learnerName: profile.full_name,
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => a.learnerName.localeCompare(b.learnerName));
+
+  const submissionByActivityLearner = new Map<string, TeacherActivityReviewSubmission>();
 
   for (const submission of submissions) {
-    const activitySubmissions =
-      submissionsByActivity.get(submission.activity_id) ?? [];
+    const key = `${submission.activity_id}:${submission.learner_id}`;
+    if (submissionByActivityLearner.has(key)) continue;
 
-    activitySubmissions.push({
+    const learnerName =
+      currentLearners.find((learner) => learner.learnerAuthUserId === submission.learner_id)
+        ?.learnerName ?? "Learner profile unavailable";
+
+    submissionByActivityLearner.set(key, {
       id: submission.id,
-      learnerName:
-        learnerNames.get(submission.learner_id) ??
-        "Learner profile unavailable",
+      learnerName,
       status: submission.status,
       preliminaryMark: submission.preliminary_mark,
       preliminaryTotal: submission.preliminary_total,
@@ -192,7 +271,6 @@ export async function getSubjectActivityReviews(
           ? submission.activity_snapshot.activity.totalMarks
           : submission.preliminary_total ?? 0),
     });
-    submissionsByActivity.set(submission.activity_id, activitySubmissions);
   }
 
   return activities
@@ -206,7 +284,22 @@ export async function getSubjectActivityReviews(
       termNumber: activity.lesson_materials.lessons.term_number,
       weekNumber: activity.lesson_materials.lessons.week_number,
       createdAt: activity.created_at,
-      submissions: submissionsByActivity.get(activity.id) ?? [],
+      dueDate: activity.due_date,
+      learners: currentLearners.map((learner) => {
+        const submission =
+          submissionByActivityLearner.get(`${activity.id}:${learner.learnerAuthUserId}`) ?? null;
+
+        return {
+          learnerProfileId: learner.learnerProfileId,
+          learnerName: learner.learnerName,
+          status: submission
+            ? (submission.status as TeacherActivityReviewMonitorStatus)
+            : isDateOverdue(activity.due_date)
+              ? "overdue"
+              : "not_submitted",
+          submission,
+        };
+      }),
     }))
     .sort((activityA, activityB) => {
       if (activityA.termNumber === null && activityB.termNumber !== null) return 1;

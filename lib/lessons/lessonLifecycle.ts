@@ -1,6 +1,9 @@
+﻿import { isDateOverdue } from "@/lib/dates/deadlineStatus";
+
 export type LessonLifecycleStatus =
   | "current"
   | "completed"
+  | "incomplete"
   | "attention_required";
 
 export type LessonLifecycleInput = {
@@ -14,20 +17,6 @@ export type LessonLifecycleResult = {
   currentLessonId: string | null;
   statusByLessonId: Map<string, LessonLifecycleStatus>;
 };
-
-function dateKeyInTimeZone(date: Date, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-ZA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const values = Object.fromEntries(
-    parts.map((part) => [part.type, part.value]),
-  );
-
-  return `${values.year}-${values.month}-${values.day}`;
-}
 
 function comparePublishedNewestFirst(
   lessonA: LessonLifecycleInput,
@@ -45,13 +34,12 @@ export function getLessonLifecycle(
   timeZone = "Africa/Johannesburg",
 ): LessonLifecycleResult {
   const orderedLessons = [...lessons].sort(comparePublishedNewestFirst);
-  const today = dateKeyInTimeZone(now, timeZone);
   const activeDatedLessons = orderedLessons
     .filter(
       (lesson) =>
         !lesson.isCompleted &&
         lesson.expected_completion_date !== null &&
-        lesson.expected_completion_date >= today,
+        !isDateOverdue(lesson.expected_completion_date, now, timeZone),
     )
     .sort((lessonA, lessonB) => {
       const dateDifference = (
@@ -70,11 +58,14 @@ export function getLessonLifecycle(
   for (const lesson of orderedLessons) {
     const status: LessonLifecycleStatus = lesson.isCompleted
       ? "completed"
-      : lesson.id === currentLessonId
-        ? "current"
-        : "attention_required";
+      : isDateOverdue(lesson.expected_completion_date, now, timeZone)
+        ? "attention_required"
+        : lesson.id === currentLessonId
+          ? "current"
+          : "incomplete";
     statusByLessonId.set(lesson.id, status);
   }
 
   return { currentLessonId, statusByLessonId };
 }
+

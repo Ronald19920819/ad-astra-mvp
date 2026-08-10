@@ -24,6 +24,10 @@ import {
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
 import PendingNavigationLink from "@/components/navigation/PendingNavigationLink";
+import {
+  formatSubjectTeacherLabel,
+  getSubjectTeacherInitials,
+} from "@/lib/subjects/subjectTeacherPresentation";
 
 const LESSON_TITLE_SEPARATOR = "\u2014";
 const SCHEDULE_SEPARATOR = "\u00B7";
@@ -100,13 +104,17 @@ function LessonLifecycleIndicator({
       ? "Completed"
       : status === "current"
         ? "Current"
-        : "Attention Required";
+        : status === "incomplete"
+          ? "Incomplete"
+          : "Attention Required";
   const colours =
     status === "completed"
       ? "bg-green-100 text-green-700"
       : status === "current"
         ? "bg-[var(--subject-soft)] text-[var(--subject-primary)]"
-        : "bg-red-100 text-red-600";
+        : status === "incomplete"
+          ? "bg-slate-100 text-slate-500"
+          : "bg-red-100 text-red-600";
 
   return (
     <div
@@ -125,6 +133,10 @@ function LessonLifecycleIndicator({
             style={{ backgroundColor: subjectColour }}
             aria-hidden="true"
           />
+        ) : status === "incomplete" ? (
+          <span className="text-lg font-black leading-none" aria-hidden="true">
+            -
+          </span>
         ) : (
           <span className="text-lg font-black leading-none" aria-hidden="true">
             !
@@ -339,10 +351,12 @@ export function SubjectClassroom({
   subjectKey = "business-studies",
   initialLessons,
   initialLoadError,
+  initialTeacherNames,
 }: {
   subjectKey?: SubjectKey;
   initialLessons?: LearnerPublishedLesson[];
   initialLoadError?: string;
+  initialTeacherNames?: string[];
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const hasInitialState =
@@ -355,6 +369,8 @@ export function SubjectClassroom({
   const [completedLessonsOpen, setCompletedLessonsOpen] = useState(false);
   const [allLessonsOpen, setAllLessonsOpen] = useState(false);
   const [openWeekKey, setOpenWeekKey] = useState<string | null>(null);
+  const teacherLabel = formatSubjectTeacherLabel(initialTeacherNames);
+  const teacherInitials = getSubjectTeacherInitials(initialTeacherNames);
 
   useEffect(() => {
     if (hasInitialState) {
@@ -440,16 +456,16 @@ export function SubjectClassroom({
             </Link>
             <div
               role="img"
-              aria-label="Teacher profile"
+              aria-label="Assigned teacher profile"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-white/30 bg-white/15 font-bold"
             >
-              T
+              {teacherInitials}
             </div>
             <div>
               <h1 className="text-lg font-bold lg:text-xl">
                 {subject.displayName} Classroom
               </h1>
-              <p className="text-sm text-blue-100">Teacher</p>
+              <p className="break-words text-sm text-blue-100">{teacherLabel}</p>
             </div>
           </div>
         </div>
@@ -716,5 +732,4 @@ export function SubjectClassroom({
 export default function BusinessStudiesClassroom() {
   return <SubjectClassroom />;
 }
-
 

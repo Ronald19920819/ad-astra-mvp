@@ -10,6 +10,7 @@ import {
 import {
   getSubjectActivityReviews,
   type TeacherActivityReview,
+  type TeacherActivityReviewMonitorStatus,
   type TeacherActivityReviewSubmission,
 } from "@/lib/supabase/activityReviewReader";
 import {
@@ -19,7 +20,9 @@ import {
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
 
-function getDraftMark(submission: TeacherActivityReviewSubmission) {
+function getDraftMark(submission: TeacherActivityReviewSubmission | null) {
+  if (!submission) return "â€”";
+
   return submission.preliminaryMark !== null &&
     submission.preliminaryTotal !== null
     ? `${submission.preliminaryMark}/${submission.preliminaryTotal}`
@@ -27,109 +30,173 @@ function getDraftMark(submission: TeacherActivityReviewSubmission) {
 }
 
 function getFinalMark(
-  submission: TeacherActivityReviewSubmission,
+  submission: TeacherActivityReviewSubmission | null,
 ) {
+  if (!submission) return "â€”";
+
   return submission.finalMark === null
     ? "Pending"
     : `${submission.finalMark}/${submission.originalTotalMarks}`;
 }
 
-function SubmissionRows({
+function getReviewStatusLabel(status: TeacherActivityReviewMonitorStatus) {
+  switch (status) {
+    case "submitted":
+      return "Submitted";
+    case "awaiting_review":
+      return "Awaiting Review";
+    case "returned":
+      return "Returned";
+    case "marking_failed":
+      return "Marking Failed";
+    case "overdue":
+    case "not_submitted":
+      return "Not Submitted";
+  }
+}
+
+function getReviewIndicator(status: TeacherActivityReviewMonitorStatus) {
+  if (
+    status === "submitted" ||
+    status === "awaiting_review" ||
+    status === "returned" ||
+    status === "marking_failed"
+  ) {
+    return {
+      icon: <CheckCircle2 className="text-green-600" size={20} />,
+      labelClassName: "text-green-700",
+      badgeClassName: "bg-green-100 text-green-700",
+    };
+  }
+
+  if (status === "overdue") {
+    return {
+      icon: <span className="text-lg font-bold text-red-600">!</span>,
+      labelClassName: "text-red-700",
+      badgeClassName: "bg-red-100 text-red-700",
+    };
+  }
+
+  return {
+    icon: <span className="text-lg font-bold text-slate-500">-</span>,
+    labelClassName: "text-slate-600",
+    badgeClassName: "bg-slate-100 text-slate-600",
+  };
+}
+
+function ReviewRows({
   activity,
   subject,
 }: {
   activity: TeacherActivityReview;
   subject: ReturnType<typeof getSubjectConfiguration>;
 }) {
-  if (activity.submissions.length === 0) {
+  if (activity.learners.length === 0) {
     return (
       <p className="border-t border-orange-100 p-4 text-sm text-slate-500">
-        No learner submissions yet.
+        No currently enrolled learners.
       </p>
     );
   }
 
   return (
     <div className="border-t border-orange-100">
-      <div className="hidden grid-cols-[minmax(0,1.5fr)_0.8fr_1fr_1fr_auto] items-center gap-3 bg-orange-50 px-4 py-3 text-xs font-bold text-slate-700 sm:grid">
+      <div className="hidden grid-cols-[minmax(0,1.5fr)_0.9fr_1fr_1fr_auto] items-center gap-3 bg-orange-50 px-4 py-3 text-xs font-bold text-slate-700 sm:grid">
         <span>Learner</span>
-        <span className="text-center">Submission</span>
+        <span className="text-center">Status</span>
         <span className="text-center">AI Review Draft</span>
         <span className="text-center">Teacher Final</span>
         <span className="text-center">Review</span>
       </div>
 
-      {activity.submissions.map((submission) => (
-        <div key={submission.id}>
-          <div className="hidden grid-cols-[minmax(0,1.5fr)_0.8fr_1fr_1fr_auto] items-center gap-3 border-t border-orange-100 px-4 py-4 text-xs sm:grid">
-            <p className="min-w-0 break-words font-semibold text-slate-900">
-              {submission.learnerName}
-            </p>
-            <CheckCircle2 className="mx-auto text-green-600" size={20} />
-            <p className="text-center font-semibold text-slate-700">
-              {getDraftMark(submission)}
-            </p>
-            <span
-              className={`mx-auto rounded-full px-2 py-1 text-center text-[10px] font-semibold ${
-                submission.finalMark === null
-                  ? "bg-yellow-100 text-yellow-700"
-                  : "bg-green-100 text-green-700"
-              }`}
-            >
-              {getFinalMark(submission)}
-            </span>
-            <Link
-              href={buildSubjectDetailRoute(
-                subject,
-                "teacherReview",
-                submission.id,
-              )}
-              className="flex items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-[10px] font-semibold text-white"
-            >
-              <FileSearch size={13} /> Open
-            </Link>
-          </div>
+      {activity.learners.map((learner) => {
+        const indicator = getReviewIndicator(learner.status);
+        const label = getReviewStatusLabel(learner.status);
 
-          <div className="border-t border-orange-100 p-4 sm:hidden">
-            <div className="flex items-start justify-between gap-3">
+        return (
+          <div key={learner.learnerProfileId}>
+            <div className="hidden grid-cols-[minmax(0,1.5fr)_0.9fr_1fr_1fr_auto] items-center gap-3 border-t border-orange-100 px-4 py-4 text-xs sm:grid">
               <p className="min-w-0 break-words font-semibold text-slate-900">
-                {submission.learnerName}
+                {learner.learnerName}
               </p>
-              <div className="flex shrink-0 items-center gap-1 text-xs font-semibold text-green-700">
-                <CheckCircle2 size={18} /> Submitted
+              <div className={`mx-auto inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-semibold ${indicator.badgeClassName}`}>
+                {indicator.icon}
+                <span>{label}</span>
               </div>
-            </div>
-            <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded-2xl bg-orange-50 p-3">
-                <dt className="text-xs font-semibold text-slate-500">
-                  AI Review Draft
-                </dt>
-                <dd className="mt-1 font-bold text-slate-800">
-                  {getDraftMark(submission)}
-                </dd>
-              </div>
-              <div className="rounded-2xl bg-orange-50 p-3">
-                <dt className="text-xs font-semibold text-slate-500">
-                  Teacher Final
-                </dt>
-                <dd className="mt-1 font-bold text-slate-800">
-                  {getFinalMark(submission)}
-                </dd>
-              </div>
-            </dl>
-            <Link
-              href={buildSubjectDetailRoute(
-                subject,
-                "teacherReview",
-                submission.id,
+              <p className="text-center font-semibold text-slate-700">
+                {getDraftMark(learner.submission)}
+              </p>
+              <span
+                className={`mx-auto rounded-full px-2 py-1 text-center text-[10px] font-semibold ${
+                  learner.submission === null
+                    ? "bg-slate-100 text-slate-600"
+                    : learner.submission.finalMark === null
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-green-100 text-green-700"
+                }`}
+              >
+                {getFinalMark(learner.submission)}
+              </span>
+              {learner.submission ? (
+                <Link
+                  href={buildSubjectDetailRoute(
+                    subject,
+                    "teacherReview",
+                    learner.submission.id,
+                  )}
+                  className="flex items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-[10px] font-semibold text-white"
+                >
+                  <FileSearch size={13} /> Open
+                </Link>
+              ) : (
+                <span className="text-center text-slate-400">â€”</span>
               )}
-              className="mt-3 flex w-full items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-xs font-semibold text-white"
-            >
-              <FileSearch size={14} /> Open
-            </Link>
+            </div>
+
+            <div className="border-t border-orange-100 p-4 sm:hidden">
+              <div className="flex items-start justify-between gap-3">
+                <p className="min-w-0 break-words font-semibold text-slate-900">
+                  {learner.learnerName}
+                </p>
+                <div className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${indicator.labelClassName}`}>
+                  {indicator.icon}
+                  <span>{label}</span>
+                </div>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-2xl bg-orange-50 p-3">
+                  <dt className="text-xs font-semibold text-slate-500">
+                    AI Review Draft
+                  </dt>
+                  <dd className="mt-1 font-bold text-slate-800">
+                    {getDraftMark(learner.submission)}
+                  </dd>
+                </div>
+                <div className="rounded-2xl bg-orange-50 p-3">
+                  <dt className="text-xs font-semibold text-slate-500">
+                    Teacher Final
+                  </dt>
+                  <dd className="mt-1 font-bold text-slate-800">
+                    {getFinalMark(learner.submission)}
+                  </dd>
+                </div>
+              </dl>
+              {learner.submission ? (
+                <Link
+                  href={buildSubjectDetailRoute(
+                    subject,
+                    "teacherReview",
+                    learner.submission.id,
+                  )}
+                  className="mt-3 flex w-full items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-xs font-semibold text-white"
+                >
+                  <FileSearch size={14} /> Open
+                </Link>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -281,7 +348,7 @@ export async function TeacherSubjectActivityReviewPage({
                           <ChevronDown size={20} />
                         </div>
                       </summary>
-                      <SubmissionRows
+                      <ReviewRows
                         activity={activity}
                         subject={subject}
                       />
