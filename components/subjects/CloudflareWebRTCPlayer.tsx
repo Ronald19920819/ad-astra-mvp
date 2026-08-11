@@ -3,10 +3,21 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
+export type CloudflarePlaybackDiagnostics = {
+  status: WebRTCStatus;
+  muted: boolean;
+  audioTrackCount: number | null;
+  videoTrackCount: number | null;
+  connectionState: RTCPeerConnectionState | "unknown";
+  iceConnectionState: RTCIceConnectionState | "unknown";
+};
+
 type CloudflareWebRTCPlayerProps = {
   whepUrl: string;
   onConnected?: () => void;
   onFailure?: () => void;
+  requireExplicitAudioJoin?: boolean;
+  onDiagnosticsChange?: (diagnostics: CloudflarePlaybackDiagnostics) => void;
 };
 
 type WebRTCStatus =
@@ -141,6 +152,8 @@ export function CloudflareWebRTCPlayer({
   whepUrl,
   onConnected,
   onFailure,
+  requireExplicitAudioJoin = false,
+  onDiagnosticsChange,
 }: CloudflareWebRTCPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -154,11 +167,22 @@ export function CloudflareWebRTCPlayer({
   const isMountedRef = useRef(false);
   const onConnectedRef = useRef(onConnected);
   const onFailureRef = useRef(onFailure);
+  const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
   const mediaPlaybackTokenRef = useRef(0);
   const silentRetryRef = useRef(false);
+  const hasLearnerJoinedRef = useRef(false);
 
   const [status, setStatus] = useState<WebRTCStatus>("connecting");
   const [attemptNonce, setAttemptNonce] = useState(0);
+  const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<CloudflarePlaybackDiagnostics>({
+    status: "connecting",
+    muted: false,
+    audioTrackCount: null,
+    videoTrackCount: null,
+    connectionState: "unknown",
+    iceConnectionState: "unknown",
+  });
 
   useEffect(() => {
     onConnectedRef.current = onConnected;
@@ -168,6 +192,13 @@ export function CloudflareWebRTCPlayer({
     onFailureRef.current = onFailure;
   }, [onFailure]);
 
+  useEffect(() => {
+    onDiagnosticsChangeRef.current = onDiagnosticsChange;
+  }, [onDiagnosticsChange]);
+
+  useEffect(() => {
+    onDiagnosticsChangeRef.current?.(diagnostics);
+  }, [diagnostics]);
 
 
   useEffect(() => {
@@ -183,6 +214,21 @@ export function CloudflareWebRTCPlayer({
     let isCancelled = false;
     const abortController = new AbortController();
     const videoElement = videoRef.current;
+
+    const updateDiagnostics = (patch: Partial<CloudflarePlaybackDiagnostics>) => {
+      if (!isMountedRef.current || isCancelled) return;
+      setDiagnostics((current) => ({ ...current, ...patch }));
+    };
+
+    const syncMediaDiagnostics = () => {
+      const currentVideoElement = videoRef.current;
+      const remoteStream = remoteStreamRef.current;
+      updateDiagnostics({
+        muted: currentVideoElement?.muted ?? false,
+        audioTrackCount: remoteStream ? remoteStream.getAudioTracks().length : null,
+        videoTrackCount: remoteStream ? remoteStream.getVideoTracks().length : null,
+      });
+    };
 
     const invalidatePlaybackAttempt = (reason: string) => {
       mediaPlaybackTokenRef.current += 1;
@@ -227,6 +273,7 @@ export function CloudflareWebRTCPlayer({
       currentVideoElement.srcObject = null;
       currentVideoElement.removeAttribute("src");
       currentVideoElement.load();
+      syncMediaDiagnostics();
     };
 
     const stopRemoteStream = () => {
@@ -245,6 +292,7 @@ export function CloudflareWebRTCPlayer({
       }
 
       remoteStreamRef.current = null;
+      syncMediaDiagnostics();
     };
 
     const closeExistingPeerConnection = (reason: string) => {
@@ -257,6 +305,11 @@ export function CloudflareWebRTCPlayer({
         peerConnectionRef.current.close();
         peerConnectionRef.current = null;
       }
+
+      updateDiagnostics({
+        connectionState: "unknown",
+        iceConnectionState: "unknown",
+      });
     };
 
     const cleanupSession = () => {
@@ -308,6 +361,7 @@ export function CloudflareWebRTCPlayer({
       closeExistingPeerConnection(reason);
       hasLiveTrackRef.current = false;
       attemptActiveRef.current = false;
+      setJoinMessage(null);
 
       if (isMountedRef.current && !isCancelled) {
         setStatus(nextStatus);
@@ -328,6 +382,7 @@ export function CloudflareWebRTCPlayer({
       closeExistingPeerConnection(`failure:${phase}`);
       hasLiveTrackRef.current = false;
       attemptActiveRef.current = false;
+      setJoinMessage(null);
 
       if (isMountedRef.current) {
         setStatus("failed");
@@ -364,6 +419,14 @@ export function CloudflareWebRTCPlayer({
     if (isMountedRef.current && !isSilentRetry) {
       setStatus("connecting");
     }
+    updateDiagnostics({
+      status: "connecting",
+      muted: videoElement?.muted ?? false,
+      audioTrackCount: null,
+      videoTrackCount: null,
+      connectionState: "unknown",
+      iceConnectionState: "unknown",
+    });
 
     timeoutTimerRef.current = window.setTimeout(() => {
       if (!hasLiveTrackRef.current) {
@@ -391,12 +454,17 @@ export function CloudflareWebRTCPlayer({
       }
 
       peerConnectionRef.current = peerConnection;
+      updateDiagnostics({
+        connectionState: peerConnection.connectionState,
+        iceConnectionState: peerConnection.iceConnectionState,
+      });
 
       const remoteStream = new MediaStream();
       remoteStreamRef.current = remoteStream;
       if (videoElement) {
         videoElement.srcObject = remoteStream;
       }
+      syncMediaDiagnostics();
 
       try {
         peerConnection.addTransceiver("audio", { direction: "recvonly" });
@@ -429,6 +497,7 @@ export function CloudflareWebRTCPlayer({
         hasLiveTrackRef.current = true;
         clearDisconnectGraceTimer();
         clearAttemptTimeout();
+        syncMediaDiagnostics();
 
         if (!videoElement || isCancelled) {
           return;
@@ -438,11 +507,13 @@ export function CloudflareWebRTCPlayer({
 
         const playWithAudio = async () => {
           videoElement.muted = false;
+          syncMediaDiagnostics();
           await videoElement.play();
         };
 
         const playMuted = async () => {
           videoElement.muted = true;
+          syncMediaDiagnostics();
           await videoElement.play();
         };
 
@@ -452,6 +523,7 @@ export function CloudflareWebRTCPlayer({
               return;
             }
             attemptActiveRef.current = false;
+            syncMediaDiagnostics();
             if (isMountedRef.current) {
               setStatus("playing");
             }
@@ -519,6 +591,7 @@ export function CloudflareWebRTCPlayer({
                 return;
               }
               attemptActiveRef.current = false;
+              setJoinMessage(null);
               if (isMountedRef.current) {
                 setStatus("waiting-for-user");
               }
@@ -537,6 +610,7 @@ export function CloudflareWebRTCPlayer({
       });
 
       peerConnection.addEventListener("connectionstatechange", () => {
+        updateDiagnostics({ connectionState: peerConnection.connectionState });
         if (IS_DEVELOPMENT) {
           console.info("WHEP connection state:", peerConnection.connectionState);
         }
@@ -584,6 +658,7 @@ export function CloudflareWebRTCPlayer({
       });
 
       peerConnection.addEventListener("iceconnectionstatechange", () => {
+        updateDiagnostics({ iceConnectionState: peerConnection.iceConnectionState });
         if (IS_DEVELOPMENT) {
           console.info("WHEP ICE connection state:", peerConnection.iceConnectionState);
         }
@@ -770,6 +845,7 @@ export function CloudflareWebRTCPlayer({
 
   const showOfflineImage =
     status === "offline" || status === "connecting" || status === "ended";
+  const showJoinOverlay = status === "waiting-for-user" && requireExplicitAudioJoin;
 
   return (
     <div className="relative aspect-video w-full overflow-hidden bg-black">
@@ -778,7 +854,7 @@ export function CloudflareWebRTCPlayer({
           src={OFFLINE_IMAGE_SRC}
           alt="Live Classroom currently offline"
           fill
-          className="object-cover [object-position:42%_center]"
+          className="bg-black object-contain object-center"
           sizes="(max-width: 1024px) 100vw, 70vw"
           priority
         />
@@ -798,7 +874,75 @@ export function CloudflareWebRTCPlayer({
         </div>
       ) : null}
 
-      {status === "waiting-for-user" ? (
+      {showJoinOverlay ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/65 px-4 text-center">
+          <div className="max-w-sm space-y-4 rounded-[1.5rem] border border-white/15 bg-slate-950/75 p-6 shadow-lg backdrop-blur-sm">
+            <div className="space-y-2">
+              <p className="text-lg font-bold text-white">Live lesson ready</p>
+              <p className="text-sm text-white/90">
+                Join the lesson to enable video and sound.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const currentVideoElement = videoRef.current;
+                if (!currentVideoElement) return;
+                hasLearnerJoinedRef.current = true;
+                setJoinMessage(null);
+                currentVideoElement.muted = false;
+                setDiagnostics((current) => ({ ...current, muted: false }));
+                const playbackToken = mediaPlaybackTokenRef.current;
+                void currentVideoElement.play().then(() => {
+                  if (playbackToken !== mediaPlaybackTokenRef.current) {
+                    return;
+                  }
+                  setStatus("playing");
+                  setJoinMessage(null);
+                  setDiagnostics((current) => ({ ...current, muted: currentVideoElement.muted }));
+                }).catch((error) => {
+                  const errorName = error instanceof Error ? error.name : "";
+
+                  if (playbackToken !== mediaPlaybackTokenRef.current) {
+                    logExpectedPlayInterruption(
+                      "Stale manual playback rejection ignored",
+                      error,
+                    );
+                    return;
+                  }
+
+                  if (errorName === "AbortError") {
+                    logExpectedPlayInterruption(
+                      "Manual Cloudflare WHEP playback was interrupted",
+                      error,
+                    );
+                    return;
+                  }
+
+                  if (errorName === "NotAllowedError") {
+                    setJoinMessage(
+                      "Your browser is blocking sound. Tap Join Live Lesson again or check your device volume.",
+                    );
+                    return;
+                  }
+
+                  console.warn("Manual Cloudflare WHEP playback start failed");
+                  logUnexpectedErrorDetails("Manual WHEP playback diagnostic", error);
+                  setJoinMessage(
+                    "Your browser is blocking sound. Tap Join Live Lesson again or check your device volume.",
+                  );
+                });
+              }}
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            >
+              Join Live Lesson
+            </button>
+            {joinMessage ? (
+              <p className="text-xs font-medium text-amber-200">{joinMessage}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : status === "waiting-for-user" ? (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/55 px-4 text-center">
           <div className="space-y-3">
             <p className="text-sm font-semibold text-white">Live lesson ready</p>
@@ -814,6 +958,7 @@ export function CloudflareWebRTCPlayer({
                     return;
                   }
                   setStatus("playing");
+                  setDiagnostics((current) => ({ ...current, muted: currentVideoElement.muted }));
                 }).catch((error) => {
                   const errorName = error instanceof Error ? error.name : "";
 
