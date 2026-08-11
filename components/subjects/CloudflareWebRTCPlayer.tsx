@@ -12,12 +12,37 @@ export type CloudflarePlaybackDiagnostics = {
   iceConnectionState: RTCIceConnectionState | "unknown";
 };
 
+export type CloudflarePerformanceDiagnostics = {
+  audioJitterMs: number | null;
+  audioBufferDelayMs: number | null;
+  audioPacketsLost: number | null;
+  audioPacketsReceived: number | null;
+  audioConcealedSamples: number | null;
+  audioConcealmentEvents: number | null;
+  audioEstimatedPlayoutTimestamp: number | null;
+  videoJitterMs: number | null;
+  videoBufferDelayMs: number | null;
+  videoPacketsLost: number | null;
+  videoPacketsReceived: number | null;
+  videoFramesDecoded: number | null;
+  videoFramesDropped: number | null;
+  videoFramesPerSecond: number | null;
+  videoTotalDecodeTimeMs: number | null;
+  videoEstimatedPlayoutTimestamp: number | null;
+  rttMs: number | null;
+  transportLabel: string | null;
+};
+
 type CloudflareWebRTCPlayerProps = {
   whepUrl: string;
   onConnected?: () => void;
   onFailure?: () => void;
   requireExplicitAudioJoin?: boolean;
   onDiagnosticsChange?: (diagnostics: CloudflarePlaybackDiagnostics) => void;
+  collectPerformanceDiagnostics?: boolean;
+  onPerformanceDiagnosticsChange?: (
+    diagnostics: CloudflarePerformanceDiagnostics | null,
+  ) => void;
 };
 
 type WebRTCStatus =
@@ -154,6 +179,8 @@ export function CloudflareWebRTCPlayer({
   onFailure,
   requireExplicitAudioJoin = false,
   onDiagnosticsChange,
+  collectPerformanceDiagnostics = false,
+  onPerformanceDiagnosticsChange,
 }: CloudflareWebRTCPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -168,6 +195,7 @@ export function CloudflareWebRTCPlayer({
   const onConnectedRef = useRef(onConnected);
   const onFailureRef = useRef(onFailure);
   const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
+  const onPerformanceDiagnosticsChangeRef = useRef(onPerformanceDiagnosticsChange);
   const mediaPlaybackTokenRef = useRef(0);
   const silentRetryRef = useRef(false);
   const hasLearnerJoinedRef = useRef(false);
@@ -197,9 +225,18 @@ export function CloudflareWebRTCPlayer({
   }, [onDiagnosticsChange]);
 
   useEffect(() => {
+    onPerformanceDiagnosticsChangeRef.current = onPerformanceDiagnosticsChange;
+  }, [onPerformanceDiagnosticsChange]);
+
+  useEffect(() => {
     onDiagnosticsChangeRef.current?.(diagnostics);
   }, [diagnostics]);
 
+  useEffect(() => {
+    if (!collectPerformanceDiagnostics) {
+      onPerformanceDiagnosticsChangeRef.current?.(null);
+    }
+  }, [collectPerformanceDiagnostics]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -207,6 +244,207 @@ export function CloudflareWebRTCPlayer({
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!collectPerformanceDiagnostics) {
+      return;
+    }
+
+    let cancelled = false;
+    let intervalId: number | null = null;
+
+    const toMilliseconds = (value: unknown) =>
+      typeof value === "number" && Number.isFinite(value) ? value * 1000 : null;
+
+    const getAverageJitterBufferDelayMs = (report: RTCInboundRtpStreamStats) => {
+      const delay = report.jitterBufferDelay;
+      const emittedCount = report.jitterBufferEmittedCount;
+
+      if (
+        typeof delay === "number" &&
+        Number.isFinite(delay) &&
+        typeof emittedCount === "number" &&
+        Number.isFinite(emittedCount) &&
+        emittedCount > 0
+      ) {
+        return (delay / emittedCount) * 1000;
+      }
+
+      return null;
+    };
+
+    const getTransportLabel = (
+      stats: RTCStatsReport,
+      selectedCandidatePair: RTCIceCandidatePairStats | null,
+    ) => {
+      if (!selectedCandidatePair) {
+        return null;
+      }
+
+      const localCandidate =
+        typeof selectedCandidatePair.localCandidateId === "string"
+          ? stats.get(selectedCandidatePair.localCandidateId)
+          : null;
+      const remoteCandidate =
+        typeof selectedCandidatePair.remoteCandidateId === "string"
+          ? stats.get(selectedCandidatePair.remoteCandidateId)
+          : null;
+      const candidateType =
+        localCandidate?.type === "local-candidate" ||
+        localCandidate?.type === "remote-candidate"
+          ? localCandidate.candidateType
+          : remoteCandidate?.type === "local-candidate" ||
+              remoteCandidate?.type === "remote-candidate"
+            ? remoteCandidate.candidateType
+            : null;
+      const protocol =
+        localCandidate?.type === "local-candidate" ||
+        localCandidate?.type === "remote-candidate"
+          ? localCandidate.protocol
+          : remoteCandidate?.type === "local-candidate" ||
+              remoteCandidate?.type === "remote-candidate"
+            ? remoteCandidate.protocol
+            : null;
+      const upperProtocol =
+        typeof protocol === "string" && protocol.length > 0 ? protocol.toUpperCase() : null;
+
+      if (candidateType === "relay") {
+        return upperProtocol ? `Relay / TURN (${upperProtocol})` : "Relay / TURN";
+      }
+
+      return upperProtocol ? `Direct (${upperProtocol})` : "Direct";
+    };
+
+    const sampleStats = async () => {
+      const peerConnection = peerConnectionRef.current;
+      if (!peerConnection) {
+        onPerformanceDiagnosticsChangeRef.current?.(null);
+        return;
+      }
+
+      try {
+        const stats = await peerConnection.getStats();
+        if (cancelled || peerConnectionRef.current !== peerConnection) {
+          return;
+        }
+
+        let inboundAudio: RTCInboundRtpStreamStats | null = null;
+        let inboundVideo: RTCInboundRtpStreamStats | null = null;
+        let selectedCandidatePair: RTCIceCandidatePairStats | null = null;
+
+        for (const report of stats.values()) {
+          if (
+            report.type === "inbound-rtp" &&
+            report.kind === "audio" &&
+            !report.isRemote
+          ) {
+            inboundAudio = report;
+            continue;
+          }
+
+          if (
+            report.type === "inbound-rtp" &&
+            report.kind === "video" &&
+            !report.isRemote
+          ) {
+            inboundVideo = report;
+            continue;
+          }
+
+          if (
+            report.type === "candidate-pair" &&
+            (report.selected === true || report.nominated === true)
+          ) {
+            selectedCandidatePair = report;
+          }
+        }
+
+        const performanceDiagnostics: CloudflarePerformanceDiagnostics = {
+          audioJitterMs: inboundAudio ? toMilliseconds(inboundAudio.jitter) : null,
+          audioBufferDelayMs: inboundAudio
+            ? getAverageJitterBufferDelayMs(inboundAudio)
+            : null,
+          audioPacketsLost:
+            inboundAudio && typeof inboundAudio.packetsLost === "number"
+              ? inboundAudio.packetsLost
+              : null,
+          audioPacketsReceived:
+            inboundAudio && typeof inboundAudio.packetsReceived === "number"
+              ? inboundAudio.packetsReceived
+              : null,
+          audioConcealedSamples:
+            inboundAudio && typeof inboundAudio.concealedSamples === "number"
+              ? inboundAudio.concealedSamples
+              : null,
+          audioConcealmentEvents:
+            inboundAudio && typeof inboundAudio.concealmentEvents === "number"
+              ? inboundAudio.concealmentEvents
+              : null,
+          audioEstimatedPlayoutTimestamp:
+            inboundAudio && typeof inboundAudio.estimatedPlayoutTimestamp === "number"
+              ? inboundAudio.estimatedPlayoutTimestamp
+              : null,
+          videoJitterMs: inboundVideo ? toMilliseconds(inboundVideo.jitter) : null,
+          videoBufferDelayMs: inboundVideo
+            ? getAverageJitterBufferDelayMs(inboundVideo)
+            : null,
+          videoPacketsLost:
+            inboundVideo && typeof inboundVideo.packetsLost === "number"
+              ? inboundVideo.packetsLost
+              : null,
+          videoPacketsReceived:
+            inboundVideo && typeof inboundVideo.packetsReceived === "number"
+              ? inboundVideo.packetsReceived
+              : null,
+          videoFramesDecoded:
+            inboundVideo && typeof inboundVideo.framesDecoded === "number"
+              ? inboundVideo.framesDecoded
+              : null,
+          videoFramesDropped:
+            inboundVideo && typeof inboundVideo.framesDropped === "number"
+              ? inboundVideo.framesDropped
+              : null,
+          videoFramesPerSecond:
+            inboundVideo && typeof inboundVideo.framesPerSecond === "number"
+              ? inboundVideo.framesPerSecond
+              : null,
+          videoTotalDecodeTimeMs:
+            inboundVideo && typeof inboundVideo.totalDecodeTime === "number"
+              ? inboundVideo.totalDecodeTime * 1000
+              : null,
+          videoEstimatedPlayoutTimestamp:
+            inboundVideo && typeof inboundVideo.estimatedPlayoutTimestamp === "number"
+              ? inboundVideo.estimatedPlayoutTimestamp
+              : null,
+          rttMs:
+            selectedCandidatePair &&
+            typeof selectedCandidatePair.currentRoundTripTime === "number"
+              ? selectedCandidatePair.currentRoundTripTime * 1000
+              : null,
+          transportLabel: getTransportLabel(stats, selectedCandidatePair),
+        };
+
+        onPerformanceDiagnosticsChangeRef.current?.(performanceDiagnostics);
+      } catch {
+        if (!cancelled) {
+          onPerformanceDiagnosticsChangeRef.current?.(null);
+        }
+      }
+    };
+
+    void sampleStats();
+    intervalId = window.setInterval(() => {
+      void sampleStats();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+      onPerformanceDiagnosticsChangeRef.current?.(null);
+    };
+  }, [attemptNonce, collectPerformanceDiagnostics]);
 
   useEffect(() => {
     playbackAttemptCounter += 1;

@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import CloudflareWebRTCPlayer, {
   type CloudflarePlaybackDiagnostics,
+  type CloudflarePerformanceDiagnostics,
 } from "@/components/subjects/CloudflareWebRTCPlayer";
 
 const CLOUDFLARE_STREAM_HOST = "customer-txjjmf9yh6vpwg3s.cloudflarestream.com";
@@ -27,6 +28,21 @@ function trackLabel(count: number | null, kind: "audio" | "video") {
   return count > 0 ? "Detected" : "Not detected";
 }
 
+function formatMilliseconds(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  return `${Math.round(value)} ms`;
+}
+
+function formatCount(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  return new Intl.NumberFormat("en-ZA").format(value);
+}
+
+function formatFramesPerSecond(value: number | null) {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  return `${value.toFixed(1)} fps`;
+}
+
 export function LiveClassroomPlayer({
   subjectColour,
   subjectSoftBackground,
@@ -42,9 +58,13 @@ export function LiveClassroomPlayer({
   const [useHlsFallback, setUseHlsFallback] = useState(false);
   const [supportInfoExpanded, setSupportInfoExpanded] = useState(false);
   const [diagnostics, setDiagnostics] = useState<CloudflarePlaybackDiagnostics | null>(null);
+  const [performanceDiagnostics, setPerformanceDiagnostics] =
+    useState<CloudflarePerformanceDiagnostics | null>(null);
 
   const iframeUrl = useMemo(() => buildCloudflareEmbedUrl(), []);
   const whepUrl = useMemo(() => buildCloudflareWhepUrl(), []);
+  const shouldCollectPerformanceDiagnostics =
+    showLearnerSupportInfo && supportInfoExpanded && !useHlsFallback;
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-sm">
@@ -63,9 +83,12 @@ export function LiveClassroomPlayer({
           <CloudflareWebRTCPlayer
             whepUrl={whepUrl}
             requireExplicitAudioJoin={requireExplicitAudioJoin}
+            collectPerformanceDiagnostics={shouldCollectPerformanceDiagnostics}
             onDiagnosticsChange={setDiagnostics}
+            onPerformanceDiagnosticsChange={setPerformanceDiagnostics}
             onFailure={() => {
               setUseHlsFallback(true);
+              setPerformanceDiagnostics(null);
             }}
           />
         )}
@@ -89,52 +112,134 @@ export function LiveClassroomPlayer({
           </button>
 
           {supportInfoExpanded ? (
-            <dl className="mt-3 space-y-2 text-sm">
-              <div className="flex items-start justify-between gap-4">
-                <dt className="font-medium text-slate-500">Playback</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {useHlsFallback ? "Backup stream (HLS)" : "Low latency (WebRTC)"}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="font-medium text-slate-500">Sound</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {useHlsFallback ? "Use backup player controls" : soundLabel(diagnostics)}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="font-medium text-slate-500">Audio track</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {useHlsFallback
-                    ? "Unavailable in backup mode"
-                    : trackLabel(diagnostics?.audioTrackCount ?? null, "audio")}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="font-medium text-slate-500">Video track</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {useHlsFallback
-                    ? "Unavailable in backup mode"
-                    : trackLabel(diagnostics?.videoTrackCount ?? null, "video")}
-                </dd>
-              </div>
-              <div className="flex items-start justify-between gap-4">
-                <dt className="font-medium text-slate-500">Connection</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {useHlsFallback
-                    ? "Backup stream active"
-                    : diagnostics?.connectionState ?? diagnostics?.status ?? "Checking"}
-                </dd>
-              </div>
-              {!useHlsFallback ? (
+            <div className="mt-3 space-y-4 text-sm">
+              <dl className="space-y-2">
                 <div className="flex items-start justify-between gap-4">
-                  <dt className="font-medium text-slate-500">ICE</dt>
+                  <dt className="font-medium text-slate-500">Playback</dt>
                   <dd className="text-right font-semibold text-slate-800">
-                    {diagnostics?.iceConnectionState ?? "Checking"}
+                    {useHlsFallback ? "Backup stream (HLS)" : "Low latency (WebRTC)"}
                   </dd>
                 </div>
-              ) : null}
-            </dl>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="font-medium text-slate-500">Sound</dt>
+                  <dd className="text-right font-semibold text-slate-800">
+                    {useHlsFallback ? "Use backup player controls" : soundLabel(diagnostics)}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="font-medium text-slate-500">Audio track</dt>
+                  <dd className="text-right font-semibold text-slate-800">
+                    {useHlsFallback
+                      ? "Unavailable in backup mode"
+                      : trackLabel(diagnostics?.audioTrackCount ?? null, "audio")}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="font-medium text-slate-500">Video track</dt>
+                  <dd className="text-right font-semibold text-slate-800">
+                    {useHlsFallback
+                      ? "Unavailable in backup mode"
+                      : trackLabel(diagnostics?.videoTrackCount ?? null, "video")}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <dt className="font-medium text-slate-500">Connection</dt>
+                  <dd className="text-right font-semibold text-slate-800">
+                    {useHlsFallback
+                      ? "Backup stream active"
+                      : diagnostics?.connectionState ?? diagnostics?.status ?? "Checking"}
+                  </dd>
+                </div>
+                {!useHlsFallback ? (
+                  <div className="flex items-start justify-between gap-4">
+                    <dt className="font-medium text-slate-500">ICE</dt>
+                    <dd className="text-right font-semibold text-slate-800">
+                      {diagnostics?.iceConnectionState ?? "Checking"}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+
+              <div className="border-t border-slate-200 pt-3">
+                <h3 className="text-sm font-semibold text-slate-800">
+                  Live connection diagnostics
+                </h3>
+                {useHlsFallback ? (
+                  <p className="mt-2 text-sm text-slate-500">
+                    Unavailable in backup stream mode.
+                  </p>
+                ) : (
+                  <dl className="mt-3 space-y-2">
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Audio jitter</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatMilliseconds(performanceDiagnostics?.audioJitterMs ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Audio buffer delay</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatMilliseconds(performanceDiagnostics?.audioBufferDelayMs ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Audio packets lost</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatCount(performanceDiagnostics?.audioPacketsLost ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Audio concealment</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {performanceDiagnostics?.audioConcealedSamples !== null &&
+                        performanceDiagnostics?.audioConcealedSamples !== undefined
+                          ? `${formatCount(performanceDiagnostics.audioConcealedSamples)} samples`
+                          : performanceDiagnostics?.audioConcealmentEvents !== null &&
+                              performanceDiagnostics?.audioConcealmentEvents !== undefined
+                            ? `${formatCount(performanceDiagnostics.audioConcealmentEvents)} events`
+                            : "Unavailable"}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Video jitter</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatMilliseconds(performanceDiagnostics?.videoJitterMs ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Video buffer delay</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatMilliseconds(performanceDiagnostics?.videoBufferDelayMs ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Video packets lost</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatCount(performanceDiagnostics?.videoPacketsLost ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Video FPS</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatFramesPerSecond(performanceDiagnostics?.videoFramesPerSecond ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">RTT</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {formatMilliseconds(performanceDiagnostics?.rttMs ?? null)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="font-medium text-slate-500">Transport</dt>
+                      <dd className="text-right font-semibold text-slate-800">
+                        {performanceDiagnostics?.transportLabel ?? "Unavailable"}
+                      </dd>
+                    </div>
+                  </dl>
+                )}
+              </div>
+            </div>
           ) : null}
         </div>
       ) : null}
