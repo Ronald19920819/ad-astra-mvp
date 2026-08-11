@@ -110,6 +110,8 @@ export async function SubjectLiveClassroomPage({
             <LiveClassroomPlayer
               subjectColour={subject.colourTheme.primary}
               subjectSoftBackground={subject.colourTheme.softBackground}
+              requireExplicitAudioJoin
+              showLearnerSupportInfo
             />
           </section>
 
