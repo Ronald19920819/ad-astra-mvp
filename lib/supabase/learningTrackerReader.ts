@@ -447,9 +447,11 @@ export async function getSubjectLearningTracker(
           : "not_started";
       const quiz: TrackerContentState = !hasQuiz
         ? "unavailable"
-        : quizCompleted
+        : quizSuccessful
           ? "complete"
-          : "not_started";
+          : quizCompleted
+            ? "partial"
+            : "not_started";
       const isLessonComplete = learnerCompletions.length > 0;
       const isLessonOverdue =
         !isLessonComplete &&
