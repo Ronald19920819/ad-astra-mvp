@@ -21,7 +21,7 @@ import {
 } from "@/lib/subjects/subjectConfig";
 
 function getDraftMark(submission: TeacherActivityReviewSubmission | null) {
-  if (!submission) return "â€”";
+  if (!submission) return "\u2014";
 
   return submission.preliminaryMark !== null &&
     submission.preliminaryTotal !== null
@@ -32,7 +32,7 @@ function getDraftMark(submission: TeacherActivityReviewSubmission | null) {
 function getFinalMark(
   submission: TeacherActivityReviewSubmission | null,
 ) {
-  if (!submission) return "â€”";
+  if (!submission) return "\u2014";
 
   return submission.finalMark === null
     ? "Pending"
@@ -149,7 +149,7 @@ function ReviewRows({
                   <FileSearch size={13} /> Open
                 </Link>
               ) : (
-                <span className="text-center text-slate-400">â€”</span>
+                <span className="text-center text-slate-400">{"\u2014"}</span>
               )}
             </div>
 
