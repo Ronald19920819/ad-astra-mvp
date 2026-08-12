@@ -27,6 +27,7 @@ export type LearningTrackerLearner = {
   quiz: TrackerContentState;
   status: TrackerLessonStatus;
   overdueItemCount: number;
+  submittedActivityCount: number;
   lastActiveAt: string | null;
 };
 
@@ -38,6 +39,7 @@ export type LearningTrackerLesson = {
   weekNumber: number | null;
   displayOrder: number | null;
   expectedCompletionDate: string | null;
+  activityCount: number;
   learners: LearningTrackerLearner[];
 };
 
@@ -482,6 +484,7 @@ export async function getSubjectLearningTracker(
         quiz,
         status,
         overdueItemCount: (isLessonOverdue ? 1 : 0) + overdueActivityCount,
+        submittedActivityCount: submittedActivityIds.size,
         lastActiveAt,
       };
     });
@@ -494,6 +497,7 @@ export async function getSubjectLearningTracker(
       weekNumber: lesson.week_number,
       displayOrder: lesson.display_order,
       expectedCompletionDate: lesson.expected_completion_date,
+      activityCount: lessonActivities.length,
       learners,
     };
   });

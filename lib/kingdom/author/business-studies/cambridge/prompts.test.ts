@@ -29,24 +29,25 @@ test("reading generation keeps its structured output contract", () => {
   assert.match(prompt, /Do not force every available block type/);
 });
 
-test("reading structure keeps both teacher-controlled modes", () => {
+test("reading structure stays formatting-only and preserves order", () => {
   const formattingPrompt = buildReadingStructurePrompt({
     subjectContext: authorContext,
     readingTitle: "Business Inputs",
     teacherContent: "Land and labour are inputs.",
     mode: "formatting_only",
   });
-  const languagePrompt = buildReadingStructurePrompt({
-    subjectContext: authorContext,
-    readingTitle: "Business Inputs",
-    teacherContent: "Land and labour are inputs.",
-    mode: "formatting_and_language",
-  });
 
-  assert.match(formattingPrompt, /Preserve the teacher's wording/);
-  assert.match(languagePrompt, /Improve grammar, clarity, flow/);
+  assert.match(formattingPrompt, /FORMAT-ONLY MODE/);
+  assert.match(formattingPrompt, /Preserve exact section order/);
+  assert.match(formattingPrompt, /Do not summarise/);
+  assert.match(formattingPrompt, /Do not shorten/);
+  assert.match(formattingPrompt, /Do not paraphrase/);
+  assert.match(formattingPrompt, /Do not improve wording/);
+  assert.match(formattingPrompt, /Do not improve flow/);
+  assert.match(formattingPrompt, /Do not move sections/);
+  assert.match(formattingPrompt, /Do not merge sections/);
   assert.match(formattingPrompt, /ad-astra-structured-reading/);
-  assert.match(languagePrompt, /ad-astra-structured-reading/);
+  assert.doesNotMatch(formattingPrompt, /Improve grammar, clarity, flow/);
 });
 
 test("lesson quiz generation keeps the exact ten one-mark contract", () => {

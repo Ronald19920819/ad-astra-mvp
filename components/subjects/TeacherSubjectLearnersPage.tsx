@@ -1,10 +1,10 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import {
   ArrowLeft,
   BookOpenCheck,
+  CheckSquare,
   Clock,
   Eye,
-  TriangleAlert,
   UserRound,
 } from "lucide-react";
 import {
@@ -13,6 +13,7 @@ import {
 } from "@/lib/supabase/learningTrackerReader";
 import { getLearnerSupportStatus } from "@/lib/teachers/learnerSupport";
 import {
+  buildSubjectDetailRoute,
   buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
@@ -50,13 +51,20 @@ export async function TeacherSubjectLearnersPage({
     loadError = "Unable to load learner progress. Please try again.";
   }
 
+  const totalLessons = lessons.length;
+  const totalActivities = lessons.reduce(
+    (sum, lesson) => sum + lesson.activityCount,
+    0,
+  );
+
   const learnerMap = new Map<
     string,
     {
       id: string;
       name: string;
       statuses: TrackerLessonStatus[];
-      completeLessons: number;
+      completedLessons: number;
+      completedActivities: number;
       overdueItems: number;
       lastActiveValues: Array<string | null>;
     }
@@ -68,12 +76,14 @@ export async function TeacherSubjectLearnersPage({
         id: learner.learnerProfileId,
         name: learner.name,
         statuses: [],
-        completeLessons: 0,
+        completedLessons: 0,
+        completedActivities: 0,
         overdueItems: 0,
         lastActiveValues: [],
       };
       current.statuses.push(learner.status);
-      if (learner.status === "Complete") current.completeLessons += 1;
+      if (learner.status === "Complete") current.completedLessons += 1;
+      current.completedActivities += learner.submittedActivityCount;
       current.overdueItems += learner.overdueItemCount;
       current.lastActiveValues.push(learner.lastActiveAt);
       learnerMap.set(learner.learnerProfileId, current);
@@ -116,8 +126,8 @@ export async function TeacherSubjectLearnersPage({
             Learner subject overview
           </h2>
           <p className="text-sm leading-relaxed text-slate-600">
-            View real lesson engagement and overdue support needs for this
-            subject.
+            View real lesson engagement, activity completion and current support
+            status for this subject.
           </p>
         </div>
 
@@ -178,27 +188,27 @@ export async function TeacherSubjectLearnersPage({
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="rounded-2xl bg-slate-50 p-3">
                       <div className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
-                        <BookOpenCheck size={16} /> Completed
+                        <BookOpenCheck size={16} /> Lessons Completed
                       </div>
                       <p
                         className="text-lg font-bold"
                         style={{ color: subject.colourTheme.primary }}
                       >
-                        {learner.completeLessons} of {lessons.length}
+                        {learner.completedLessons} of {totalLessons}
                       </p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-3">
                       <div className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
-                        <TriangleAlert size={16} /> Missed Items
+                        <CheckSquare size={16} /> Activities Completed
                       </div>
                       <p
                         className="text-lg font-bold"
                         style={{ color: subject.colourTheme.primary }}
                       >
-                        {learner.overdueItems}
+                        {learner.completedActivities} of {totalActivities}
                       </p>
                     </div>
-                    <div className="col-span-2 rounded-2xl bg-slate-50 p-3">
+                    <div className="rounded-2xl bg-slate-50 p-3">
                       <div className="mb-1 flex items-center gap-2 font-semibold text-slate-800">
                         <Clock size={16} /> Last Active
                       </div>
@@ -211,15 +221,30 @@ export async function TeacherSubjectLearnersPage({
                         )}
                       </p>
                     </div>
+                    <div className="rounded-2xl bg-slate-50 p-3">
+                      <div className="mb-1 font-semibold text-slate-800">
+                        Status
+                      </div>
+                      <p
+                        className="font-bold"
+                        style={{ color: subject.colourTheme.primary }}
+                      >
+                        {supportStatus}
+                      </p>
+                    </div>
                   </div>
 
                   <Link
-                    href={buildSubjectRoute(subject, "teacherTracker")}
+                    href={buildSubjectDetailRoute(
+                      subject,
+                      "teacherLearners",
+                      learner.id,
+                    )}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white"
                     style={{ backgroundColor: subject.colourTheme.primary }}
                   >
                     <Eye size={17} />
-                    View Learning Tracker
+                    View Learner Profile
                   </Link>
                 </div>
               );
@@ -230,4 +255,3 @@ export async function TeacherSubjectLearnersPage({
     </main>
   );
 }
-

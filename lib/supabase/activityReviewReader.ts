@@ -15,6 +15,7 @@ export type TeacherActivityReviewSubmission = {
   id: string;
   learnerName: string;
   status: string;
+  submittedAt: string;
   preliminaryMark: number | null;
   preliminaryTotal: number | null;
   finalMark: number | null;
@@ -101,6 +102,7 @@ type SubmissionRow = {
   activity_id: string;
   learner_id: string;
   status: string;
+  submitted_at: string;
   preliminary_mark: number | null;
   preliminary_total: number | null;
   final_mark: number | null;
@@ -167,6 +169,7 @@ export async function getSubjectActivityReviews(
         activity_id,
         learner_id,
         status,
+        submitted_at,
         preliminary_mark,
         preliminary_total,
         final_mark,
@@ -262,6 +265,7 @@ export async function getSubjectActivityReviews(
       id: submission.id,
       learnerName,
       status: submission.status,
+      submittedAt: submission.submitted_at,
       preliminaryMark: submission.preliminary_mark,
       preliminaryTotal: submission.preliminary_total,
       finalMark: submission.final_mark,

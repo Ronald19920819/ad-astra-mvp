@@ -425,7 +425,7 @@ export function buildSubjectRoute(
 
 export function buildSubjectDetailRoute(
   subject: Pick<SubjectConfiguration, "databaseId" | "routes">,
-  routeKey: "learnerClassroom" | "learnerActivities" | "teacherReview",
+  routeKey: "learnerClassroom" | "learnerActivities" | "teacherReview" | "teacherLearners",
   detailId: string,
 ) {
   return `${subject.routes[routeKey]}/${detailId}?subject=${encodeURIComponent(

@@ -4,6 +4,7 @@ import { buildReadingStructurePrompt } from "@/lib/kingdom/author/business-studi
 import {
   parseStructuredReadingDocument,
   structuredReadingToEditorText,
+  validateStructuredReadingCompleteness,
 } from "@/lib/readings/structuredReading";
 import {
   authorizeTeacher,
@@ -26,6 +27,10 @@ function cleanKingdomJson(output: string) {
     .replace(/\s*```$/i, "");
 }
 
+function formatFailure(message: string) {
+  return NextResponse.json({ error: message }, { status: 422 });
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -41,21 +46,25 @@ export async function POST(request: Request) {
 
     const readingTitle = body.readingTitle;
     const teacherContent = body.teacherContent;
-    const mode = body.mode;
+    const mode = "formatting_only" as const;
 
-    if (
-      typeof readingTitle !== "string" ||
-      !readingTitle.trim() ||
-      readingTitle.length > 300 ||
-      typeof teacherContent !== "string" ||
-      !teacherContent.trim() ||
-      teacherContent.length > 60_000 ||
-      (mode !== "formatting_only" &&
-        mode !== "formatting_and_language")
-    ) {
-      return NextResponse.json(
-        { error: "Add a valid reading title, content, and structure mode." },
-        { status: 400 },
+    if (typeof readingTitle !== "string" || !readingTitle.trim()) {
+      return formatFailure("Add a valid reading title before structuring.");
+    }
+
+    if (readingTitle.length > 300) {
+      return formatFailure("Reading titles must stay below 300 characters.");
+    }
+
+    if (typeof teacherContent !== "string" || !teacherContent.trim()) {
+      return formatFailure(
+        "Add your original reading content before using Structure with Kingdom.",
+      );
+    }
+
+    if (teacherContent.length > 60_000) {
+      return formatFailure(
+        "This reading is too long to structure in one step. Please keep it below 60,000 characters.",
       );
     }
 
@@ -74,18 +83,36 @@ export async function POST(request: Request) {
       }),
     });
     const outputText = response.output_text?.trim();
-    if (!outputText) throw new Error("Kingdom returned an empty response.");
+    if (!outputText) {
+      throw new Error("Kingdom returned an empty response.");
+    }
 
-    const document = parseStructuredReadingDocument(
-      JSON.parse(cleanKingdomJson(outputText)),
-    );
+    const parsedJson = JSON.parse(cleanKingdomJson(outputText));
+    const document = parseStructuredReadingDocument(parsedJson);
     if (!document) {
-      throw new Error("Kingdom returned invalid structured reading data.");
+      return formatFailure(
+        "Kingdom could not format the complete reading without losing content. Your original reading has been kept unchanged.",
+      );
+    }
+
+    const editorText = structuredReadingToEditorText(document);
+    const completenessCheck = validateStructuredReadingCompleteness({
+      sourceText: teacherContent,
+      editorText,
+    });
+
+    if (!completenessCheck.ok) {
+      console.warn("Kingdom reading completeness check failed:", {
+        reason: completenessCheck.reason,
+      });
+      return formatFailure(
+        "Kingdom could not format the complete reading without losing content. Your original reading has been kept unchanged.",
+      );
     }
 
     return NextResponse.json({
       success: true,
-      editorText: structuredReadingToEditorText(document),
+      editorText,
     });
   } catch (error) {
     console.error("Kingdom reading structure error:", {

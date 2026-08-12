@@ -105,9 +105,6 @@ export function TeacherSubjectClassroomPage({
   const [readingWorkflow, setReadingWorkflow] = useState<
     "write" | "generate" | null
   >(null);
-  const [structureMode, setStructureMode] = useState<
-    "formatting_only" | "formatting_and_language"
-  >("formatting_only");
   const [isProcessingReading, setIsProcessingReading] = useState(false);
   const [readingKingdomError, setReadingKingdomError] = useState("");
   const [learnerLevel, setLearnerLevel] = useState("");
@@ -734,7 +731,7 @@ const structureReadingWithKingdom = async () => {
         subjectKey,
         readingTitle: readingTitle.trim(),
         teacherContent: readingText,
-        mode: structureMode,
+        mode: "formatting_only",
       }),
     });
     const result = (await response.json()) as {
@@ -1266,40 +1263,11 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
 
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <p className="font-bold text-slate-900">Structure with Kingdom</p>
-          <div className="mt-3 grid gap-2">
-            <button
-              type="button"
-              onClick={() => setStructureMode("formatting_only")}
-              className={`rounded-xl border p-3 text-left text-sm ${
-                structureMode === "formatting_only"
-                  ? "border-amber-500 bg-white"
-                  : "border-amber-100 bg-amber-50"
-              }`}
-            >
-              <span className="font-bold">Formatting only</span>
-              <span className="mt-1 block text-slate-600">
-                Preserve wording and organise the existing content.
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() =>
-                setStructureMode("formatting_and_language")
-              }
-              className={`rounded-xl border p-3 text-left text-sm ${
-                structureMode === "formatting_and_language"
-                  ? "border-amber-500 bg-white"
-                  : "border-amber-100 bg-amber-50"
-              }`}
-            >
-              <span className="font-bold">
-                Formatting and language polish
-              </span>
-              <span className="mt-1 block text-slate-600">
-                Improve clarity and flow while preserving factual meaning.
-              </span>
-            </button>
-          </div>
+          <p className="mt-3 text-sm text-slate-700">
+            Formatting only preserves the teacher&apos;s final academic content
+            and applies structure without rewriting, shortening, or moving
+            sections.
+          </p>
           <button
             type="button"
             onClick={structureReadingWithKingdom}

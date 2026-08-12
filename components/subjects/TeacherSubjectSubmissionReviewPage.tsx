@@ -5,6 +5,7 @@ import { ArrowLeft, BookOpen, Clock } from "lucide-react";
 import TeacherSubmissionReviewForm from "@/components/activities/TeacherSubmissionReviewForm";
 import { StructuredReadingContent } from "@/components/readings/StructuredReadingContent";
 import { getSubjectSubmissionReview } from "@/lib/supabase/activityReviewReader";
+import { getSubmissionTiming } from "@/lib/activities/submissionTiming";
 import {
   buildSubjectRoute,
   getSubjectConfiguration,
@@ -14,17 +15,6 @@ import {
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function getSubmissionDateKey(submittedAt: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Africa/Johannesburg",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(submittedAt));
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-
-  return `${values.year}-${values.month}-${values.day}`;
-}
 
 export async function TeacherSubjectSubmissionReviewPage({
   params,
@@ -97,11 +87,10 @@ export async function TeacherSubjectSubmissionReviewPage({
       timeZone: "Africa/Johannesburg",
     },
   );
-  const timing = !review.activity.dueDate
-    ? { label: "Due date not set", className: "bg-slate-100 text-slate-600" }
-    : getSubmissionDateKey(review.submittedAt) > review.activity.dueDate
-      ? { label: "Late", className: "bg-red-100 text-red-700" }
-      : { label: "On time", className: "bg-green-100 text-green-700" };
+  const timing = getSubmissionTiming(
+    review.submittedAt,
+    review.activity.dueDate,
+  );
 
   return (
     <main
