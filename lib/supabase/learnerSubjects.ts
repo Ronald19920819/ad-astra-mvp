@@ -4,6 +4,7 @@ import {
   getAuthenticatedLearnerProfile,
 } from "@/lib/supabase/learnerProfile";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSubjectLearnerOverview } from "@/lib/supabase/businessStudiesLearnerOverview";
 import { resolveCurrentTopicTitle } from "@/lib/subjects/currentTopic";
 import {
   getSubjectConfigurationByDatabaseId,
@@ -15,6 +16,7 @@ export type LearnerSubjectCardData = {
   subjectKey: SubjectKey;
   approvedStatusLabel: "Active";
   currentTopic: string | null;
+  overallMark: number | null;
 };
 
 type SubjectLessonTopicRow = {
@@ -44,6 +46,7 @@ export async function getAuthenticatedLearnerSubjectCards() {
 
   const approvedSubjectIds = profile.approvedSubjects.map((subject) => subject.id);
   const subjectTopicMap = new Map<string, string | null>();
+  const overallMarkMap = new Map<string, number | null>();
 
   if (approvedSubjectIds.length > 0) {
     const admin = createSupabaseAdminClient();
@@ -75,6 +78,31 @@ export async function getAuthenticatedLearnerSubjectCards() {
         }),
       );
     }
+
+    const subjectOverviews = await Promise.all(
+      approvedSubjectIds.map(async (subjectId) => {
+        try {
+          const overview = await getSubjectLearnerOverview(profile.userId, subjectId);
+          return {
+            subjectId,
+            overallMark: overview.progress.overallMark,
+          };
+        } catch (error) {
+          console.error("Unable to load learner subject-card overall mark:", {
+            subjectId,
+            error,
+          });
+          return {
+            subjectId,
+            overallMark: null,
+          };
+        }
+      }),
+    );
+
+    for (const overview of subjectOverviews) {
+      overallMarkMap.set(overview.subjectId, overview.overallMark);
+    }
   }
 
   const subjectCards = profile.approvedSubjects
@@ -87,6 +115,7 @@ export async function getAuthenticatedLearnerSubjectCards() {
         subjectKey: configuration.key,
         approvedStatusLabel: "Active" as const,
         currentTopic: subjectTopicMap.get(subject.id) ?? null,
+        overallMark: overallMarkMap.get(subject.id) ?? null,
       };
     })
     .filter(

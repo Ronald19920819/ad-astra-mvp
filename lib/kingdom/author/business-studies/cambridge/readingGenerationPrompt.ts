@@ -1,5 +1,6 @@
 import { buildKingdomPromptPipeline } from "../../../promptPipeline";
 import type { KingdomSubjectContext } from "../../../subjectContext";
+import { buildLanguageReadingSourceIntegrityPrompt } from "../../../../subjects/languageSourceIntegrity";
 
 type ReadingGenerationPromptInput = {
   subjectContext: KingdomSubjectContext;
@@ -11,6 +12,13 @@ type ReadingGenerationPromptInput = {
 export function buildReadingGenerationPrompt(
   input: ReadingGenerationPromptInput,
 ) {
+  const languageSourceIntegrityPrompt =
+    buildLanguageReadingSourceIntegrityPrompt({
+      subjectKey: input.subjectContext.subjectKey,
+      readingTitle: input.readingTitle,
+      instruction: input.instruction,
+    });
+
   return buildKingdomPromptPipeline({
     subjectContext: input.subjectContext,
     roleInstruction:
@@ -31,7 +39,7 @@ export function buildReadingGenerationPrompt(
 - Include an introduction, logically ordered main content, relevant definitions and examples, and a concise summary or key takeaways.
 - Use lists and tables only where they materially improve understanding.
 - Do not force every available block type into the reading.
-- Do not include citations you cannot verify.
+- Do not include citations you cannot verify.${languageSourceIntegrityPrompt}
 
 Return JSON only:
 {

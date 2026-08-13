@@ -1,6 +1,7 @@
 import { getKingdomAuthorConstitution } from "./constitution";
 import { buildKingdomPromptPipeline } from "../../../promptPipeline";
 import type { KingdomSubjectContext } from "../../../subjectContext";
+import { buildLanguageActivitySourceIntegrityPrompt } from "../../../../subjects/languageSourceIntegrity";
 
 type KingdomQuestionPlan = {
   id: number;
@@ -36,6 +37,11 @@ export function buildBusinessStudiesKingdomPrompt({
     assessmentObjectives: question.ao,
     guidance: question.guidance,
   }));
+  const languageSourceIntegrityPrompt =
+    buildLanguageActivitySourceIntegrityPrompt({
+      subjectKey: subjectContext.subjectKey,
+      lessonReading,
+    });
 
   return buildKingdomPromptPipeline({
     subjectContext,
@@ -49,7 +55,7 @@ export function buildBusinessStudiesKingdomPrompt({
       activityTitle: activityTitle || "Untitled Activity",
       questionPlans,
     },
-    prompt: `${getKingdomAuthorConstitution(subjectContext)}
+    prompt: `${getKingdomAuthorConstitution(subjectContext)}${languageSourceIntegrityPrompt}
 
 Generate one examination-style question for each question plan.
 

@@ -1,13 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Pencil, Sparkles } from "lucide-react";
 import type { TeacherSubmissionReview } from "@/lib/supabase/activityReviewReader";
+import { calculateTeacherReviewScore } from "@/lib/activities/teacherReviewScoring";
 import {
+  buildSubjectRoute,
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
+
+function buildInitialMarks(review: TeacherSubmissionReview) {
+  return Object.fromEntries(
+    review.questions.map((question) => [
+      question.answer.id,
+      String(question.answer.teacherMark ?? question.answer.kingdomMark ?? ""),
+    ]),
+  );
+}
+
+function buildInitialFeedback(review: TeacherSubmissionReview) {
+  return Object.fromEntries(
+    review.questions.map((question) => [
+      question.answer.id,
+      question.answer.teacherFeedback ?? "",
+    ]),
+  );
+}
 
 export default function TeacherSubmissionReviewForm({
   review,
@@ -20,22 +40,10 @@ export default function TeacherSubmissionReviewForm({
   const router = useRouter();
   const isReturned = review.status === "returned";
   const [teacherMarks, setTeacherMarks] = useState<Record<string, string>>(
-    Object.fromEntries(
-      review.questions.map((question) => [
-        question.answer.id,
-        String(question.answer.teacherMark ?? question.answer.kingdomMark ?? ""),
-      ]),
-    ),
+    buildInitialMarks(review),
   );
-  const [teacherFeedback, setTeacherFeedback] = useState<
-    Record<string, string>
-  >(
-    Object.fromEntries(
-      review.questions.map((question) => [
-        question.answer.id,
-        question.answer.teacherFeedback ?? "",
-      ]),
-    ),
+  const [teacherFeedback, setTeacherFeedback] = useState<Record<string, string>>(
+    buildInitialFeedback(review),
   );
   const [teacherComment, setTeacherComment] = useState(
     review.teacherComment ?? "",
@@ -43,9 +51,59 @@ export default function TeacherSubmissionReviewForm({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
   const [isReturning, setIsReturning] = useState(false);
+  const [isEditingReturnedReview, setIsEditingReturnedReview] = useState(false);
+
+  const isEditable = !isReturned || isEditingReturnedReview;
+  const originalMaximumTotal = review.questions.reduce(
+    (total, question) => total + question.maximumMarks,
+    0,
+  );
+
+  const scorePreview = useMemo(() => {
+    const entries = review.questions.flatMap((question) => {
+      const markValue = teacherMarks[question.answer.id]?.trim() ?? "";
+      if (!markValue) return [];
+
+      const teacherMark = Number(markValue);
+      if (!Number.isInteger(teacherMark)) return [];
+
+      try {
+        return [
+          calculateTeacherReviewScore([
+            {
+              maximumMarks: question.maximumMarks,
+              teacherMark,
+            },
+          ]),
+        ];
+      } catch {
+        return [];
+      }
+    });
+
+    const earnedMarks = entries.reduce((total, entry) => total + entry.earnedMarks, 0);
+    const maximumMarks = entries.reduce((total, entry) => total + entry.maximumMarks, 0);
+
+    return {
+      earnedMarks,
+      maximumMarks,
+      percentage:
+        originalMaximumTotal > 0
+          ? Number(((earnedMarks / originalMaximumTotal) * 100).toFixed(2))
+          : 0,
+    };
+  }, [originalMaximumTotal, review.questions, teacherMarks]);
+
+  function resetToSavedReview() {
+    setTeacherMarks(buildInitialMarks(review));
+    setTeacherFeedback(buildInitialFeedback(review));
+    setTeacherComment(review.teacherComment ?? "");
+    setFieldErrors({});
+    setSubmitError("");
+  }
 
   async function returnToLearner() {
-    if (isReturned || isReturning) return;
+    if (isReturning) return;
 
     const errors: Record<string, string> = {};
     const answers = review.questions.map((question) => {
@@ -97,7 +155,8 @@ export default function TeacherSubmissionReviewForm({
         );
       }
 
-      router.push(subject.routes.teacherReview);
+      setIsEditingReturnedReview(false);
+      router.push(buildSubjectRoute(subject, "teacherReview"));
       router.refresh();
     } catch (error) {
       setSubmitError(
@@ -112,6 +171,31 @@ export default function TeacherSubmissionReviewForm({
 
   return (
     <>
+      <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-slate-900">Review Summary</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Current score preview: {scorePreview.earnedMarks}/{originalMaximumTotal}
+              {" "}
+              ({scorePreview.percentage.toFixed(2)}%)
+            </p>
+          </div>
+          {isReturned && !isEditingReturnedReview && (
+            <button
+              type="button"
+              onClick={() => {
+                resetToSavedReview();
+                setIsEditingReturnedReview(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-2 text-sm font-bold text-orange-600"
+            >
+              <Pencil size={16} /> Edit Review
+            </button>
+          )}
+        </div>
+      </section>
+
       <div className="space-y-5">
         {review.questions.map((question) => (
           <section
@@ -175,7 +259,7 @@ export default function TeacherSubmissionReviewForm({
                   step={1}
                   min={0}
                   max={question.maximumMarks}
-                  disabled={isReturned}
+                  disabled={!isEditable}
                   value={teacherMarks[question.answer.id] ?? ""}
                   onChange={(event) => {
                     setTeacherMarks((current) => ({
@@ -203,7 +287,7 @@ export default function TeacherSubmissionReviewForm({
                 Teacher Comment
               </label>
               <textarea
-                disabled={isReturned}
+                disabled={!isEditable}
                 value={teacherFeedback[question.answer.id] ?? ""}
                 onChange={(event) =>
                   setTeacherFeedback((current) => ({
@@ -224,26 +308,47 @@ export default function TeacherSubmissionReviewForm({
           Teacher&apos;s overall comment
         </label>
         <textarea
-          disabled={isReturned}
+          disabled={!isEditable}
           value={teacherComment}
           onChange={(event) => setTeacherComment(event.target.value)}
           placeholder="Add an overall comment for the learner..."
           className="min-h-[120px] w-full rounded-2xl border border-slate-200 p-3 text-sm outline-none focus:border-orange-300 disabled:bg-slate-100"
         />
 
-        {isReturned ? (
+        {isReturned && !isEditingReturnedReview ? (
           <p className="mt-4 rounded-2xl bg-green-50 p-3 text-center text-sm font-bold text-green-700">
             Status: Returned
           </p>
         ) : (
-          <button
-            type="button"
-            onClick={returnToLearner}
-            disabled={isReturning}
-            className="mt-4 w-full rounded-2xl bg-orange-500 py-4 font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-60"
-          >
-            {isReturning ? "Returning..." : "Return to Learner"}
-          </button>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={returnToLearner}
+              disabled={isReturning}
+              className="w-full rounded-2xl bg-orange-500 py-4 font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-60"
+            >
+              {isReturning
+                ? isReturned
+                  ? "Updating..."
+                  : "Returning..."
+                : isReturned
+                  ? "Update & Return Review"
+                  : "Return to Learner"}
+            </button>
+            {isReturned && isEditingReturnedReview && (
+              <button
+                type="button"
+                onClick={() => {
+                  resetToSavedReview();
+                  setIsEditingReturnedReview(false);
+                }}
+                disabled={isReturning}
+                className="w-full rounded-2xl border border-slate-200 bg-white py-4 font-bold text-slate-700 shadow-sm disabled:opacity-60"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         )}
 
         {submitError && (

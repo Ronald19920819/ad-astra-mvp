@@ -3,6 +3,7 @@ import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
+import { calculateTeacherReviewScore } from "@/lib/activities/teacherReviewScoring";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import { isActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
 const uuidPattern =
@@ -109,13 +110,6 @@ export async function POST(
       return NextResponse.json(
         { error: "Submission not found.", code: "NOT_FOUND" },
         { status: 404 },
-      );
-    }
-
-    if (submission.status === "returned") {
-      return NextResponse.json(
-        { error: "This submission has already been returned.", code: "ALREADY_RETURNED" },
-        { status: 409 },
       );
     }
 
@@ -241,21 +235,25 @@ export async function POST(
       );
     }
 
-    let finalMark = 0;
     const now = new Date().toISOString();
+    const scoreSummary = calculateTeacherReviewScore(
+      answers.map((answer) => {
+        const submittedAnswer = submittedAnswerById.get(answer.id)!;
+        const maximumMark = maximumMarks.get(answer.question_id);
+
+        if (maximumMark === undefined) {
+          throw new RangeError("Submission questions do not match this activity.");
+        }
+
+        return {
+          maximumMarks: maximumMark,
+          teacherMark: submittedAnswer.teacherMark,
+        };
+      }),
+    );
+
     const updatedAnswers = answers.map((answer) => {
       const submittedAnswer = submittedAnswerById.get(answer.id)!;
-      const maximumMark = maximumMarks.get(answer.question_id);
-
-      if (
-        maximumMark === undefined ||
-        submittedAnswer.teacherMark < 0 ||
-        submittedAnswer.teacherMark > maximumMark
-      ) {
-        throw new RangeError("A teacher mark is outside the allowed range.");
-      }
-
-      finalMark += submittedAnswer.teacherMark;
 
       return {
         ...answer,
@@ -274,7 +272,7 @@ export async function POST(
             0,
           ));
 
-    if (finalMark > originalTotalMarks) {
+    if (scoreSummary.earnedMarks > originalTotalMarks) {
       throw new RangeError("The final mark exceeds the submitted total.");
     }
 
@@ -288,7 +286,7 @@ export async function POST(
       .from("activity_submissions")
       .update({
         status: "returned",
-        final_mark: finalMark,
+        final_mark: scoreSummary.earnedMarks,
         teacher_comment: teacherComment.trim() || null,
         reviewed_at: now,
         reviewed_by: profileId,
@@ -316,7 +314,11 @@ export async function POST(
       throw submissionUpdateError;
     }
 
-    return NextResponse.json({ success: true, finalMark });
+    return NextResponse.json({
+      success: true,
+      finalMark: scoreSummary.earnedMarks,
+      finalPercentage: scoreSummary.percentage,
+    });
   } catch (error) {
     if (error instanceof RangeError) {
       return NextResponse.json(

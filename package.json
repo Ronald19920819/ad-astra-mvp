@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "reset-dev": "node scripts/reset-development-data.mjs"
+    "reset-dev": "node scripts/reset-development-data.mjs",
+    "audit-language-source-integrity": "node scripts/run-language-source-integrity-audit.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -29,3 +30,4 @@
     "typescript": "^5"
   }
 }
+

@@ -11,10 +11,79 @@ import {
   getSubjectConfiguration,
   isSubjectKey,
 } from "@/lib/subjects/subjectConfig";
+import {
+  hasSufficientEvidenceForQuestion,
+  isLanguageSubjectKey,
+} from "@/lib/subjects/languageSourceIntegrity";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+type ActivityQuestionPlan = {
+  id: number;
+  paper?: string;
+  questionType?: string;
+  marks?: string;
+  ao?: string;
+  guidance?: string;
+};
+
+type GeneratedActivityQuestion = {
+  id: number;
+  questionText: string;
+};
+
+function validateLanguageSourceIntegrity(args: {
+  subjectKey: Parameters<typeof getSubjectConfiguration>[0];
+  readingContent: string;
+  generatedQuestions: GeneratedActivityQuestion[];
+  plannedQuestions: ActivityQuestionPlan[];
+}) {
+  if (!isLanguageSubjectKey(args.subjectKey)) {
+    return [] as string[];
+  }
+
+  const planById = new Map(
+    args.plannedQuestions.map((question) => [question.id, question]),
+  );
+
+  return args.generatedQuestions.flatMap((question) => {
+    const plan = planById.get(question.id);
+    const result = hasSufficientEvidenceForQuestion({
+      subjectKey: args.subjectKey,
+      questionText: question.questionText,
+      questionType: plan?.questionType ?? null,
+      guidance: plan?.guidance ?? null,
+      readingContent: args.readingContent,
+    });
+
+    if (result.ok) {
+      return [];
+    }
+
+    if (result.reason === "not_required" || result.reason === "sufficient") {
+      return [];
+    }
+
+    const reasons: Record<typeof result.reason, string> = {
+      no_substantial_source:
+        "the lesson reading does not contain a substantial learner-facing source",
+      insufficient_examples:
+        "the lesson reading does not contain enough defensible evidence for the requested examples",
+      missing_second_text:
+        "the lesson reading does not contain two suitable texts to compare",
+      insufficient_structure:
+        "the lesson reading does not contain enough structure to support the requested beginning/end analysis",
+      insufficient_quoted_material:
+        "the lesson reading does not contain enough quotable material for the requested evidence",
+    };
+
+    return [
+      `Question ${question.id} is not source aligned because ${reasons[result.reason]}. Generated text: ${question.questionText}`,
+    ];
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -136,6 +205,18 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedQuestions = (questions as ActivityQuestionPlan[]).map(
+      (question) => ({
+        id: question.id,
+        paper: String(question.paper ?? ""),
+        questionType: String(question.questionType ?? ""),
+        marks: String(question.marks ?? ""),
+        ao: typeof question.ao === "string" ? question.ao : "",
+        guidance:
+          typeof question.guidance === "string" ? question.guidance : "",
+      }),
+    );
+
     const subjectContext = buildKingdomSubjectContext({
       subjectKey,
       role: "Author",
@@ -146,7 +227,7 @@ export async function POST(request: Request) {
       lessonTitle: lesson.title,
       lessonReading,
       activityTitle,
-      questions,
+      questions: normalizedQuestions,
     });
 
     const response = await openai.responses.create({
@@ -168,12 +249,32 @@ export async function POST(request: Request) {
       .replace(/^```\s*/i, "")
       .replace(/\s*```$/i, "");
 
-    const generatedActivity = JSON.parse(cleanedOutput);
+    const generatedActivity = JSON.parse(cleanedOutput) as {
+      questions?: GeneratedActivityQuestion[];
+    };
 
     if (!Array.isArray(generatedActivity.questions)) {
       return NextResponse.json(
         { error: "Kingdom returned an invalid question structure." },
         { status: 500 }
+      );
+    }
+
+    const sourceIntegrityIssues = validateLanguageSourceIntegrity({
+      subjectKey,
+      readingContent: readingMaterial.content_text ?? lessonReading,
+      generatedQuestions: generatedActivity.questions,
+      plannedQuestions: normalizedQuestions,
+    });
+
+    if (sourceIntegrityIssues.length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Kingdom generated one or more language questions that require source evidence the learner has not actually been given. Review the reading source material or regenerate with source-aligned questions.",
+          details: sourceIntegrityIssues,
+        },
+        { status: 422 },
       );
     }
 

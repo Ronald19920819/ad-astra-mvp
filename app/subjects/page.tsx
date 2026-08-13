@@ -27,6 +27,7 @@ type SubjectCardData = {
   subjectKey: SubjectKey;
   approvedStatusLabel: "Active";
   currentTopic: string | null;
+  overallMark: number | null;
 };
 
 export const dynamic = "force-dynamic";
@@ -105,9 +106,17 @@ export default async function SubjectsPage() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-5">
-            {subjectCards.map(({ subjectKey, approvedStatusLabel, currentTopic }) => {
+            {subjectCards.map(({ subjectKey, approvedStatusLabel, currentTopic, overallMark }) => {
               const subject = getSubjectConfiguration(subjectKey);
               const Icon = subjectIcons[subject.iconKey];
+              const overallMarkPercentage =
+                overallMark === null || overallMark === undefined
+                  ? null
+                  : Math.round(overallMark);
+              const overallMarkDisplay =
+                overallMarkPercentage === null ? "N/A" : `${overallMarkPercentage}%`;
+              const overallMarkLabel =
+                overallMarkPercentage === null ? "Not available" : overallMarkDisplay;
 
               return (
                 <PendingNavigationLink
@@ -136,7 +145,7 @@ export default async function SubjectsPage() {
                             className="font-bold"
                             style={{ color: subject.colourTheme.primary }}
                           >
-                            Not available
+                            {overallMarkLabel}
                           </span>
                         </p>
                         <p className="mt-1">
@@ -151,13 +160,19 @@ export default async function SubjectsPage() {
                       <div
                         className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full"
                         style={{
-                          background: "#E5E7EB",
+                          background: `conic-gradient(${subject.colourTheme.primary} ${
+                            (overallMarkPercentage ?? 0) * 3.6
+                          }deg, #E5E7EB 0deg)`,
                         }}
-                        aria-label="Overall Mark not available"
+                        aria-label={
+                          overallMarkPercentage === null
+                            ? "Overall Mark not available"
+                            : `Overall Mark ${overallMarkDisplay}`
+                        }
                       >
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
                           <span className="text-sm font-bold text-slate-900">
-                            N/A
+                            {overallMarkDisplay}
                           </span>
                         </div>
                       </div>
@@ -185,7 +200,7 @@ export default async function SubjectsPage() {
                           className="font-bold"
                           style={{ color: subject.colourTheme.primary }}
                         >
-                          Not available
+                          {overallMarkLabel}
                         </span>
                       </p>
                       <p className="mt-1">
@@ -200,13 +215,19 @@ export default async function SubjectsPage() {
                     <div
                       className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full"
                       style={{
-                        background: "#E5E7EB",
+                        background: `conic-gradient(${subject.colourTheme.primary} ${
+                          (overallMarkPercentage ?? 0) * 3.6
+                        }deg, #E5E7EB 0deg)`,
                       }}
-                      aria-label="Overall Mark not available"
+                      aria-label={
+                        overallMarkPercentage === null
+                          ? "Overall Mark not available"
+                          : `Overall Mark ${overallMarkDisplay}`
+                      }
                     >
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
                         <span className="text-sm font-bold text-slate-900">
-                          N/A
+                          {overallMarkDisplay}
                         </span>
                       </div>
                     </div>
