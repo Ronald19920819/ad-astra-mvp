@@ -81,3 +81,32 @@ export function serialiseKingdomSubjectContext(
     2,
   );
 }
+
+const lessonQuizAssessmentQuestionConventions = new Set([
+  "Use Cambridge Business Studies command words.",
+  "Respect AO labels and mark allocations.",
+]);
+
+const lessonQuizAssessmentTeacherPreferenceKeys = new Set([
+  "useCambridgeCommandWords",
+  "showAssessmentObjectiveLabels",
+]);
+
+export function buildLessonQuizSubjectContext(
+  context: KingdomSubjectContext,
+): KingdomSubjectContext {
+  const teacherPreferences = Object.fromEntries(
+    Object.entries(context.teacherPreferences).filter(
+      ([key]) => !lessonQuizAssessmentTeacherPreferenceKeys.has(key),
+    ),
+  );
+
+  return {
+    ...context,
+    assessmentStyle: "Reading-engagement retrieval quiz",
+    questionConventions: context.questionConventions.filter(
+      (rule) => !lessonQuizAssessmentQuestionConventions.has(rule),
+    ),
+    teacherPreferences,
+  };
+}

@@ -50,7 +50,7 @@ test("reading structure stays formatting-only and preserves order", () => {
   assert.doesNotMatch(formattingPrompt, /Improve grammar, clarity, flow/);
 });
 
-test("lesson quiz generation keeps the exact five-question multiple-choice retrieval contract", () => {
+test("lesson quiz generation strips Cambridge assessment instructions from the compiled prompt", () => {
   const prompt = buildLessonQuizPrompt({
     subjectContext: authorContext,
     readingTitle: "Business Inputs",
@@ -59,14 +59,22 @@ test("lesson quiz generation keeps the exact five-question multiple-choice retri
 
   assert.match(prompt, /exactly 5 multiple-choice reading-retrieval questions/i);
   assert.match(prompt, /This is NOT a Cambridge exam/);
-  assert.match(prompt, /This is only a reading-engagement check/);
   assert.match(prompt, /Exactly one option must be unquestionably correct/);
   assert.match(prompt, /"optionA": "\.\.\."/);
   assert.match(prompt, /"optionD": "\.\.\."/);
-  assert.match(prompt, /"correctOption": "A"/);
+  assert.match(prompt, /"correctOption": "B"/);
+  assert.doesNotMatch(prompt, /Paper 1/i);
+  assert.doesNotMatch(prompt, /Paper 2/i);
+  assert.doesNotMatch(prompt, /Use Cambridge Business Studies command words\./i);
+  assert.doesNotMatch(prompt, /Respect AO labels and mark allocations\./i);
+  assert.doesNotMatch(prompt, /\bAO1\b|\bAO2\b|\bAO3\b|\bAO4\b/);
+  assert.doesNotMatch(prompt, /assessment objectives/i);
+  assert.doesNotMatch(prompt, /EXPLAIN TWO/i);
+  assert.doesNotMatch(prompt, /RECOMMEND AND JUSTIFY/i);
+  assert.doesNotMatch(prompt, /JUSTIFY\b/i);
 });
 
-test("activity generation preserves question plans and output IDs", () => {
+test("activity generation preserves question plans, output IDs and Cambridge assessment rules", () => {
   const prompt = buildBusinessStudiesKingdomPrompt({
     subjectContext: authorContext,
     lessonTitle: "Business Inputs",
@@ -86,10 +94,10 @@ test("activity generation preserves question plans and output IDs", () => {
 
   assert.match(prompt, /Operations Activity/);
   assert.match(prompt, /"assessmentObjectives": "AO1"/);
+  assert.match(prompt, /Use Cambridge Business Studies command words\./);
+  assert.match(prompt, /Respect AO labels and mark allocations\./);
+  assert.match(prompt, /For Paper 1 questions, keep the wording focused and concise\./);
+  assert.match(prompt, /For Paper 2 questions, use the case-study context and require applied reasoning where appropriate\./);
   assert.match(prompt, /returned id must match/i);
   assert.match(prompt, /Do not include answers/);
 });
-
-
-
-

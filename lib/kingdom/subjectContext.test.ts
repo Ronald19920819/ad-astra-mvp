@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildKingdomPromptPipeline } from "./promptPipeline";
-import { buildKingdomSubjectContext } from "./subjectContext";
+import { buildKingdomSubjectContext, buildLessonQuizSubjectContext } from "./subjectContext";
 import {
   getSubjectConfigurationByDatabaseId,
   subjectConfigurations,
@@ -90,6 +90,30 @@ test("Business Studies context includes role, framework and preferences", () => 
   assert.equal(context.taskType, "Generate lesson reading");
   assert.equal(context.teacherPreferences.useCambridgeCommandWords, true);
   assert.equal(context.teacherPreferences.preferredDepth, "concise");
+});
+
+test("lesson quiz subject context strips Business Studies assessment-specific metadata", () => {
+  const context = buildKingdomSubjectContext({
+    subjectKey: "business-studies",
+    role: "Author",
+    taskType: "Generate lesson reading quiz",
+    teacherPreferences: {
+      preferredDepth: "concise",
+    },
+  });
+  const lessonQuizContext = buildLessonQuizSubjectContext(context);
+
+  assert.equal(lessonQuizContext.assessmentStyle, "Reading-engagement retrieval quiz");
+  assert.deepEqual(lessonQuizContext.questionConventions, []);
+  assert.equal(lessonQuizContext.teacherPreferences.preferredDepth, "concise");
+  assert.equal(
+    lessonQuizContext.teacherPreferences.useCambridgeCommandWords,
+    undefined,
+  );
+  assert.equal(
+    lessonQuizContext.teacherPreferences.showAssessmentObjectiveLabels,
+    undefined,
+  );
 });
 
 test("Kingdom prompt pipeline preserves the required section order", () => {
