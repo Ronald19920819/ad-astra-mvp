@@ -146,7 +146,7 @@ export default function ResetPasswordPage() {
                   disabled={!isRecoveryReady}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="w-full min-w-0 rounded-2xl border border-blue-100 py-3 pl-4 pr-16 outline-none focus:border-[#508DB1] disabled:bg-slate-50"
+                  className="w-full min-w-0 rounded-2xl border border-blue-100 bg-white py-3 pl-4 pr-16 text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1] disabled:bg-slate-50 disabled:text-slate-500"
                 />
                 <button
                   type="button"
@@ -170,7 +170,7 @@ export default function ResetPasswordPage() {
                   disabled={!isRecoveryReady}
                   value={confirmation}
                   onChange={(event) => setConfirmation(event.target.value)}
-                  className="w-full min-w-0 rounded-2xl border border-blue-100 py-3 pl-4 pr-16 outline-none focus:border-[#508DB1] disabled:bg-slate-50"
+                  className="w-full min-w-0 rounded-2xl border border-blue-100 bg-white py-3 pl-4 pr-16 text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1] disabled:bg-slate-50 disabled:text-slate-500"
                 />
                 <button
                   type="button"
@@ -215,3 +215,4 @@ export default function ResetPasswordPage() {
     </main>
   );
 }
+

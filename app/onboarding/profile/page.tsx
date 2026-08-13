@@ -97,7 +97,7 @@ export default function LearnerProfileOnboardingPage() {
               required
               value={school}
               onChange={(event) => setSchool(event.target.value)}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#508DB1]"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
             />
           </label>
           <label className="block">
@@ -109,7 +109,7 @@ export default function LearnerProfileOnboardingPage() {
               value={gradeOrStage}
               onChange={(event) => setGradeOrStage(event.target.value)}
               placeholder="For example Grade 10 or Cambridge IGCSE"
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#508DB1]"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
             />
           </label>
 
@@ -131,3 +131,4 @@ export default function LearnerProfileOnboardingPage() {
     </main>
   );
 }
+

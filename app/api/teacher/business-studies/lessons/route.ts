@@ -3,6 +3,10 @@ import {
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
+import {
+  getLessonQuizCorrectAnswerText,
+  isCompleteLessonQuizQuestion,
+} from "@/lib/lessons/lessonQuiz";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -303,21 +307,17 @@ export async function POST(request: Request) {
         typeof lessonTitle !== "string" ||
         !lessonTitle.trim() ||
         !Array.isArray(questions) ||
-        questions.length !== 10 ||
+        questions.length !== 5 ||
         !questions.every(
           (question) =>
             isRecord(question) &&
             (question.questionId === undefined ||
               (typeof question.questionId === "string" &&
                 uuidPattern.test(question.questionId))) &&
-            typeof question.questionText === "string" &&
-            Boolean(question.questionText.trim()) &&
-            typeof question.answerText === "string" &&
-            Boolean(question.answerText.trim()) &&
-            question.marks === 1,
+            isCompleteLessonQuizQuestion(question),
         )
       ) {
-        return invalid("A complete 10-question lesson quiz is required.");
+        return invalid("A complete 5-question lesson quiz is required.");
       }
 
       const { data: existingQuiz, error: existingQuizError } = await admin
@@ -407,8 +407,8 @@ export async function POST(request: Request) {
           .from("activities")
           .update({
             title: `${lessonTitle.trim()} Quiz`,
-            instructions: "Answer all 10 questions.",
-            total_marks: 10,
+            instructions: "Choose the correct answer for each of the 5 questions.",
+            total_marks: 5,
           })
           .eq("id", existingActivity.id);
         if (activityUpdateError) throw activityUpdateError;
@@ -423,15 +423,28 @@ export async function POST(request: Request) {
           question_text: String(
             isRecord(question) ? question.questionText : "",
           ).trim(),
-          answer_text: String(
-            isRecord(question) ? question.answerText : "",
+          answer_text: getLessonQuizCorrectAnswerText({
+            optionA: String(isRecord(question) ? question.optionA : "").trim(),
+            optionB: String(isRecord(question) ? question.optionB : "").trim(),
+            optionC: String(isRecord(question) ? question.optionC : "").trim(),
+            optionD: String(isRecord(question) ? question.optionD : "").trim(),
+            correctOption: String(
+              isRecord(question) ? question.correctOption : "",
+            ).trim() as "A" | "B" | "C" | "D",
+          }),
+          option_a: String(isRecord(question) ? question.optionA : "").trim(),
+          option_b: String(isRecord(question) ? question.optionB : "").trim(),
+          option_c: String(isRecord(question) ? question.optionC : "").trim(),
+          option_d: String(isRecord(question) ? question.optionD : "").trim(),
+          correct_option: String(
+            isRecord(question) ? question.correctOption : "",
           ).trim(),
           marks: 1,
           display_order: index + 1,
           assessment_objective: null,
           guidance: null,
           paper: null,
-          question_type: null,
+          question_type: "multiple_choice",
         }));
         const { error: questionUpsertError } = await admin
           .from("activity_questions")
@@ -468,8 +481,8 @@ export async function POST(request: Request) {
         .from("activities")
         .insert({
           title: `${lessonTitle.trim()} Quiz`,
-          instructions: "Answer all 10 questions.",
-          total_marks: 10,
+          instructions: "Choose the correct answer for each of the 5 questions.",
+          total_marks: 5,
           lesson_material_id: quizMaterial.id,
           due_date: null,
         })
@@ -481,13 +494,24 @@ export async function POST(request: Request) {
         activity_id: activity.id,
         question_number: index + 1,
         question_text: String(question.questionText).trim(),
-        answer_text: String(question.answerText).trim(),
+        answer_text: getLessonQuizCorrectAnswerText({
+          optionA: String(question.optionA).trim(),
+          optionB: String(question.optionB).trim(),
+          optionC: String(question.optionC).trim(),
+          optionD: String(question.optionD).trim(),
+          correctOption: question.correctOption,
+        }),
+        option_a: String(question.optionA).trim(),
+        option_b: String(question.optionB).trim(),
+        option_c: String(question.optionC).trim(),
+        option_d: String(question.optionD).trim(),
+        correct_option: question.correctOption,
         marks: 1,
         display_order: index + 1,
         assessment_objective: null,
         guidance: null,
         paper: null,
-        question_type: null,
+        question_type: "multiple_choice",
       }));
       const { error: questionsError } = await admin
         .from("activity_questions")
@@ -506,3 +530,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
+
+
+

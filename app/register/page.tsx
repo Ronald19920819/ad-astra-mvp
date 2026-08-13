@@ -109,7 +109,7 @@ export default function LearnerRegistrationPage() {
                 autoComplete="given-name"
                 value={firstName}
                 onChange={(event) => setFirstName(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#508DB1]"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
               />
             </label>
             <label className="block">
@@ -121,7 +121,7 @@ export default function LearnerRegistrationPage() {
                 autoComplete="family-name"
                 value={surname}
                 onChange={(event) => setSurname(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#508DB1]"
+                className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
               />
             </label>
           </div>
@@ -136,7 +136,7 @@ export default function LearnerRegistrationPage() {
               autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#508DB1]"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
             />
           </label>
 
@@ -151,7 +151,7 @@ export default function LearnerRegistrationPage() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                className="w-full rounded-2xl border border-slate-300 py-3 pl-4 pr-16 text-sm outline-none focus:border-[#508DB1]"
+                className="w-full rounded-2xl border border-slate-300 bg-white py-3 pl-4 pr-16 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
               />
               <button
                 type="button"
@@ -174,7 +174,7 @@ export default function LearnerRegistrationPage() {
               autoComplete="new-password"
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-[#508DB1]"
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[#508DB1]"
             />
           </label>
 
@@ -206,3 +206,4 @@ export default function LearnerRegistrationPage() {
     </main>
   );
 }
+

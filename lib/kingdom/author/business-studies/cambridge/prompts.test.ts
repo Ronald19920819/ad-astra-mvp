@@ -50,17 +50,20 @@ test("reading structure stays formatting-only and preserves order", () => {
   assert.doesNotMatch(formattingPrompt, /Improve grammar, clarity, flow/);
 });
 
-test("lesson quiz generation keeps the exact ten one-mark contract", () => {
+test("lesson quiz generation keeps the exact five-question multiple-choice retrieval contract", () => {
   const prompt = buildLessonQuizPrompt({
     subjectContext: authorContext,
     readingTitle: "Business Inputs",
     readingText: "Inputs include land, labour, capital and enterprise.",
   });
 
-  assert.match(prompt, /exactly 10 factual reading-comprehension questions/i);
-  assert.match(prompt, /Every question is worth ONE mark/);
-  assert.match(prompt, /Questions must be answerable directly from the reading/);
-  assert.match(prompt, /"answerText": "\.\.\."/);
+  assert.match(prompt, /exactly 5 multiple-choice reading-retrieval questions/i);
+  assert.match(prompt, /This is NOT a Cambridge exam/);
+  assert.match(prompt, /This is only a reading-engagement check/);
+  assert.match(prompt, /Exactly one option must be unquestionably correct/);
+  assert.match(prompt, /"optionA": "\.\.\."/);
+  assert.match(prompt, /"optionD": "\.\.\."/);
+  assert.match(prompt, /"correctOption": "A"/);
 });
 
 test("activity generation preserves question plans and output IDs", () => {
@@ -86,3 +89,7 @@ test("activity generation preserves question plans and output IDs", () => {
   assert.match(prompt, /returned id must match/i);
   assert.match(prompt, /Do not include answers/);
 });
+
+
+
+

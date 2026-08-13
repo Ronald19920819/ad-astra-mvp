@@ -1,29 +1,21 @@
-import OpenAI from "openai";
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
 import { hasPassedLessonQuiz } from "@/lib/lessons/lessonAssessment";
 import {
-  buildBusinessStudiesLessonQuizMarkingPrompt,
-  parseBusinessStudiesLessonQuizMarking,
-} from "@/lib/kingdom/examiner/businessStudiesLessonQuiz";
-import {
-  parseReadingContent,
-  readingContentToPlainText,
-} from "@/lib/readings/structuredReading";
-import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+  isLessonQuizOptionLetter,
+  scoreLessonQuizAnswers,
+  type LessonQuizOptionLetter,
+  type StoredLessonQuizQuestion,
+} from "@/lib/lessons/lessonQuiz";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 type SubmittedAnswer = {
   questionId: string;
-  answer: string;
+  answer: LessonQuizOptionLetter;
 };
 
 function isSubmittedAnswer(value: unknown): value is SubmittedAnswer {
@@ -33,9 +25,7 @@ function isSubmittedAnswer(value: unknown): value is SubmittedAnswer {
   return (
     typeof answer.questionId === "string" &&
     answer.questionId.length > 0 &&
-    typeof answer.answer === "string" &&
-    answer.answer.trim().length > 0 &&
-    answer.answer.length <= 4000
+    isLessonQuizOptionLetter(answer.answer)
   );
 }
 
@@ -97,10 +87,7 @@ export async function POST(request: Request) {
       );
     }
     if (user) {
-      const access = await verifyLearnerSubjectAccess(
-        user.id,
-        lesson.subject_id,
-      );
+      const access = await verifyLearnerSubjectAccess(user.id, lesson.subject_id);
       if (!access.allowed) {
         return NextResponse.json(
           { error: "You are not enrolled in this subject." },
@@ -158,29 +145,52 @@ export async function POST(request: Request) {
     const { data: officialQuestions, error: questionsError } = await supabase
       .from("activity_questions")
       .select(
-        "id, question_text, answer_text, marks, assessment_objective, question_type, display_order",
+        "id, question_text, marks, display_order, option_a, option_b, option_c, option_d, correct_option",
       )
       .eq("activity_id", activity.id)
       .order("display_order", { ascending: true });
 
     if (questionsError) throw new Error(questionsError.message);
 
-    const officialQuestionIds = new Set(
-      (officialQuestions ?? []).map((question) => question.id),
-    );
+    const normalizedQuestions: StoredLessonQuizQuestion[] = (officialQuestions ?? [])
+      .flatMap((question) => {
+        if (
+          !question.question_text?.trim() ||
+          !Number.isInteger(question.marks) ||
+          question.marks <= 0 ||
+          typeof question.option_a !== "string" ||
+          !question.option_a.trim() ||
+          typeof question.option_b !== "string" ||
+          !question.option_b.trim() ||
+          typeof question.option_c !== "string" ||
+          !question.option_c.trim() ||
+          typeof question.option_d !== "string" ||
+          !question.option_d.trim() ||
+          !isLessonQuizOptionLetter(question.correct_option)
+        ) {
+          return [];
+        }
+
+        return [
+          {
+            id: question.id,
+            questionText: question.question_text,
+            marks: question.marks,
+            optionA: question.option_a.trim(),
+            optionB: question.option_b.trim(),
+            optionC: question.option_c.trim(),
+            optionD: question.option_d.trim(),
+            correctOption: question.correct_option,
+          },
+        ];
+      });
+
+    const officialQuestionIds = new Set(normalizedQuestions.map((question) => question.id));
 
     if (
       officialQuestionIds.size === 0 ||
       submittedAnswers.length !== officialQuestionIds.size ||
-      submittedAnswers.some(
-        (answer) => !officialQuestionIds.has(answer.questionId),
-      ) ||
-      officialQuestions?.some(
-        (question) =>
-          !question.answer_text?.trim() ||
-          !Number.isInteger(question.marks) ||
-          question.marks <= 0,
-      )
+      submittedAnswers.some((answer) => !officialQuestionIds.has(answer.questionId))
     ) {
       return NextResponse.json(
         { error: "The submitted questions do not match this lesson quiz." },
@@ -188,70 +198,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: readingMaterial, error: readingError } = await supabase
-      .from("lesson_materials")
-      .select("content_text")
-      .eq("lesson_id", lessonId)
-      .eq("material_type", "reading")
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (readingError) throw new Error(readingError.message);
-    const parsedReading = parseReadingContent(
-      readingMaterial?.content_text ?? null,
-    );
-    if (
-      parsedReading.kind === "malformed" &&
-      process.env.NODE_ENV === "development"
-    ) {
-      console.error("Lesson quiz reading could not be parsed:", { lessonId });
-    }
-    const lessonReading =
-      readingContentToPlainText(readingMaterial?.content_text ?? null).trim() ||
-      null;
-
-    const learnerAnswers = new Map(
-      submittedAnswers.map((answer) => [answer.questionId, answer.answer.trim()]),
-    );
-    const markingInput = officialQuestions.map((question) => ({
-      questionId: question.id,
-      questionText: question.question_text,
-      learnerAnswer: learnerAnswers.get(question.id) ?? "",
-      expectedAnswer: question.answer_text!,
-      maximumMark: question.marks,
-      assessmentObjective: question.assessment_objective,
-      questionType: question.question_type,
-    }));
-    const subjectContext = buildKingdomSubjectContext({
-      subjectKey: subject.key,
-      role: "Examiner",
-      taskType: "Mark lesson reading quiz",
-    });
-    const prompt = buildBusinessStudiesLessonQuizMarkingPrompt({
-      subjectContext,
-      lessonReading,
-      questions: markingInput,
-    });
-
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt,
-    });
-    const outputText = response.output_text?.trim();
-
-    if (!outputText) {
-      throw new Error("Kingdom returned an empty marking response.");
-    }
-
-    const results = parseBusinessStudiesLessonQuizMarking(
-      outputText,
-      markingInput,
-    );
-    const score = results.reduce((total, result) => total + result.mark, 0);
-    const total = markingInput.reduce(
-      (markTotal, question) => markTotal + question.maximumMark,
-      0,
+    const { results, score, total } = scoreLessonQuizAnswers(
+      normalizedQuestions,
+      submittedAnswers,
     );
     const passed = hasPassedLessonQuiz(score, total);
     let completionToken: string | null = null;
@@ -284,10 +233,10 @@ export async function POST(request: Request) {
       completionAvailable: Boolean(completionToken),
     });
   } catch (error) {
-    console.error("Kingdom lesson quiz marking error:", error);
+    console.error("Lesson quiz marking error:", error);
 
     return NextResponse.json(
-      { error: "Kingdom could not mark this quiz. Please try again." },
+      { error: "This quiz could not be marked. Please try again." },
       { status: 500 },
     );
   }

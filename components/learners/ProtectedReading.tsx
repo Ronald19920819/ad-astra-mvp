@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { CSSProperties } from "react";
 import { StructuredReadingContent } from "@/components/readings/StructuredReadingContent";
@@ -20,7 +20,7 @@ export function ProtectedReading({
       onCut={(event) => event.preventDefault()}
       onDragStart={(event) => event.preventDefault()}
       className={`select-none rounded-2xl border border-orange-100 bg-[#FFFDF9] p-5 shadow-inner ${
-        scrollable ? "max-h-[420px] overflow-y-auto" : ""
+        scrollable ? "max-h-[560px] overflow-y-auto lg:max-h-[720px]" : ""
       }`}
       style={
         {

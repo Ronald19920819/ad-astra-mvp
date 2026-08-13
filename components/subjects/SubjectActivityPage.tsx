@@ -168,6 +168,7 @@ export function SubjectActivityPage({
   const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>("idle");
   const [draftNotice, setDraftNotice] = useState("");
   const [draftLearnerId, setDraftLearnerId] = useState<string | null>(null);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const saveTimeoutRef = useRef<number | null>(null);
   const localDraftCacheKeyRef = useRef<string | null>(null);
   const latestAnswersRef = useRef<Record<string, string>>({});
@@ -196,6 +197,7 @@ export function SubjectActivityPage({
   const renderData =
     activityData ??
     (submissionSnapshot ? workspaceFromSnapshot(submissionSnapshot) : null);
+  const activeQuestionCount = renderData?.questions.length ?? 0;
 
   function applySavedSubmission(savedSubmission: SavedActivitySubmission) {
     setSubmission(savedSubmission);
@@ -519,6 +521,7 @@ export function SubjectActivityPage({
     latestAnswersRef.current = answers;
   }, [answers]);
 
+
   useEffect(() => {
     if (!activityData || isLoadingSubmission) return;
 
@@ -841,6 +844,16 @@ export function SubjectActivityPage({
     displayedLesson.term_number !== null &&
     displayedLesson.week_number !== null;
   const activitiesHref = buildSubjectRoute(subject, "learnerActivities");
+  const safeCurrentQuestionIndex =
+    activeQuestionCount <= 0
+      ? 0
+      : Math.min(currentQuestionIndex, activeQuestionCount - 1);
+  const activeQuestion = displayedQuestions[safeCurrentQuestionIndex] ?? null;
+  const activeSavedAnswer = activeQuestion
+    ? submission?.activity_submission_answers.find(
+        (answer) => answer.question_id === activeQuestion.id,
+      ) ?? null
+    : null;
 
   return (
     <main
@@ -902,126 +915,135 @@ export function SubjectActivityPage({
         </section>
         )}
 
-        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-3xl lg:p-6">
-          <div className="mb-4 flex min-w-0 items-center gap-3">
-            <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
-              <BookOpen className="text-[var(--subject-primary)]" size={22} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="break-words text-xl font-bold text-slate-900">
-                {displayedReading.title}
-              </h2>
-              <p className="break-words text-sm text-slate-500">
-                Reading Reference: Lesson {displayedLesson.lesson_number}
-              </p>
-            </div>
-          </div>
-          <ProtectedReading content={displayedReading.content_text} scrollable />
-        </section>
-
-        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
-              <SquarePen className="text-[var(--subject-primary)]" size={22} />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">
-                Activity Questions
-              </h2>
-              {displayedActivity.instructions && (
-                <p className="text-sm text-slate-500">
-                  {displayedActivity.instructions}
+        <div className="space-y-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
+            <div className="mb-4 flex min-w-0 items-center gap-3">
+              <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
+                <BookOpen className="text-[var(--subject-primary)]" size={22} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="break-words text-xl font-bold text-slate-900">
+                  {displayedReading.title}
+                </h2>
+                <p className="break-words text-sm text-slate-500">
+                  Reading Reference: Lesson {displayedLesson.lesson_number}
                 </p>
-              )}
-              {submissionSnapshot && (
-                <p className="mt-1 text-xs font-semibold text-slate-400">
-                  Activity version completed: Version{" "}
-                  {submissionSnapshot.activity.version}
-                </p>
-              )}
+              </div>
             </div>
-          </div>
+            <ProtectedReading content={displayedReading.content_text} scrollable />
+          </section>
 
-          {displayedQuestions.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-              No questions are available for this activity.
-            </p>
-          ) : (
-            <div className="w-full min-w-0 space-y-4">
-              {displayedQuestions.map((question) => (
-                <div
-                  key={question.id}
-                  className="w-full min-w-0 rounded-2xl bg-slate-50 p-4"
-                >
-                  <div className="flex min-w-0 items-start justify-between gap-3">
-                    <h3 className="min-w-0 font-bold text-slate-900">
-                      Question {question.question_number}
-                    </h3>
-                    <span className="shrink-0 text-xs font-semibold text-[var(--subject-primary)]">
-                      {question.marks}{" "}
-                      {question.marks === 1 ? "mark" : "marks"}
-                    </span>
-                  </div>
-                  <p className="mt-2 break-words text-sm font-semibold leading-6 text-slate-700">
-                    {question.question_text}
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
+                <SquarePen className="text-[var(--subject-primary)]" size={22} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-900">
+                  Activity Questions
+                </h2>
+                {displayedActivity.instructions && (
+                  <p className="text-sm text-slate-500">
+                    {displayedActivity.instructions}
                   </p>
-                  {question.assessment_objective && (
-                    <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--subject-primary)]">
-                      {question.assessment_objective}
-                    </p>
-                  )}
-                  <textarea
-                    disabled={Boolean(submission) || isSubmitting}
-                    value={answers[question.id] ?? ""}
-                    onChange={(event) => {
-                      const nextAnswers = {
-                        ...latestAnswersRef.current,
-                        [question.id]: event.target.value,
-                      };
-                      latestAnswersRef.current = nextAnswers;
-                      setAnswers(nextAnswers);
-                      writeLocalDraftCache({
-                        answers: nextAnswers,
-                        dirty: true,
-                      });
-                      setDraftSaveState(
-                        navigator.onLine ? "saving" : "offline",
-                      );
-                      setSubmissionMessage("");
-                      setDraftNotice(
-                        navigator.onLine ? "" : "Offline \u2014 saved on this device only",
-                      );
-                      scheduleDraftSave();
-                    }}
-                    onBlur={() => {
-                      void saveDraft("blur");
-                    }}
-                    placeholder="Type your answer here..."
-                    className="mt-3 min-h-[120px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100 lg:min-h-[144px]"
-                  />
-                  {submission?.activity_submission_answers.find(
-                    (answer) => answer.question_id === question.id,
-                  )?.kingdom_feedback && (() => {
-                    const savedAnswer =
-                      submission.activity_submission_answers.find(
-                        (answer) => answer.question_id === question.id,
-                      )!;
-
-                    return (
-                      <div className="mt-3 rounded-2xl bg-orange-50 p-3 text-sm text-slate-700">
-                        <p className="font-bold text-orange-600">
-                          Kingdom: {savedAnswer.kingdom_mark}/{question.marks}
-                        </p>
-                        <p className="mt-1">{savedAnswer.kingdom_feedback}</p>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ))}
+                )}
+                {submissionSnapshot && (
+                  <p className="mt-1 text-xs font-semibold text-slate-400">
+                    Activity version completed: Version{" "}
+                    {submissionSnapshot.activity.version}
+                  </p>
+                )}
+              </div>
             </div>
-          )}
-        </section>
 
+            {displayedQuestions.length === 0 || !activeQuestion ? (
+              <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                No questions are available for this activity.
+              </p>
+            ) : (
+              <div className="w-full min-w-0 rounded-2xl bg-slate-50 p-4 lg:flex lg:min-h-[720px] lg:flex-col">
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <h3 className="min-w-0 font-bold text-slate-900 font-sans">
+                    Question {safeCurrentQuestionIndex + 1} of {displayedQuestions.length}
+                  </h3>
+                  <span className="shrink-0 text-xs font-semibold text-[var(--subject-primary)]">
+                    {activeQuestion.marks}{" "}
+                    {activeQuestion.marks === 1 ? "mark" : "marks"}
+                  </span>
+                </div>
+                <p className="mt-2 break-words font-sans text-sm font-medium leading-6 text-slate-700">
+                  {activeQuestion.question_text}
+                </p>
+                {activeQuestion.assessment_objective && (
+                  <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--subject-primary)]">
+                    {activeQuestion.assessment_objective}
+                  </p>
+                )}
+                <textarea
+                  disabled={Boolean(submission) || isSubmitting}
+                  value={answers[activeQuestion.id] ?? ""}
+                  onChange={(event) => {
+                    const nextAnswers = {
+                      ...latestAnswersRef.current,
+                      [activeQuestion.id]: event.target.value,
+                    };
+                    latestAnswersRef.current = nextAnswers;
+                    setAnswers(nextAnswers);
+                    writeLocalDraftCache({
+                      answers: nextAnswers,
+                      dirty: true,
+                    });
+                    setDraftSaveState(
+                      navigator.onLine ? "saving" : "offline",
+                    );
+                    setSubmissionMessage("");
+                    setDraftNotice(
+                      navigator.onLine ? "" : "Offline \u2014 saved on this device only",
+                    );
+                    scheduleDraftSave();
+                  }}
+                  onBlur={() => {
+                    void saveDraft("blur");
+                  }}
+                  placeholder="Type your answer here..."
+                  className="mt-3 min-h-[160px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 font-sans text-sm text-slate-900 outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100 lg:min-h-[320px] lg:flex-1"
+                />
+                {activeSavedAnswer?.kingdom_feedback && (
+                  <div className="mt-3 rounded-2xl bg-orange-50 p-3 text-sm text-slate-700">
+                    <p className="font-bold text-orange-600">
+                      Kingdom: {activeSavedAnswer.kingdom_mark}/{activeQuestion.marks}
+                    </p>
+                    <p className="mt-1">{activeSavedAnswer.kingdom_feedback}</p>
+                  </div>
+                )}
+                <div className="mt-4 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentQuestionIndex(Math.max(0, safeCurrentQuestionIndex - 1))
+                    }
+                    disabled={safeCurrentQuestionIndex === 0}
+                    aria-label="Previous question"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {"\u2190"} Previous
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentQuestionIndex(Math.min(displayedQuestions.length - 1, safeCurrentQuestionIndex + 1))
+                    }
+                    disabled={safeCurrentQuestionIndex === displayedQuestions.length - 1}
+                    aria-label="Next question"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next {"\u2192"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
         {submission?.status === "awaiting_review" && (
           <section className="rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
             <h2 className="text-xl font-bold text-slate-900">
@@ -1139,3 +1161,6 @@ export function SubjectActivityPage({
 export default function BusinessStudiesActivityPage() {
   return <SubjectActivityPage />;
 }
+
+
+

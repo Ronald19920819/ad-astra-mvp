@@ -30,6 +30,8 @@ textarea,
 select {
   color: #0f172a;
   caret-color: #0f172a;
+  -webkit-text-fill-color: #0f172a;
+  opacity: 1;
 }
 
 input::placeholder,

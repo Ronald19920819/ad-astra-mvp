@@ -1,10 +1,16 @@
-import { createClient } from "@/lib/supabase/client";
+﻿import { createClient } from "@/lib/supabase/client";
+import type { LessonQuizOptionLetter } from "@/lib/lessons/lessonQuiz";
 
 export type LessonEditorQuestion = {
   id: string;
   question_number: number;
   question_text: string;
   answer_text: string | null;
+  option_a: string | null;
+  option_b: string | null;
+  option_c: string | null;
+  option_d: string | null;
+  correct_option: LessonQuizOptionLetter | null;
   marks: number;
 };
 
@@ -56,7 +62,7 @@ export async function getLessonEditorData(
       topic_id,
       expected_completion_date,
       status
-      `
+      `,
     )
     .eq("id", lessonId)
     .single();
@@ -77,7 +83,7 @@ export async function getLessonEditorData(
       title,
       content_text,
       content_url
-      `
+      `,
     )
     .eq("lesson_id", lessonId)
     .order("display_order", { ascending: true });
@@ -116,8 +122,13 @@ export async function getLessonEditorData(
         question_number,
         question_text,
         answer_text,
+        option_a,
+        option_b,
+        option_c,
+        option_d,
+        correct_option,
         marks
-        `
+        `,
       )
       .eq("activity_id", activity.id)
       .order("question_number", { ascending: true });
@@ -130,7 +141,7 @@ export async function getLessonEditorData(
       materialId: quizMaterial.id,
       activityId: activity.id,
       title: activity.title,
-      questions: questions ?? [],
+      questions: (questions ?? []) as LessonEditorQuestion[],
     };
   }
 

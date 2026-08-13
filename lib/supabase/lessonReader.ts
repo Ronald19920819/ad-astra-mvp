@@ -35,6 +35,10 @@ export type LearnerLessonQuestion = {
   question_text: string;
   marks: number;
   display_order: number;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
 };
 
 export type LearnerLessonData = {
@@ -279,7 +283,7 @@ export async function getLearnerLessonData(
     if (activity) {
       const { data: questions, error: questionsError } = await supabase
         .from("activity_questions")
-        .select("id, question_number, question_text, marks, display_order")
+        .select("id, question_number, question_text, marks, display_order, option_a, option_b, option_c, option_d")
         .eq("activity_id", activity.id)
         .order("display_order", { ascending: true });
 

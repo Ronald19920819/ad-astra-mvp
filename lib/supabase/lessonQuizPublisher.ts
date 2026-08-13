@@ -1,10 +1,15 @@
-import { teacherApiRequest } from "@/lib/supabase/teacherApiClient";
+﻿import { teacherApiRequest } from "@/lib/supabase/teacherApiClient";
+import type { LessonQuizOptionLetter } from "@/lib/lessons/lessonQuiz";
 
 type LessonQuizQuestion = {
   id: number;
   questionId?: string;
   questionText: string;
-  answerText: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correctOption: LessonQuizOptionLetter;
   marks: 1;
 };
 

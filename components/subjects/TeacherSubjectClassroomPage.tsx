@@ -28,6 +28,7 @@ import {
   getSubjectConfiguration,
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
+import { isLessonQuizOptionLetter, type LessonQuizOptionLetter } from "@/lib/lessons/lessonQuiz";
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -53,7 +54,11 @@ type LessonQuizQuestion = {
   id: number;
   questionId?: string;
   questionText: string;
-  answerText: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correctOption: LessonQuizOptionLetter | "";
   marks: 1;
 };
 
@@ -62,7 +67,11 @@ function quizEditorSignature(questions: LessonQuizQuestion[]) {
     questions.map((question) => ({
       questionId: question.questionId ?? null,
       questionText: question.questionText,
-      answerText: question.answerText,
+      optionA: question.optionA,
+      optionB: question.optionB,
+      optionC: question.optionC,
+      optionD: question.optionD,
+      correctOption: question.correctOption,
       marks: question.marks,
     })),
   );
@@ -441,12 +450,16 @@ const handleOpenLesson = async (lessonId: string) => {
     );
     const loadedVideoTitle = editorData.video?.title ?? "";
     const loadedVideoUrl = editorData.video?.content_url ?? "";
-    const loadedQuizQuestions =
+    const loadedQuizQuestions: LessonQuizQuestion[] =
       editorData.quiz?.questions.map((question, index) => ({
         id: index + 1,
         questionId: question.id,
         questionText: question.question_text,
-        answerText: question.answer_text ?? "",
+        optionA: question.option_a ?? "",
+        optionB: question.option_b ?? "",
+        optionC: question.option_c ?? "",
+        optionD: question.option_d ?? "",
+        correctOption: isLessonQuizOptionLetter(question.correct_option) ? question.correct_option : "",
         marks: 1 as const,
       })) ?? [];
 
@@ -621,7 +634,10 @@ const groupedLessons = sortedLessons.reduce<
         subjectId,
         lessonId: currentLessonId,
         lessonTitle: lessonTitle.trim(),
-        questions: quizQuestions,
+        questions: quizQuestions.map((question) => ({
+        ...question,
+        correctOption: question.correctOption as LessonQuizOptionLetter,
+      })),
       });
     }
 
@@ -1494,14 +1510,14 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
 </button>
 
 {quizQuestions.length > 0 && (
-  <div className="space-y-3">
+  <div className="space-y-4">
     {quizQuestions.map((question, index) => (
       <div
         key={question.id}
-        className="rounded-2xl border border-orange-100 bg-white p-3"
+        className="rounded-2xl border border-orange-100 bg-white p-4"
       >
         <p className="mb-2 text-sm font-bold text-slate-900">
-          Question {index + 1}
+          Question {index + 1} of 5
         </p>
 
         <input
@@ -1519,31 +1535,105 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
             )
           }
           placeholder="Quiz question"
-          className="w-full rounded-2xl border border-slate-200 bg-white p-3 outline-none"
+          className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-slate-900 outline-none"
         />
+
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {([
+            ["A", "optionA", question.optionA],
+            ["B", "optionB", question.optionB],
+            ["C", "optionC", question.optionC],
+            ["D", "optionD", question.optionD],
+          ] as const).map(([label, field, value]) => (
+            <label key={label} className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                Option {label}
+              </span>
+              <input
+                value={value}
+                onChange={(event) =>
+                  setQuizQuestions((currentQuestions) =>
+                    currentQuestions.map((currentQuestion) =>
+                      currentQuestion.id === question.id
+                        ? {
+                            ...currentQuestion,
+                            [field]: event.target.value,
+                          }
+                        : currentQuestion,
+                    ),
+                  )
+                }
+                placeholder={
+                  label === "A"
+                    ? "Option A"
+                    : label === "B"
+                      ? "Option B"
+                      : label === "C"
+                        ? "Option C"
+                        : "Option D"
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-slate-900 outline-none"
+              />
+            </label>
+          ))}
+        </div>
+
+        <label className="mt-3 block space-y-1">
+          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Correct option
+          </span>
+          <select
+            value={question.correctOption}
+            onChange={(event) =>
+              setQuizQuestions((currentQuestions) =>
+                currentQuestions.map((currentQuestion) =>
+                  currentQuestion.id === question.id
+                    ? {
+                        ...currentQuestion,
+                        correctOption: event.target.value as LessonQuizOptionLetter,
+                      }
+                    : currentQuestion,
+                ),
+              )
+            }
+            className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-slate-900 outline-none"
+          >
+            <option value="" disabled>Select correct option</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="D">D</option>
+          </select>
+        </label>
       </div>
     ))}
   </div>
 )}
 
     <div className="rounded-2xl bg-orange-50 p-3 text-sm font-semibold text-slate-700">
-      Total Quiz Marks: {quizQuestions.length}/10
+      Total Quiz Marks: {quizQuestions.length}/5
     </div>
 
     <button
       type="button"
       onClick={async () => {
-  if (quizQuestions.length !== 10) {
-    alert("Ask Kingdom to create the 10-question quiz first.");
+  if (quizQuestions.length !== 5) {
+    alert("Ask Kingdom to create the 5-question quiz first.");
     return;
   }
 
   const hasIncompleteQuestion = quizQuestions.some(
-    (question) => !question.questionText.trim()
+    (question) =>
+      !question.questionText.trim() ||
+      !question.optionA.trim() ||
+      !question.optionB.trim() ||
+      !question.optionC.trim() ||
+      !question.optionD.trim() ||
+      !question.correctOption
   );
 
   if (hasIncompleteQuestion) {
-    alert("Every quiz question must contain text.");
+    alert("Every quiz question must contain text, four options and one correct option.");
     return;
   }
 
@@ -1554,7 +1644,10 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
       subjectId,
       lessonId,
       lessonTitle: lessonTitle.trim(),
-      questions: quizQuestions,
+      questions: quizQuestions.map((question) => ({
+        ...question,
+        correctOption: question.correctOption as LessonQuizOptionLetter,
+      })),
     });
 
     setActiveContentPanel(null);
@@ -1833,3 +1926,8 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
 export default function BusinessStudiesClassroomPage() {
   return <TeacherSubjectClassroomPage />;
 }
+
+
+
+
+

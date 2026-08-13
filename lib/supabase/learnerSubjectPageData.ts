@@ -296,7 +296,11 @@ export async function getLearnerLessonDataServer(
           question_number,
           question_text,
           marks,
-          display_order
+          display_order,
+          option_a,
+          option_b,
+          option_c,
+          option_d
         )
       `)
       .eq("lesson_material_id", quizMaterial.id)
