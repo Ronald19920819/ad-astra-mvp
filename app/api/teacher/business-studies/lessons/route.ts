@@ -1,4 +1,8 @@
 import {
+  isLessonReadingPdfPath,
+  LESSON_READING_PDF_BUCKET,
+} from "@/lib/lessons/pdfReading";
+import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
@@ -180,7 +184,7 @@ export async function POST(request: Request) {
 
       const { data: existing, error: existingError } = await admin
         .from("lesson_materials")
-        .select("id")
+        .select("id, source_type, content_url")
         .eq("lesson_id", lessonId)
         .eq("material_type", materialType)
         .maybeSingle();
@@ -212,6 +216,25 @@ export async function POST(request: Request) {
             .single();
 
       if (result.error) throw result.error;
+
+      if (
+        materialType === "reading" &&
+        existing?.source_type === "pdf" &&
+        sourceType !== "pdf" &&
+        typeof existing.content_url === "string" &&
+        isLessonReadingPdfPath(existing.content_url, subjectId, lessonId)
+      ) {
+        const { error: cleanupError } = await admin.storage
+          .from(LESSON_READING_PDF_BUCKET)
+          .remove([existing.content_url]);
+        if (cleanupError) {
+          console.warn("Replaced lesson PDF cleanup failed:", {
+            lessonId,
+            message: cleanupError.message,
+          });
+        }
+      }
+
       return Response.json({ success: true, data: result.data });
     }
 
@@ -530,7 +553,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-
-
-

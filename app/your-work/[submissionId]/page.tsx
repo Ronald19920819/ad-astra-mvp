@@ -8,6 +8,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
+import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import {
@@ -196,7 +197,7 @@ export default async function LearnerWorkDetailPage({
               Activity Mark
             </p>
             <p className="mt-1 text-4xl font-bold text-[#102A43]">
-              {work.finalMark ?? "—"}/{work.activity.totalMarks}
+              {work.finalMark ?? "â€”"}/{work.activity.totalMarks}
             </p>
             <p
               className="mt-1 text-lg font-bold"
@@ -299,7 +300,13 @@ export default async function LearnerWorkDetailPage({
               {work.reading.title}
             </h2>
           </div>
-          <ProtectedReading content={work.reading.contentText} />
+          {work.reading.sourceType === "pdf" ? (
+            <ProtectedPdfReading
+              sourceUrl={`/api/activity-submissions/${encodeURIComponent(work.id)}/reading-pdf`}
+            />
+          ) : (
+            <ProtectedReading content={work.reading.contentText} />
+          )}
         </section>
 
         <section className="space-y-4 lg:mx-auto lg:w-full lg:max-w-4xl">
@@ -377,7 +384,7 @@ export default async function LearnerWorkDetailPage({
                   </p>
                   <p className="mt-2 text-2xl font-bold text-[#102A43]">
                     {question.answer.teacherMark === null
-                      ? "—"
+                      ? "â€”"
                       : question.answer.teacherMark}
                     /{question.maximumMarks}
                   </p>

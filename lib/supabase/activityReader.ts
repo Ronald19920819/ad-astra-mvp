@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export type PublishedActivityQuestion = {
   id: string;
@@ -360,6 +360,7 @@ export type LearnerActivityWorkspaceData = {
   reading: {
     id: string;
     title: string;
+    source_type: "pasted_text" | "pdf";
     content_text: string;
   };
   lesson: {
@@ -381,6 +382,7 @@ export type LearnerActivityWorkspaceResult =
 type LinkedActivityMaterialRow = {
   id: string;
   title: string;
+  source_type: string;
   content_text: string | null;
   lesson_id: string;
   material_type: string;
@@ -421,6 +423,7 @@ export async function getLearnerActivityData(
     .select(`
       id,
       title,
+      source_type,
       content_text,
       lesson_id,
       material_type,
@@ -457,7 +460,7 @@ export async function getLearnerActivityData(
 
   if (
     material.material_type !== "reading" ||
-    !material.content_text?.trim()
+    (material.source_type !== "pdf" && !material.content_text?.trim())
   ) {
     return { status: "missing-reading" };
   }
@@ -489,7 +492,8 @@ export async function getLearnerActivityData(
       reading: {
         id: material.id,
         title: material.title,
-        content_text: material.content_text,
+        source_type: material.source_type === "pdf" ? "pdf" : "pasted_text",
+        content_text: material.content_text ?? "",
       },
       lesson: {
         id: material.lessons.id,

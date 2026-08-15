@@ -1,4 +1,4 @@
-﻿import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import type { LessonQuizOptionLetter } from "@/lib/lessons/lessonQuiz";
 
 export type LessonEditorQuestion = {
@@ -29,6 +29,8 @@ export type LessonEditorData = {
     id: string;
     title: string;
     content_text: string | null;
+    content_url: string | null;
+    source_type: "pasted_text" | "pdf";
   } | null;
   video: {
     id: string;
@@ -80,6 +82,7 @@ export async function getLessonEditorData(
       `
       id,
       material_type,
+      source_type,
       title,
       content_text,
       content_url
@@ -161,6 +164,9 @@ export async function getLessonEditorData(
           id: readingMaterial.id,
           title: readingMaterial.title,
           content_text: readingMaterial.content_text,
+          content_url: readingMaterial.content_url,
+          source_type:
+            readingMaterial.source_type === "pdf" ? "pdf" : "pasted_text",
         }
       : null,
     video: videoMaterial

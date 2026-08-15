@@ -49,6 +49,7 @@ export type LearnerLessonData = {
   reading: {
     id: string;
     title: string;
+    source_type: "pasted_text" | "pdf";
     content_text: string | null;
   } | null;
   video: {
@@ -252,7 +253,7 @@ export async function getLearnerLessonData(
 
   const { data: materials, error: materialsError } = await supabase
     .from("lesson_materials")
-    .select("id, material_type, title, content_text, content_url")
+    .select("id, material_type, source_type, title, content_text, content_url")
     .eq("lesson_id", lessonId)
     .order("display_order", { ascending: true });
 
@@ -335,6 +336,8 @@ export async function getLearnerLessonData(
       ? {
           id: readingMaterial.id,
           title: readingMaterial.title,
+          source_type:
+            readingMaterial.source_type === "pdf" ? "pdf" : "pasted_text",
           content_text: readingMaterial.content_text,
         }
       : null,

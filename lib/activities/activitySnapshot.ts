@@ -1,5 +1,13 @@
 export const ACTIVITY_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 
+export type ActivitySnapshotReading = {
+  id: string;
+  title: string;
+  sourceType: "pasted_text" | "pdf";
+  contentText: string;
+  pdfStoragePath: string | null;
+};
+
 export type ActivitySnapshotQuestion = {
   id: string;
   questionNumber: number;
@@ -35,11 +43,7 @@ export type ActivitySubmissionSnapshot = {
     termNumber: number | null;
     weekNumber: number | null;
   };
-  reading: {
-    id: string;
-    title: string;
-    contentText: string;
-  };
+  reading: ActivitySnapshotReading;
   questions: ActivitySnapshotQuestion[];
 };
 
@@ -92,6 +96,21 @@ function isSnapshotQuestion(value: unknown): value is ActivitySnapshotQuestion {
   );
 }
 
+function isSnapshotReading(value: unknown): value is ActivitySnapshotReading {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    (value.sourceType === "pasted_text" || value.sourceType === "pdf") &&
+    typeof value.contentText === "string" &&
+    isNullableString(value.pdfStoragePath) &&
+    (value.sourceType === "pdf"
+      ? typeof value.pdfStoragePath === "string" && value.pdfStoragePath.length > 0
+      : value.pdfStoragePath === null)
+  );
+}
+
 export function isActivitySubmissionSnapshot(
   value: unknown,
 ): value is ActivitySubmissionSnapshot {
@@ -123,10 +142,7 @@ export function isActivitySubmissionSnapshot(
     typeof lesson.lessonNumber === "string" &&
     isNullableNumber(lesson.termNumber) &&
     isNullableNumber(lesson.weekNumber) &&
-    isRecord(reading) &&
-    typeof reading.id === "string" &&
-    typeof reading.title === "string" &&
-    typeof reading.contentText === "string" &&
+    isSnapshotReading(reading) &&
     Array.isArray(value.questions) &&
     value.questions.length > 0 &&
     value.questions.every(isSnapshotQuestion)

@@ -18,6 +18,7 @@ import {
 } from "@/lib/supabase/activityReader";
 import type { LearnerSavedActivitySubmission } from "@/lib/supabase/learnerSubjectPageData";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
+import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
 import {
   buildSubjectRoute,
   getSubjectConfiguration,
@@ -73,6 +74,7 @@ function workspaceFromSnapshot(
     reading: {
       id: snapshot.reading.id,
       title: snapshot.reading.title,
+      source_type: "pasted_text",
       content_text: snapshot.reading.contentText,
     },
     lesson: {
@@ -115,6 +117,17 @@ type DraftApiResponse = {
   error?: string;
   code?: string;
 };
+
+function isLifecycleSaveReason(
+  reason: "debounced" | "blur" | "visibility" | "pagehide" | "before-submit",
+) {
+  return reason === "visibility" || reason === "pagehide";
+}
+
+function isLikelyLifecycleFetchTermination(error: unknown) {
+  return error instanceof TypeError && /failed to fetch/i.test(error.message);
+}
+
 
 export function SubjectActivityPage({
   subjectKey = "business-studies",
@@ -177,6 +190,8 @@ export function SubjectActivityPage({
   const latestDraftRevisionRef = useRef(0);
   const hasDirtyLocalDraftRef = useRef(false);
   const isSavingDraftRef = useRef(false);
+  const lastConfirmedDraftPayloadRef = useRef<string | null>(null);
+  const pendingLifecycleDraftPayloadRef = useRef<string | null>(null);
   const submissionSnapshot =
     submission && isActivitySubmissionSnapshot(submission.activity_snapshot)
       ? submission.activity_snapshot
@@ -278,13 +293,15 @@ export function SubjectActivityPage({
   }, []);
 
   const saveDraft = useCallback(
-    async (reason: "debounced" | "blur" | "visibility" | "before-submit") => {
+    async (reason: "debounced" | "blur" | "visibility" | "pagehide" | "before-submit") => {
+      const lifecycleSave = isLifecycleSaveReason(reason);
+
       if (
         !activityData ||
         !draftLearnerId ||
         submission ||
         submissionAccessBlocked ||
-        isSavingDraftRef.current
+        (!lifecycleSave && isSavingDraftRef.current)
       ) {
         return false;
       }
@@ -302,6 +319,64 @@ export function SubjectActivityPage({
         latestQuestionIdsRef.current,
         latestAnswersRef.current,
       );
+      const payload = {
+        activityId,
+        activityVersion:
+          latestActivityVersionRef.current ?? activityData.activity.version,
+        revision: latestDraftRevisionRef.current,
+        answers: latestQuestionIdsRef.current.map((questionId) => ({
+          questionId,
+          answerText: normalizedAnswers[questionId] ?? "",
+        })),
+      };
+      const payloadKey = JSON.stringify(payload);
+
+      if (payloadKey === lastConfirmedDraftPayloadRef.current) {
+        setDraftSaveState("saved");
+        return true;
+      }
+
+      if (lifecycleSave) {
+        if (
+          payloadKey === pendingLifecycleDraftPayloadRef.current ||
+          isSavingDraftRef.current
+        ) {
+          return true;
+        }
+
+        pendingLifecycleDraftPayloadRef.current = payloadKey;
+
+        try {
+          void fetch("/api/learner/activity-drafts", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: payloadKey,
+            keepalive: true,
+          }).catch((error) => {
+            if (!isLikelyLifecycleFetchTermination(error)) {
+              console.error("Unable to dispatch learner activity draft save:", error);
+            }
+          });
+
+          return true;
+        } catch (error) {
+          if (!isLikelyLifecycleFetchTermination(error)) {
+            console.error("Unable to dispatch learner activity draft save:", error);
+            setDraftSaveState(navigator.onLine ? "error" : "offline");
+            setDraftNotice(
+              navigator.onLine
+                ? "Unable to save draft"
+                : "Offline ? saved on this device only",
+            );
+          }
+
+          writeLocalDraftCache({
+            answers: normalizedAnswers,
+            dirty: true,
+          });
+          return false;
+        }
+      }
 
       setDraftSaveState("saving");
       setDraftNotice("");
@@ -311,17 +386,7 @@ export function SubjectActivityPage({
         const response = await fetch("/api/learner/activity-drafts", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            activityId,
-            activityVersion:
-              latestActivityVersionRef.current ?? activityData.activity.version,
-            revision: latestDraftRevisionRef.current,
-            answers: latestQuestionIdsRef.current.map((questionId) => ({
-              questionId,
-              answerText: normalizedAnswers[questionId] ?? "",
-            })),
-          }),
-          keepalive: reason === "visibility",
+          body: payloadKey,
         });
 
         const result = (await response.json()) as DraftApiResponse;
@@ -352,6 +417,8 @@ export function SubjectActivityPage({
 
         if (result.draft) {
           latestDraftRevisionRef.current = result.draft.revision;
+          lastConfirmedDraftPayloadRef.current = payloadKey;
+          pendingLifecycleDraftPayloadRef.current = null;
           writeLocalDraftCache({
             answers: normalizedAnswers,
             revision: result.draft.revision,
@@ -371,7 +438,7 @@ export function SubjectActivityPage({
         setDraftNotice(
           navigator.onLine
             ? "Unable to save draft"
-            : "Offline \u2014 saved on this device only",
+            : "Offline ? saved on this device only",
         );
         writeLocalDraftCache({
           answers: normalizedAnswers,
@@ -392,6 +459,65 @@ export function SubjectActivityPage({
     ],
   );
 
+  const reconcileLifecycleDraft = useCallback(async () => {
+    if (
+      typeof window === "undefined" ||
+      !pendingLifecycleDraftPayloadRef.current ||
+      !activityId ||
+      !draftLearnerId ||
+      !navigator.onLine ||
+      submission ||
+      submissionAccessBlocked
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        "/api/learner/activity-drafts?activityId=" + encodeURIComponent(activityId),
+      );
+      const result = (await response.json()) as DraftApiResponse;
+
+      if (!response.ok || !result.draft) {
+        return;
+      }
+
+      const serverAnswers = reconcileAnswersForQuestionIds(
+        latestQuestionIdsRef.current,
+        answersRecordFromDraft(result.draft.answers),
+      );
+      const localAnswers = reconcileAnswersForQuestionIds(
+        latestQuestionIdsRef.current,
+        latestAnswersRef.current,
+      );
+
+      if (JSON.stringify(serverAnswers) !== JSON.stringify(localAnswers)) {
+        return;
+      }
+
+      latestDraftRevisionRef.current = result.draft.revision;
+      lastConfirmedDraftPayloadRef.current = pendingLifecycleDraftPayloadRef.current;
+      pendingLifecycleDraftPayloadRef.current = null;
+      writeLocalDraftCache({
+        answers: localAnswers,
+        revision: result.draft.revision,
+        activityVersion: result.draft.activityVersion,
+        dirty: false,
+        updatedAt: result.draft.updatedAt,
+      });
+      setDraftSaveState("saved");
+      setDraftNotice("");
+    } catch (error) {
+      console.error("Unable to reconcile learner activity draft:", error);
+    }
+  }, [
+    activityId,
+    draftLearnerId,
+    submission,
+    submissionAccessBlocked,
+    writeLocalDraftCache,
+  ]);
+
   const scheduleDraftSave = useCallback(() => {
     if (saveTimeoutRef.current !== null) {
       window.clearTimeout(saveTimeoutRef.current);
@@ -403,269 +529,22 @@ export function SubjectActivityPage({
   }, [saveDraft]);
 
   useEffect(() => {
-    if (hasInitialActivityState) {
-      return;
-    }
-
-    let isActive = true;
-
-    async function loadActivity() {
-      if (!activityId || !uuidPattern.test(activityId)) {
-        if (isActive) {
-          setPageState("invalid");
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setPageState(null);
-        const result = await getLearnerActivityData(
-          activityId,
-          subject.databaseId,
-        );
-
-        if (!isActive) return;
-
-        if (result.status === "success") {
-          setActivityData(result.data);
-        } else {
-          setActivityData(null);
-          setPageState(result.status);
-        }
-      } catch (error) {
-        console.error(
-          `Unable to load learner ${subject.displayName} activity:`,
-          error,
-        );
-        if (isActive) {
-          setActivityData(null);
-          setPageState("error");
-        }
-      } finally {
-        if (isActive) setIsLoading(false);
-      }
-    }
-
-    loadActivity();
-
-    return () => {
-      isActive = false;
-    };
-  }, [activityId, hasInitialActivityState, subject.databaseId, subject.displayName]);
-
-  useEffect(() => {
-    if (initialSubmissionLoaded) {
-      return;
-    }
-
-    let isActive = true;
-
-    async function loadSubmission() {
-      if (!activityId || !uuidPattern.test(activityId)) {
-        if (isActive) setIsLoadingSubmission(false);
-        return;
-      }
-
-      try {
-        setIsLoadingSubmission(true);
-        const response = await fetch(
-          `/api/kingdom/mark-activity?activityId=${encodeURIComponent(activityId)}`,
-        );
-        const result = (await response.json()) as {
-          submission?: SavedActivitySubmission | null;
-          error?: string;
-          code?: string;
-        };
-
-        if (!isActive) return;
-
-        if (!response.ok) {
-          setSubmissionAccessBlocked(true);
-          setSubmissionMessage(
-            result.error || "Unable to load your activity submission.",
-          );
-          return;
-        }
-
-        setSubmissionAccessBlocked(false);
-        if (result.submission) applySavedSubmission(result.submission);
-      } catch (error) {
-        console.error("Unable to load saved activity submission:", error);
-        if (isActive) {
-          setSubmissionAccessBlocked(true);
-          setSubmissionMessage("Unable to load your activity submission.");
-        }
-      } finally {
-        if (isActive) setIsLoadingSubmission(false);
-      }
-    }
-
-    loadSubmission();
-
-    return () => {
-      isActive = false;
-    };
-  }, [activityId, initialSubmissionLoaded]);
-
-  useEffect(() => {
-    if (!activityData) return;
-    latestQuestionIdsRef.current = activityData.questions.map(
-      (question) => question.id,
-    );
-    latestActivityVersionRef.current = activityData.activity.version;
-  }, [activityData]);
-
-  useEffect(() => {
-    latestAnswersRef.current = answers;
-  }, [answers]);
-
-
-  useEffect(() => {
-    if (!activityData || isLoadingSubmission) return;
-
-    if (submission) return;
-
-    let isActive = true;
-
-    async function loadDraft() {
-      const currentActivityData = activityData;
-      if (!currentActivityData) {
-        setIsLoadingDraft(false);
-        return;
-      }
-
-      try {
-        setIsLoadingDraft(true);
-        const response = await fetch(
-          `/api/learner/activity-drafts?activityId=${encodeURIComponent(activityId)}`,
-        );
-        const result = (await response.json()) as DraftApiResponse;
-
-        if (!isActive) return;
-
-        if (!response.ok) {
-          if (
-            result.code === "ALREADY_SUBMITTED" ||
-            result.code === "UNAUTHORIZED"
-          ) {
-            return;
-          }
-
-          setDraftSaveState("error");
-          setDraftNotice(result.error ?? "Unable to load activity draft");
-          return;
-        }
-
-        setDraftLearnerId(result.learnerId);
-        const cacheKey = buildActivityDraftCacheKey({
-          learnerId: result.learnerId,
-          subjectId: subject.databaseId,
-          activityId,
-        });
-        localDraftCacheKeyRef.current = cacheKey;
-
-        const localDraft = readLocalDraftCache();
-        const serverDraft = result.draft;
-        const currentQuestionIds = currentActivityData.questions.map(
-          (question) => question.id,
-        );
-
-        let nextAnswers: Record<string, string> = {};
-        let nextRevision = 0;
-
-        const preferred = choosePreferredDraftSource({
-          serverDraft,
-          localDraft,
-        });
-
-        if (
-          serverDraft &&
-          serverDraft.activityVersion !== currentActivityData.activity.version
-        ) {
-          setDraftNotice(
-            "This activity was updated by your teacher. Review your restored answers before submitting.",
-          );
-        }
-        if (
-          localDraft &&
-          localDraft.activityVersion !== currentActivityData.activity.version
-        ) {
-          setDraftNotice(
-            "This activity was updated by your teacher. Review your restored answers before submitting.",
-          );
-        }
-
-        if (preferred.newerDraftFound) {
-          setDraftSaveState("newer-draft");
-        }
-
-        if (preferred.winner === "server" && serverDraft) {
-          nextAnswers = reconcileAnswersForQuestionIds(
-            currentQuestionIds,
-            answersRecordFromDraft(serverDraft.answers),
-          );
-          nextRevision = serverDraft.revision;
-          writeLocalDraftCache({
-            answers: nextAnswers,
-            revision: serverDraft.revision,
-            activityVersion: serverDraft.activityVersion,
-            dirty: false,
-            updatedAt: serverDraft.updatedAt,
-          });
-        } else if (preferred.winner === "local" && localDraft) {
-          nextAnswers = reconcileAnswersForQuestionIds(
-            currentQuestionIds,
-            localDraft.answers,
-          );
-          nextRevision = localDraft.revision;
-          if (localDraft.dirty) {
-            setDraftSaveState(navigator.onLine ? "saving" : "offline");
-            scheduleDraftSave();
-          } else if (!serverDraft) {
-            setDraftSaveState("saved");
-          }
-        }
-
-        latestDraftRevisionRef.current = nextRevision;
-        setAnswers(nextAnswers);
-      } catch (error) {
-        console.error("Unable to hydrate learner activity draft:", error);
-        if (isActive) {
-          setDraftSaveState("error");
-          setDraftNotice("Unable to load activity draft");
-        }
-      } finally {
-        if (isActive) setIsLoadingDraft(false);
-      }
-    }
-
-    void loadDraft();
-
-    return () => {
-      isActive = false;
-    };
-  }, [
-    activityData,
-    activityId,
-    isLoadingSubmission,
-    scheduleDraftSave,
-    submission,
-    subject.databaseId,
-    writeLocalDraftCache,
-  ]);
-
-  useEffect(() => {
     function flushOnHidden() {
       if (document.visibilityState === "hidden") {
         void saveDraft("visibility");
+        return;
       }
+
+      void reconcileLifecycleDraft();
+    }
+
+    function flushOnPageHide() {
+      void saveDraft("pagehide");
     }
 
     function markOfflineState() {
       setDraftSaveState("offline");
-      setDraftNotice("Offline \u2014 saved on this device only");
+      setDraftNotice("Offline — saved on this device only");
     }
 
     function clearOfflineState() {
@@ -675,18 +554,20 @@ export function SubjectActivityPage({
     }
 
     document.addEventListener("visibilitychange", flushOnHidden);
+    window.addEventListener("pagehide", flushOnPageHide);
     window.addEventListener("offline", markOfflineState);
     window.addEventListener("online", clearOfflineState);
 
     return () => {
       document.removeEventListener("visibilitychange", flushOnHidden);
+      window.removeEventListener("pagehide", flushOnPageHide);
       window.removeEventListener("offline", markOfflineState);
       window.removeEventListener("online", clearOfflineState);
       if (saveTimeoutRef.current !== null) {
         window.clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [saveDraft]);
+  }, [reconcileLifecycleDraft, saveDraft]);
 
   async function submitActivity() {
     if (!activityData || submission || isSubmitting) return;
@@ -815,6 +696,7 @@ export function SubjectActivityPage({
         ...reading,
         id: submissionSnapshot.reading.id,
         title: submissionSnapshot.reading.title,
+        source_type: "pasted_text" as const,
         content_text: submissionSnapshot.reading.contentText,
       }
     : reading;
@@ -860,8 +742,8 @@ export function SubjectActivityPage({
       className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`}
       style={themeStyle}
     >
-      <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-6xl lg:space-y-8">
-        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
+      <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-7xl lg:space-y-8 xl:max-w-[1400px]">
+        <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:flex lg:h-full lg:flex-col lg:p-6">
           <Link
             href={activitiesHref}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
@@ -902,21 +784,21 @@ export function SubjectActivityPage({
           </p>
         )}
 
-        {subjectKey === "business-studies" && (
-        <section className="w-full min-w-0 overflow-hidden rounded-[2rem] border border-[var(--subject-border)] bg-black shadow-sm lg:mx-auto lg:max-w-5xl">
+        {subject.activityBannerSrc && (
+        <section className="w-full min-w-0 overflow-hidden rounded-[2rem] border border-[var(--subject-border)] bg-black shadow-sm lg:mx-auto lg:max-w-6xl">
           <Image
-            src="/kingdom-business-studies.png"
-            alt="Business Studies activity"
+            src={subject.activityBannerSrc}
+            alt={`${subject.displayName} activity`}
             width={1400}
             height={1050}
             priority
-            className="h-auto w-full object-contain"
+            className="h-[180px] w-full object-cover object-top sm:h-[210px] lg:h-[220px] xl:h-[240px]"
           />
         </section>
         )}
 
-        <div className="space-y-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
-          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
+        <div className="space-y-5 lg:grid lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,1fr)] lg:items-stretch lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1.7fr)_minmax(420px,1fr)]">
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:flex lg:h-full lg:flex-col lg:p-6">
             <div className="mb-4 flex min-w-0 items-center gap-3">
               <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
                 <BookOpen className="text-[var(--subject-primary)]" size={22} />
@@ -930,10 +812,14 @@ export function SubjectActivityPage({
                 </p>
               </div>
             </div>
-            <ProtectedReading content={displayedReading.content_text} scrollable />
+            {displayedReading.source_type === "pdf" && !submissionSnapshot ? (
+              <ProtectedPdfReading lessonId={displayedLesson.id} materialId={displayedReading.id} />
+            ) : (
+              <ProtectedReading content={displayedReading.content_text} scrollable />
+            )}
           </section>
 
-          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:flex lg:h-full lg:flex-col lg:p-6">
             <div className="mb-4 flex items-center gap-3">
               <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
                 <SquarePen className="text-[var(--subject-primary)]" size={22} />
@@ -961,7 +847,7 @@ export function SubjectActivityPage({
                 No questions are available for this activity.
               </p>
             ) : (
-              <div className="w-full min-w-0 rounded-2xl bg-slate-50 p-4 lg:flex lg:min-h-[720px] lg:flex-col">
+              <div className="w-full min-w-0 rounded-2xl bg-slate-50 p-4 lg:flex lg:h-full lg:min-h-[720px] lg:flex-1 lg:flex-col lg:overflow-y-auto">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <h3 className="min-w-0 font-bold text-slate-900 font-sans">
                     Question {safeCurrentQuestionIndex + 1} of {displayedQuestions.length}
@@ -1161,6 +1047,8 @@ export function SubjectActivityPage({
 export default function BusinessStudiesActivityPage() {
   return <SubjectActivityPage />;
 }
+
+
 
 
 

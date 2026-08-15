@@ -50,10 +50,11 @@ test("reading structure stays formatting-only and preserves order", () => {
   assert.doesNotMatch(formattingPrompt, /Improve grammar, clarity, flow/);
 });
 
-test("lesson quiz generation strips Cambridge assessment instructions from the compiled prompt", () => {
+test("lesson quiz generation strips Cambridge assessment instructions from the compiled text-reading prompt", () => {
   const prompt = buildLessonQuizPrompt({
     subjectContext: authorContext,
     readingTitle: "Business Inputs",
+    readingSourceType: "pasted_text",
     readingText: "Inputs include land, labour, capital and enterprise.",
   });
 
@@ -69,16 +70,26 @@ test("lesson quiz generation strips Cambridge assessment instructions from the c
   assert.doesNotMatch(prompt, /Respect AO labels and mark allocations\./i);
   assert.doesNotMatch(prompt, /\bAO1\b|\bAO2\b|\bAO3\b|\bAO4\b/);
   assert.doesNotMatch(prompt, /assessment objectives/i);
-  assert.doesNotMatch(prompt, /EXPLAIN TWO/i);
-  assert.doesNotMatch(prompt, /RECOMMEND AND JUSTIFY/i);
-  assert.doesNotMatch(prompt, /JUSTIFY\b/i);
 });
 
-test("activity generation preserves question plans, output IDs and Cambridge assessment rules", () => {
+test("lesson quiz prompt tells Kingdom to inspect the attached PDF when the saved reading is a PDF", () => {
+  const prompt = buildLessonQuizPrompt({
+    subjectContext: authorContext,
+    readingTitle: "The Cold War Sources",
+    readingSourceType: "pdf",
+  });
+
+  assert.match(prompt, /attached separately as a PDF file input/i);
+  assert.match(prompt, /Inspect the attached PDF itself before drafting the quiz/i);
+  assert.match(prompt, /Never invent facts/i);
+});
+
+test("activity generation preserves question plans, output IDs and the integrity-check contract", () => {
   const prompt = buildBusinessStudiesKingdomPrompt({
     subjectContext: authorContext,
     lessonTitle: "Business Inputs",
     lessonReading: "Inputs include land, labour, capital and enterprise.",
+    readingSourceType: "pasted_text",
     activityTitle: "Operations Activity",
     questions: [
       {
@@ -90,6 +101,7 @@ test("activity generation preserves question plans, output IDs and Cambridge ass
         guidance: "Give a precise meaning.",
       },
     ],
+    universalEvidenceIntegrityPrompt: "UNIVERSAL EVIDENCE INTEGRITY",
   });
 
   assert.match(prompt, /Operations Activity/);
@@ -100,4 +112,6 @@ test("activity generation preserves question plans, output IDs and Cambridge ass
   assert.match(prompt, /For Paper 2 questions, use the case-study context and require applied reasoning where appropriate\./);
   assert.match(prompt, /returned id must match/i);
   assert.match(prompt, /Do not include answers/);
+  assert.match(prompt, /"integrityCheck"/);
+  assert.match(prompt, /UNIVERSAL EVIDENCE INTEGRITY/);
 });

@@ -2,15 +2,19 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { buildLessonQuizPrompt } from "@/lib/kingdom/author/business-studies/cambridge/lessonQuizPrompt";
 import {
+  buildOpenAIReadingInput,
+  resolveAuthoritativeLessonReading,
+} from "@/lib/kingdom/lessonReadingGeneration";
+import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import { isCompleteLessonQuizQuestion } from "@/lib/lessons/lessonQuiz";
+import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
-import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
 import {
   getSubjectConfiguration,
   isSubjectKey,
 } from "@/lib/subjects/subjectConfig";
-import { isCompleteLessonQuizQuestion } from "@/lib/lessons/lessonQuiz";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -36,6 +40,57 @@ type NormalizedLessonQuizQuestion = {
   correctOption: string;
   marks: 1;
 };
+
+type LessonQuizResponseInput = NonNullable<
+  Parameters<typeof openai.responses.create>[0]["input"]
+>;
+
+function toLessonQuizErrorResponse(
+  error: unknown,
+  readingSourceType: "pasted_text" | "pdf" | null,
+) {
+  const message =
+    error instanceof Error
+      ? error.message
+      : "Kingdom could not generate the lesson quiz.";
+
+  if (
+    message === "Save the lesson reading before Kingdom can build a quiz." ||
+    message ===
+      "The selected lesson has no reading content for Kingdom to use." ||
+    message === "The saved PDF reading could not be resolved securely." ||
+    message === "The saved PDF reading is missing or invalid."
+  ) {
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  if (
+    message === "The selected lesson does not exist." ||
+    message ===
+      "The saved PDF reading could not be downloaded from secure storage."
+  ) {
+    return NextResponse.json({ error: message }, { status: 404 });
+  }
+
+  if (message === "The selected lesson is not a Business Studies lesson.") {
+    return NextResponse.json(
+      { error: "The selected lesson cannot be used for this subject." },
+      { status: 400 },
+    );
+  }
+
+  if (readingSourceType === "pdf") {
+    return NextResponse.json(
+      {
+        error:
+          "Kingdom could not process the saved PDF reading. Please try again or replace the PDF if the problem continues.",
+      },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({ error: message }, { status: 500 });
+}
 
 function normalizeGeneratedCorrectOption(value: unknown) {
   return typeof value === "string" ? value.trim().toUpperCase() : "";
@@ -65,10 +120,10 @@ function hasSingleRepeatedCorrectOption(
   return distinctCorrectOptions.size === 1;
 }
 
-async function requestLessonQuiz(prompt: string) {
+async function requestLessonQuiz(input: LessonQuizResponseInput) {
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
-    input: prompt,
+    input,
   });
 
   const outputText = response.output_text?.trim();
@@ -116,6 +171,9 @@ async function requestLessonQuiz(prompt: string) {
 }
 
 export async function POST(request: Request) {
+  let cleanup = async () => {};
+  let readingSourceType: "pasted_text" | "pdf" | null = null;
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const subjectKey =
@@ -128,24 +186,23 @@ export async function POST(request: Request) {
       return teacherAuthorizationResponse(authorization);
     }
 
-    const readingTitle =
-      typeof body.readingTitle === "string" ? body.readingTitle : "";
-    const readingText =
-      typeof body.readingText === "string" ? body.readingText : "";
+    const lessonId =
+      typeof body.lessonId === "string" ? body.lessonId.trim() : "";
 
-    if (!readingTitle.trim()) {
+    if (!lessonId) {
       return NextResponse.json(
-        { error: "A reading title is required." },
+        { error: "Save the lesson reading before Kingdom can build a quiz." },
         { status: 400 },
       );
     }
 
-    if (!readingText.trim()) {
-      return NextResponse.json(
-        { error: "Reading text is required before Kingdom can build a quiz." },
-        { status: 400 },
-      );
-    }
+    const resolvedReading = await resolveAuthoritativeLessonReading({
+      admin: authorization.teacher.admin,
+      subjectKey,
+      lessonId,
+      lessonStatusMode: "draft-or-published",
+    });
+    readingSourceType = resolvedReading.reading.sourceType;
 
     const subjectContext = buildKingdomSubjectContext({
       subjectKey,
@@ -154,11 +211,31 @@ export async function POST(request: Request) {
     });
     const basePrompt = buildLessonQuizPrompt({
       subjectContext,
-      readingTitle: readingTitle.trim(),
-      readingText: readingText.trim(),
+      readingTitle: resolvedReading.reading.title,
+      readingSourceType: resolvedReading.reading.sourceType,
+      readingText: resolvedReading.reading.plainText,
     });
 
-    let questions = await requestLessonQuiz(basePrompt);
+    const readingInput = await buildOpenAIReadingInput({
+      admin: authorization.teacher.admin,
+      openai,
+      resolvedReading,
+      pdfDetail: "auto",
+    });
+    cleanup = readingInput.cleanup;
+
+    const buildResponseInput = (promptText: string) =>
+      [
+        {
+          role: "user" as const,
+          content: [
+            { type: "input_text" as const, text: promptText },
+            ...readingInput.content,
+          ],
+        },
+      ] satisfies LessonQuizResponseInput;
+
+    let questions = await requestLessonQuiz(buildResponseInput(basePrompt));
 
     if (hasSingleRepeatedCorrectOption(questions)) {
       const retryPrompt = `${basePrompt}
@@ -170,7 +247,7 @@ IMPORTANT CORRECTION:
 - Use a natural spread of correctOption letters across A-D where the reading allows.
 - Do not return all 5 correct answers in the same option position.`;
 
-      questions = await requestLessonQuiz(retryPrompt);
+      questions = await requestLessonQuiz(buildResponseInput(retryPrompt));
     }
 
     const incompleteQuestion = questions.find(
@@ -203,15 +280,8 @@ IMPORTANT CORRECTION:
     });
   } catch (error) {
     console.error("Kingdom lesson quiz generation error:", error);
-
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Kingdom could not generate the lesson quiz.",
-      },
-      { status: 500 },
-    );
+    return toLessonQuizErrorResponse(error, readingSourceType);
+  } finally {
+    await cleanup();
   }
 }

@@ -1,4 +1,19 @@
-import type { SubjectKey } from "@/lib/subjects/subjectConfig";
+﻿import type { SubjectKey } from "@/lib/subjects/subjectConfig";
+
+export type QuestionEvidenceKind =
+  | "substantial-text"
+  | "history-source"
+  | "visual-source"
+  | "business-context";
+
+export type QuestionEvidenceRequirement = {
+  specialSource: boolean;
+  acceptedEvidenceKinds: QuestionEvidenceKind[];
+  minimumSourceCount?: number;
+  visualAccessRequired?: boolean;
+  contextualSupportRequired?: boolean;
+  teacherFacingLabel: string;
+};
 
 export type SubjectQuestionType = {
   label: string;
@@ -7,6 +22,7 @@ export type SubjectQuestionType = {
   assessmentLabel: string;
   opening: string;
   guidance: string;
+  evidenceRequirement?: QuestionEvidenceRequirement;
 };
 
 export type SubjectQuestionPreset = {
@@ -67,6 +83,12 @@ const businessStudiesPreset: SubjectQuestionPreset = {
       assessmentLabel: "AO1, AO2, AO3",
       opening: "Explain ",
       guidance: "Develop and apply points to the case-study business.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["business-context"],
+        contextualSupportRequired: true,
+        teacherFacingLabel: "business context or case-study information",
+      },
     },
     "consider-justify": {
       label: "Consider and justify - 12 marks",
@@ -75,6 +97,12 @@ const businessStudiesPreset: SubjectQuestionPreset = {
       assessmentLabel: "AO2, AO3, AO4",
       opening: "Consider ",
       guidance: "Analyse options and reach a supported final judgement.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["business-context"],
+        contextualSupportRequired: true,
+        teacherFacingLabel: "business context or case-study information",
+      },
     },
     recommend: {
       label: "Recommend and justify - 12 marks",
@@ -83,6 +111,12 @@ const businessStudiesPreset: SubjectQuestionPreset = {
       assessmentLabel: "AO2, AO3, AO4",
       opening: "Recommend ",
       guidance: "Compare the options and justify a recommendation.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["business-context"],
+        contextualSupportRequired: true,
+        teacherFacingLabel: "business context or case-study information",
+      },
     },
   },
 };
@@ -105,17 +139,27 @@ const englishPreset: SubjectQuestionPreset = {
       label: "Language analysis - 6 marks",
       paper: "reading",
       marks: 6,
-      assessmentLabel: "Reading · Language",
+      assessmentLabel: "Reading \u00b7 Language",
       opening: "Analyse how ",
       guidance: "Select evidence and explain its meaning or effect.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["substantial-text"],
+        teacherFacingLabel: "a substantial learner-facing text or extract",
+      },
     },
     interpretation: {
       label: "Interpretation - 4 marks",
       paper: "reading",
       marks: 4,
-      assessmentLabel: "Reading · Interpretation",
+      assessmentLabel: "Reading \u00b7 Interpretation",
       opening: "What impression ",
       guidance: "Support the interpretation with textual evidence.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["substantial-text"],
+        teacherFacingLabel: "a substantial learner-facing text or extract",
+      },
     },
     "writing-task": {
       label: "Writing task - 10 marks",
@@ -150,6 +194,11 @@ const afrikaansPreset: SubjectQuestionPreset = {
       assessmentLabel: "Lees en Kyk",
       opening: "Bespreek ",
       guidance: "Verwys na taalgebruik, register of toon.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["substantial-text"],
+        teacherFacingLabel: "'n substansiele leerdergerigte teks of uittreksel",
+      },
     },
     skryf: {
       label: "Skryftaak - 10 punte",
@@ -173,7 +222,7 @@ const afrikaansPreset: SubjectQuestionPreset = {
 const historyPreset: SubjectQuestionPreset = {
   papers: [
     { value: "paper-1", label: "Paper 1" },
-    { value: "paper-2", label: "Paper 2 · Sources" },
+    { value: "paper-2", label: "Paper 2 \u00b7 Sources" },
   ],
   questionTypes: {
     "describe-four": {
@@ -207,6 +256,12 @@ const historyPreset: SubjectQuestionPreset = {
       assessmentLabel: "Source comparison",
       opening: "How similar are ",
       guidance: "Compare source content and support both sides with evidence.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["history-source", "visual-source"],
+        minimumSourceCount: 2,
+        teacherFacingLabel: "two suitable sources",
+      },
     },
     "source-evaluation": {
       label: "Evaluate a source - 8 marks",
@@ -215,6 +270,12 @@ const historyPreset: SubjectQuestionPreset = {
       assessmentLabel: "Source evaluation",
       opening: "How useful is ",
       guidance: "Evaluate content, provenance and contextual knowledge.",
+      evidenceRequirement: {
+        specialSource: true,
+        acceptedEvidenceKinds: ["history-source", "visual-source"],
+        minimumSourceCount: 1,
+        teacherFacingLabel: "a suitable source",
+      },
     },
   },
 };
@@ -232,3 +293,11 @@ export const subjectQuestionPresets: Record<
   history: historyPreset,
   "history-igcse-1": historyPreset,
 };
+
+export function getQuestionEvidenceRequirement(
+  subjectKey: SubjectKey,
+  questionType: string,
+) {
+  return subjectQuestionPresets[subjectKey].questionTypes[questionType]
+    ?.evidenceRequirement;
+}

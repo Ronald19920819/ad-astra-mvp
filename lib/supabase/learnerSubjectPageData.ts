@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 
 import type { ActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
 import type {
@@ -251,7 +251,7 @@ export async function getLearnerLessonDataServer(
     await Promise.all([
       supabase
         .from("lesson_materials")
-        .select("id, material_type, title, content_text, content_url")
+        .select("id, material_type, source_type, title, content_text, content_url")
         .eq("lesson_id", lessonId)
         .order("display_order", { ascending: true }),
       supabase
@@ -333,6 +333,8 @@ export async function getLearnerLessonDataServer(
       ? {
           id: readingMaterial.id,
           title: readingMaterial.title,
+          source_type:
+            readingMaterial.source_type === "pdf" ? "pdf" : "pasted_text",
           content_text: readingMaterial.content_text,
         }
       : null,
@@ -352,6 +354,7 @@ export async function getLearnerLessonDataServer(
 type LinkedActivityMaterialRow = {
   id: string;
   title: string;
+  source_type: string;
   content_text: string | null;
   lesson_id: string;
   material_type: string;
@@ -390,6 +393,7 @@ export async function getLearnerActivityDataServer(
       .select(`
         id,
         title,
+        source_type,
         content_text,
         lesson_id,
         material_type,
@@ -438,7 +442,7 @@ export async function getLearnerActivityDataServer(
 
   if (
     material.material_type !== "reading" ||
-    !material.content_text?.trim()
+    (material.source_type !== "pdf" && !material.content_text?.trim())
   ) {
     return { status: "missing-reading" };
   }
@@ -450,7 +454,8 @@ export async function getLearnerActivityDataServer(
       reading: {
         id: material.id,
         title: material.title,
-        content_text: material.content_text,
+        source_type: material.source_type === "pdf" ? "pdf" : "pasted_text",
+        content_text: material.content_text ?? "",
       },
       lesson: {
         id: material.lessons.id,

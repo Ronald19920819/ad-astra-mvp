@@ -1,3 +1,4 @@
+import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import {
   markBusinessStudiesActivity,
@@ -13,6 +14,13 @@ import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfi
 import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
 import { deleteLearnerActivityDraft } from "@/lib/supabase/activityDrafts";
 import { createActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
+import {
+  buildActivitySubmissionPdfSnapshotPath,
+  LESSON_READING_PDF_BUCKET,
+} from "@/lib/activities/activitySnapshotPdf";
+import { buildOpenAIStoredPdfInput } from "@/lib/kingdom/lessonReadingGeneration";
+import type { OpenAIReadingInput } from "@/lib/kingdom/lessonReadingGeneration";
+import { hasPdfSignature, isLessonReadingPdfPath } from "@/lib/lessons/pdfReading";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -233,6 +241,8 @@ export async function POST(request: Request) {
   let submissionId: string | null = null;
   let learnerId: string | null = null;
   let activityIdForLog: string | null = null;
+  let snapshotPdfPath: string | null = null;
+  let snapshotPersisted = false;
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
@@ -319,7 +329,7 @@ export async function POST(request: Request) {
 
     const { data: material, error: materialError } = await supabase
       .from("lesson_materials")
-      .select("id, title, lesson_id, material_type, content_text")
+      .select("id, title, lesson_id, material_type, source_type, content_text, content_url")
       .eq("id", activity.lesson_material_id)
       .maybeSingle();
 
@@ -455,6 +465,80 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
+    let readingInput: OpenAIReadingInput = { content: [], cleanup: async () => {} };
+    let lessonReadingForMarking = readingContentToPlainText(material.content_text);
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const snapshotReading =
+      material.source_type === "pdf"
+        ? await (async () => {
+            if (
+              typeof material.content_url !== "string" ||
+              !isLessonReadingPdfPath(
+                material.content_url,
+                lesson.subject_id,
+                lesson.id,
+              )
+            ) {
+              throw new Error("The saved PDF reading could not be resolved securely.");
+            }
+
+            const { data: pdfBlob, error: downloadError } = await supabase.storage
+              .from(LESSON_READING_PDF_BUCKET)
+              .download(material.content_url);
+
+            if (downloadError || !pdfBlob) {
+              throw new Error(
+                "The saved PDF reading could not be downloaded from secure storage.",
+              );
+            }
+
+            const bytes = new Uint8Array(await pdfBlob.arrayBuffer());
+            if (!hasPdfSignature(bytes)) {
+              throw new Error("The saved PDF reading is missing or invalid.");
+            }
+
+            snapshotPdfPath = buildActivitySubmissionPdfSnapshotPath(
+              learnerId,
+              activity.id,
+            );
+
+            const { error: uploadError } = await supabase.storage
+              .from(LESSON_READING_PDF_BUCKET)
+              .upload(snapshotPdfPath, bytes, {
+                contentType: "application/pdf",
+                upsert: false,
+              });
+
+            if (uploadError) throw uploadError;
+
+            readingInput = await buildOpenAIStoredPdfInput({
+              admin: supabase,
+              openai,
+              storagePath: snapshotPdfPath,
+              title: material.title,
+              pdfDetail: "auto",
+              introText:
+                "Use the attached PDF as the authoritative saved learner submission reading evidence.",
+            });
+            lessonReadingForMarking =
+              "Authoritative saved lesson reading is attached separately as a PDF file input.";
+
+            return {
+              id: material.id,
+              title: material.title,
+              sourceType: "pdf" as const,
+              contentText: "",
+              pdfStoragePath: snapshotPdfPath,
+            };
+          })()
+        : {
+            id: material.id,
+            title: material.title,
+            sourceType: "pasted_text" as const,
+            contentText: material.content_text ?? "",
+            pdfStoragePath: null,
+          };
+
     const snapshot = createActivitySubmissionSnapshot({
       submittedAt: now,
       activity: {
@@ -476,11 +560,7 @@ export async function POST(request: Request) {
         termNumber: lesson.term_number,
         weekNumber: lesson.week_number,
       },
-      reading: {
-        id: material.id,
-        title: material.title,
-        contentText: material.content_text,
-      },
+      reading: snapshotReading,
       questions: officialQuestions.map((question) => ({
         id: question.id,
         questionNumber: question.question_number,
@@ -538,6 +618,7 @@ export async function POST(request: Request) {
       throw new Error("The activity submission ID was not returned.");
     }
     submissionId = createdSubmissionId;
+    snapshotPersisted = true;
 
     try {
       await deleteLearnerActivityDraft(activityId, learnerId);
@@ -587,13 +668,18 @@ export async function POST(request: Request) {
         role: "Examiner",
         taskType: "Mark learner activity",
       });
-      markingResult = await markBusinessStudiesActivity({
-        subjectContext,
-        activityTitle: activity.title,
-        lessonTitle: lesson.title,
-        lessonReading: readingContentToPlainText(material.content_text),
-        questions: markingQuestions,
-      });
+      try {
+        markingResult = await markBusinessStudiesActivity({
+          subjectContext,
+          activityTitle: activity.title,
+          lessonTitle: lesson.title,
+          lessonReading: lessonReadingForMarking,
+          questions: markingQuestions,
+          readingInput: readingInput.content,
+        });
+      } finally {
+        await readingInput.cleanup();
+      }
     } catch (error) {
       console.error("Kingdom activity preliminary marking failed:", {
         activityId,
@@ -661,6 +747,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ submission: savedSubmission });
   } catch (error) {
     if (submissionId) await markSubmissionAsFailed(submissionId);
+
+    if (!snapshotPersisted && snapshotPdfPath) {
+      const cleanupClient = createSupabaseAdminClient();
+      const { error: cleanupError } = await cleanupClient.storage
+        .from(LESSON_READING_PDF_BUCKET)
+        .remove([snapshotPdfPath]);
+      if (cleanupError) {
+        console.warn("Uncommitted activity snapshot PDF cleanup failed:", {
+          snapshotPdfPath,
+          message: cleanupError.message,
+        });
+      }
+    }
 
     console.error("Unable to submit and mark learner activity:", {
       activityId: activityIdForLog,

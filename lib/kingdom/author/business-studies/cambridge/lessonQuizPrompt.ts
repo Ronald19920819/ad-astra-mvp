@@ -1,4 +1,4 @@
-import { buildKingdomPromptPipeline } from "../../../promptPipeline";
+﻿import { buildKingdomPromptPipeline } from "../../../promptPipeline";
 import {
   buildLessonQuizSubjectContext,
   type KingdomSubjectContext,
@@ -7,7 +7,8 @@ import {
 type BuildLessonQuizPromptArgs = {
   subjectContext: KingdomSubjectContext;
   readingTitle: string;
-  readingText: string;
+  readingSourceType: "pasted_text" | "pdf";
+  readingText?: string | null;
 };
 
 const lessonQuizConstitution = `
@@ -38,21 +39,37 @@ LESSON READING QUIZ RULES
 export function buildLessonQuizPrompt({
   subjectContext,
   readingTitle,
+  readingSourceType,
   readingText,
 }: BuildLessonQuizPromptArgs) {
   const lessonQuizSubjectContext = buildLessonQuizSubjectContext(subjectContext);
+  const lessonContext =
+    readingSourceType === "pdf"
+      ? {
+          lessonTitle: readingTitle,
+          lessonReading:
+            "Authoritative saved lesson reading is attached separately as a PDF file input.",
+        }
+      : {
+          lessonTitle: readingTitle,
+          lessonReading: readingText ?? "",
+        };
+  const pdfInstruction =
+    readingSourceType === "pdf"
+      ? "- Inspect the attached PDF itself before drafting the quiz. The PDF may contain both written and visual information."
+      : "";
 
   return buildKingdomPromptPipeline({
     subjectContext: lessonQuizSubjectContext,
     roleInstruction:
       "You are Kingdom Author creating a simple lesson reading-engagement multiple-choice quiz.",
-    lessonContext: {
-      lessonTitle: readingTitle,
-      lessonReading: readingText,
-    },
+    lessonContext,
     currentTask:
       "Generate exactly 5 multiple-choice reading-retrieval questions with one clearly correct option each.",
     prompt: `${lessonQuizConstitution}
+
+${pdfInstruction}
+- Never invent facts, labels, captions, quotations or visual details that are not present in the supplied lesson reading.
 
 Return valid JSON only using this exact structure:
 

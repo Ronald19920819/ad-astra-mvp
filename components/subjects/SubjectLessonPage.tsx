@@ -18,6 +18,7 @@ import {
 } from "@/lib/supabase/lessonReader";
 import { TrackedYouTubePlayer } from "@/components/lessons/TrackedYouTubePlayer";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
+import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
 import { LESSON_QUIZ_PASS_PERCENT } from "@/lib/lessons/lessonAssessment";
 import {
   buildLessonQuizOptionMap,
@@ -317,6 +318,7 @@ export function SubjectLessonPage({
   }
 
   const { lesson, video, reading, quiz } = lessonData;
+  const hasPdfReading = reading?.source_type === "pdf";
   const videoId = getYouTubeVideoId(video?.content_url ?? null);
   const savedPassedAttempt = lessonData.passedQuizAttempt;
   const quizHasBeenPassed = Boolean(savedPassedAttempt || markingResult?.passed);
@@ -342,7 +344,7 @@ export function SubjectLessonPage({
 
   return (
     <main className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`} style={themeStyle}>
-      <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-6xl lg:space-y-8">
+      <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-7xl lg:space-y-8 xl:max-w-[1400px]">
         <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
           <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
@@ -376,25 +378,45 @@ export function SubjectLessonPage({
           <div
             className={`space-y-5 ${
               reading && quiz
-                ? "lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0"
+                ? hasPdfReading
+                  ? "lg:grid lg:grid-cols-[minmax(0,1.65fr)_minmax(360px,1fr)] lg:items-start lg:gap-6 lg:space-y-0 xl:grid-cols-[minmax(0,1.7fr)_minmax(420px,1fr)]"
+                  : "lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0"
                 : ""
             }`}
           >
             {reading && (
-              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:h-full lg:p-6">
+              <section
+                className={`w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6 ${
+                  hasPdfReading
+                    ? "lg:flex lg:h-[720px] lg:flex-col"
+                    : "lg:h-full"
+                }`}
+              >
                 <div className="mb-4 flex min-w-0 items-center gap-3">
                   <div className="rounded-2xl bg-[var(--subject-soft)] p-3"><BookOpen className="text-[var(--subject-primary)]" size={22} /></div>
                   <h2 className="min-w-0 break-words text-xl font-bold text-slate-900">{reading.title}</h2>
                 </div>
-                <ProtectedReading content={reading.content_text} scrollable />
+                <div className={hasPdfReading ? "min-h-0 flex-1 overflow-hidden" : ""}>
+                  {reading.source_type === "pdf" ? (
+                    <ProtectedPdfReading lessonId={lesson.id} materialId={reading.id} />
+                  ) : (
+                    <ProtectedReading content={reading.content_text} scrollable />
+                  )}
+                </div>
               </section>
             )}
 
             {quiz && (
-              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:h-full lg:p-6">
+              <section
+                className={`w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6 ${
+                  hasPdfReading
+                    ? "lg:flex lg:h-[720px] lg:flex-col"
+                    : "lg:h-full"
+                }`}
+              >
                 <div className="mb-4 flex min-w-0 items-center gap-3">
                   <div className="rounded-2xl bg-[var(--subject-soft)] p-3"><LockKeyhole className="text-[var(--subject-primary)]" size={22} /></div>
-                  <h2 className="min-w-0 break-words text-xl font-bold text-slate-900">{quiz.title}</h2>
+                  <h2 className="min-w-0 break-words text-xl font-bold text-slate-900">Lesson {lesson.lesson_number} Quiz</h2>
                 </div>
                 {savedPassedAttempt ? (
                   <div className="rounded-2xl bg-green-50 p-4 text-center">
@@ -412,10 +434,11 @@ export function SubjectLessonPage({
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-4 lg:max-h-[720px] lg:overflow-y-auto lg:pr-1">
+                  <div className={hasPdfReading ? "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col" : "space-y-4"}>
                     {failedReviewResult ? (
                       <>
-                        <div className="rounded-2xl bg-orange-50 p-4 text-center">
+                        <div className={hasPdfReading ? "space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1" : "space-y-4 lg:max-h-[720px] lg:overflow-y-auto lg:pr-1"}>
+                          <div className="rounded-2xl bg-orange-50 p-4 text-center">
                           <p className="text-sm font-semibold text-slate-600">Lesson Quiz Result</p>
                           <p className="mt-1 text-3xl font-bold text-orange-600">
                             {failedReviewResult.score}/{failedReviewResult.total}
@@ -489,14 +512,17 @@ export function SubjectLessonPage({
                             );
                           })}
                         </div>
+                      </div>
 
-                        <button type="button" onClick={tryAgain} className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm">
+                        <div className={hasPdfReading ? "mt-4 lg:flex-none" : ""}>
+                          <button type="button" onClick={tryAgain} className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm">
                           Take Again
-                        </button>
+                          </button>
+                        </div>
                       </>
                     ) : (
                       <>
-                        <div className="w-full min-w-0 space-y-4">
+                        <div className={hasPdfReading ? "w-full min-w-0 space-y-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1" : "w-full min-w-0 space-y-4 lg:max-h-[720px] lg:overflow-y-auto lg:pr-1"}>
                           {quiz.questions.map((question, index) => {
                             const options = buildLessonQuizOptionMap({
                               optionA: question.option_a,
@@ -556,11 +582,13 @@ export function SubjectLessonPage({
                           })}
                         </div>
 
-                        {submitMessage && <p className={`rounded-2xl p-3 text-sm font-semibold ${submitMessage.startsWith("Please") || submitMessage.includes("could not") ? "bg-red-50 text-red-700" : "bg-orange-50 text-slate-700"}`}>{submitMessage}</p>}
+                        <div className={hasPdfReading ? "mt-4 space-y-4 lg:flex-none" : "space-y-4"}>
+                          {submitMessage && <p className={`rounded-2xl p-3 text-sm font-semibold ${submitMessage.startsWith("Please") || submitMessage.includes("could not") ? "bg-red-50 text-red-700" : "bg-orange-50 text-slate-700"}`}>{submitMessage}</p>}
 
-                        <button disabled={isMarking} type="button" onClick={submitQuiz} className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70">
-                          {isMarking ? "Marking quiz..." : "Submit Quiz"}
-                        </button>
+                          <button disabled={isMarking} type="button" onClick={submitQuiz} className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm disabled:cursor-wait disabled:opacity-70">
+                            {isMarking ? "Marking quiz..." : "Submit Quiz"}
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
@@ -688,8 +716,7 @@ export function SubjectLessonPage({
                   Achieve at least {LESSON_QUIZ_PASS_PERCENT}% to complete this lesson.
                 </p>
               </section>
-            )}
-      </div>
+            )}      </div>
       <style jsx>{`
         .kingdom-particle {
           animation: kingdom-particle-burst 900ms ease-out forwards;
@@ -732,10 +759,3 @@ export function SubjectLessonPage({
 export default function BusinessStudiesLessonPage() {
   return <SubjectLessonPage />;
 }
-
-
-
-
-
-
-

@@ -1,6 +1,7 @@
 import "server-only";
 
 import OpenAI from "openai";
+import type { OpenAIReadingInputContent } from "../lessonReadingGeneration";
 import { buildKingdomPromptPipeline } from "../promptPipeline";
 import type { KingdomSubjectContext } from "../subjectContext";
 
@@ -33,6 +34,16 @@ export type ActivityMarkingResult = {
   totalMarks: number;
   percentage: number;
 };
+
+type ActivityMarkingResponseInput = [
+  {
+    role: "user";
+    content: [
+      { type: "input_text"; text: string },
+      ...OpenAIReadingInputContent,
+    ];
+  },
+];
 
 function parseKingdomActivityMarking(
   outputText: string,
@@ -121,6 +132,7 @@ export async function markBusinessStudiesActivity(input: {
   lessonTitle: string;
   lessonReading: string;
   questions: ActivityMarkingQuestion[];
+  readingInput?: OpenAIReadingInputContent;
 }): Promise<ActivityMarkingResult> {
   const prompt = buildKingdomPromptPipeline({
     subjectContext: input.subjectContext,
@@ -149,8 +161,16 @@ export async function markBusinessStudiesActivity(input: {
 
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
-    input: prompt,
-  });
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: prompt },
+          ...(input.readingInput ?? []),
+        ],
+      },
+    ] satisfies ActivityMarkingResponseInput,
+  } as never);
   const outputText = response.output_text?.trim();
 
   if (!outputText) {

@@ -3,6 +3,7 @@ import type { CSSProperties } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BookOpen, Clock } from "lucide-react";
 import TeacherSubmissionReviewForm from "@/components/activities/TeacherSubmissionReviewForm";
+import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
 import { StructuredReadingContent } from "@/components/readings/StructuredReadingContent";
 import { getSubjectSubmissionReview } from "@/lib/supabase/activityReviewReader";
 import { getSubmissionTiming } from "@/lib/activities/submissionTiming";
@@ -146,7 +147,6 @@ export async function TeacherSubjectSubmissionReviewPage({
             </p>
           )}
         </section>
-
         <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-3">
             <div className="shrink-0 rounded-2xl bg-orange-50 p-3">
@@ -156,11 +156,16 @@ export async function TeacherSubjectSubmissionReviewPage({
               {review.reading.title}
             </h2>
           </div>
-          <div className="max-h-[32rem] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <StructuredReadingContent content={review.reading.contentText} />
-          </div>
+          {(review.reading as { sourceType?: "pasted_text" | "pdf" }).sourceType === "pdf" ? (
+            <ProtectedPdfReading
+              sourceUrl={`/api/teacher/business-studies/reviews/${encodeURIComponent(review.id)}/reading-pdf`}
+            />
+          ) : (
+            <div className="max-h-[32rem] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <StructuredReadingContent content={review.reading.contentText} />
+            </div>
+          )}
         </section>
-
         <TeacherSubmissionReviewForm
           review={review}
           subjectKey={subjectKey}

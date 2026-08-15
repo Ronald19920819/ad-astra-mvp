@@ -1,5 +1,12 @@
 "use client";
 import { updateLessonStatus } from "@/lib/supabase/lessonStatusUpdater";
+import { createClient } from "@/lib/supabase/client";
+import {
+  hasPdfSignature,
+  isPdfFileMetadata,
+  LESSON_READING_PDF_BUCKET,
+  LESSON_READING_PDF_MAX_BYTES,
+} from "@/lib/lessons/pdfReading";
 import { updateLessonDetails } from "@/lib/supabase/lessonDetailsUpdater";
 import { publishLesson } from "@/lib/supabase/lessonPublisher";
 import { publishLessonMaterial } from "@/lib/supabase/lessonMaterialPublisher";
@@ -20,7 +27,6 @@ import {
 import {
   editorTextToStructuredReading,
   readingContentToEditorText,
-  readingContentToPlainText,
   serializeStructuredReading,
 } from "@/lib/readings/structuredReading";
 import {
@@ -112,8 +118,13 @@ export function TeacherSubjectClassroomPage({
   const [readingTitle, setReadingTitle] = useState("");
   const [readingText, setReadingText] = useState("");
   const [readingWorkflow, setReadingWorkflow] = useState<
-    "write" | "generate" | null
+    "write" | "pdf" | "generate" | null
   >(null);
+  const [readingSourceType, setReadingSourceType] = useState<"pasted_text" | "pdf">("pasted_text");
+  const [readingPdfPath, setReadingPdfPath] = useState("");
+  const [readingPdfFile, setReadingPdfFile] = useState<File | null>(null);
+  const [readingPdfError, setReadingPdfError] = useState("");
+  const [isUploadingReadingPdf, setIsUploadingReadingPdf] = useState(false);
   const [isProcessingReading, setIsProcessingReading] = useState(false);
   const [readingKingdomError, setReadingKingdomError] = useState("");
   const [learnerLevel, setLearnerLevel] = useState("");
@@ -134,22 +145,14 @@ export function TeacherSubjectClassroomPage({
   useState(false);
   const [isAskingKingdom, setIsAskingKingdom] = useState(false);
   const askKingdomForQuiz = async () => {
-  if (!readingTitle.trim() || !readingText.trim()) {
-    alert("Add and save a reading before asking Kingdom.");
+  if (!readingTitle.trim() || !readingIsSaved) {
+    alert("Save the reading before asking Kingdom.");
     return;
   }
 
   try {
     setIsAskingKingdom(true);
-    const readingDocument = editorTextToStructuredReading(readingText);
-    if (!readingDocument) {
-      alert("The reading could not be prepared for quiz generation.");
-      return;
-    }
-    const quizReadingText = readingContentToPlainText(
-      serializeStructuredReading(readingDocument.blocks),
-    );
-
+    const lessonId = currentLessonId ?? await ensureDraftLesson();
     const response = await fetch("/api/kingdom/generate-lesson-quiz", {
       method: "POST",
       headers: {
@@ -157,8 +160,7 @@ export function TeacherSubjectClassroomPage({
       },
       body: JSON.stringify({
         subjectKey,
-        readingTitle: readingTitle.trim(),
-        readingText: quizReadingText,
+        lessonId,
       }),
     });
 
@@ -186,7 +188,7 @@ const hasVideo =
 
 const hasReading =
   readingTitle.trim().length > 0 &&
-  readingText.trim().length > 0;
+  (readingSourceType === "pdf" ? readingIsSaved : readingText.trim().length > 0);
 
 const hasQuiz = quizQuestions.length > 0;
 
@@ -358,6 +360,10 @@ const handleDeleteDraftLesson = async (
       setReadingTitle("");
       setReadingText("");
       setReadingWorkflow(null);
+      setReadingSourceType("pasted_text");
+      setReadingPdfPath("");
+      setReadingPdfFile(null);
+      setReadingPdfError("");
       setReadingIsSaved(false);
       setGeneratedDraftBaseline(null);
       setGenerationInstruction("");
@@ -465,7 +471,17 @@ const handleOpenLesson = async (lessonId: string) => {
 
     setReadingTitle(loadedReadingTitle);
     setReadingText(loadedReadingText);
-    setReadingWorkflow(editorData.reading ? "write" : null);
+    setReadingSourceType(editorData.reading?.source_type ?? "pasted_text");
+    setReadingPdfPath(editorData.reading?.content_url ?? "");
+    setReadingPdfFile(null);
+    setReadingPdfError("");
+    setReadingWorkflow(
+      editorData.reading?.source_type === "pdf"
+        ? "pdf"
+        : editorData.reading
+          ? "write"
+          : null,
+    );
     setReadingKingdomError("");
     setReadingIsSaved(Boolean(editorData.reading));
     setGeneratedDraftBaseline(null);
@@ -590,6 +606,27 @@ const groupedLessons = sortedLessons.reduce<
       (readingTitle !== editingContentBaseline?.readingTitle ||
         readingText !== editingContentBaseline?.readingText);
     if (hasReading && readingChanged) {
+      if (readingSourceType === "pdf") {
+        if (!readingPdfPath) {
+          alert("Upload and save the PDF reading before publishing.");
+          return;
+        }
+        const response = await fetch("/api/teacher/lesson-readings/pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "finalize",
+            subjectId,
+            lessonId: currentLessonId,
+            title: readingTitle.trim(),
+            path: readingPdfPath,
+          }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "The PDF reading could not be saved.");
+        }
+      } else {
       const readingDocument = editorTextToStructuredReading(readingText);
       if (!readingDocument) {
         alert("The reading needs valid content before it can be saved.");
@@ -605,6 +642,7 @@ const groupedLessons = sortedLessons.reduce<
         contentText: serializeStructuredReading(readingDocument.blocks),
         displayOrder: 1,
       });
+      }
     }
 
     const videoChanged =
@@ -673,6 +711,10 @@ const groupedLessons = sortedLessons.reduce<
     setReadingTitle("");
     setReadingText("");
     setReadingWorkflow(null);
+    setReadingSourceType("pasted_text");
+    setReadingPdfPath("");
+    setReadingPdfFile(null);
+    setReadingPdfError("");
     setReadingIsSaved(false);
     setGeneratedDraftBaseline(null);
     setGenerationInstruction("");
@@ -720,6 +762,8 @@ const saveReadingDraft = async () => {
       displayOrder: 1,
     });
 
+    setReadingSourceType("pasted_text");
+    setReadingPdfPath("");
     setReadingIsSaved(true);
     setActiveContentPanel(null);
     alert("Reading saved.");
@@ -729,6 +773,104 @@ const saveReadingDraft = async () => {
   }
 };
 
+const uploadPdfReading = async () => {
+  if (!readingTitle.trim()) {
+    setReadingPdfError("Add a reading title before uploading the PDF.");
+    return;
+  }
+  if (!readingPdfFile) {
+    setReadingPdfError("Select a PDF to upload.");
+    return;
+  }
+  if (
+    !isPdfFileMetadata({
+      fileName: readingPdfFile.name,
+      contentType: readingPdfFile.type,
+      size: readingPdfFile.size,
+    })
+  ) {
+    setReadingPdfError("Select a valid PDF no larger than 25 MB.");
+    return;
+  }
+
+  const signature = new Uint8Array(
+    await readingPdfFile.slice(0, 5).arrayBuffer(),
+  );
+  if (!hasPdfSignature(signature)) {
+    setReadingPdfError("The selected file is not a valid PDF.");
+    return;
+  }
+
+  try {
+    setIsUploadingReadingPdf(true);
+    setReadingPdfError("");
+    const lessonId = await ensureDraftLesson();
+    const prepareResponse = await fetch("/api/teacher/lesson-readings/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "prepare",
+        subjectId,
+        lessonId,
+        fileName: readingPdfFile.name,
+        contentType: readingPdfFile.type,
+        size: readingPdfFile.size,
+      }),
+    });
+    const prepared = await prepareResponse.json();
+    if (!prepareResponse.ok) {
+      throw new Error(prepared.error || "The PDF upload could not be prepared.");
+    }
+
+    const supabase = createClient();
+    const { error: uploadError } = await supabase.storage
+      .from(LESSON_READING_PDF_BUCKET)
+      .uploadToSignedUrl(prepared.path, prepared.token, readingPdfFile, {
+        contentType: "application/pdf",
+      });
+    if (uploadError) throw uploadError;
+
+    const finalizeResponse = await fetch("/api/teacher/lesson-readings/pdf", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "finalize",
+        subjectId,
+        lessonId,
+        title: readingTitle.trim(),
+        path: prepared.path,
+      }),
+    });
+    const finalized = await finalizeResponse.json();
+    if (!finalizeResponse.ok) {
+      throw new Error(finalized.error || "The PDF reading could not be saved.");
+    }
+
+    setReadingSourceType("pdf");
+    setReadingText("");
+    setReadingPdfPath(prepared.path);
+    setReadingPdfFile(null);
+    setReadingIsSaved(true);
+    setEditingContentBaseline((current) =>
+      current
+        ? {
+            ...current,
+            readingTitle: readingTitle.trim(),
+            readingText: "",
+          }
+        : current,
+    );
+    setActiveContentPanel(null);
+    alert("PDF reading saved.");
+  } catch (error) {
+    console.error("Unable to save PDF reading:", error);
+    setReadingPdfError(
+      error instanceof Error ? error.message : "Unable to save the PDF reading.",
+    );
+  } finally {
+    setIsUploadingReadingPdf(false);
+  }
+};
 const structureReadingWithKingdom = async () => {
   if (!readingTitle.trim() || !readingText.trim()) {
     setReadingKingdomError(
@@ -1077,7 +1219,13 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
     type="button"
     onClick={() => {
       setActiveContentPanel("reading");
-      setReadingWorkflow(readingText.trim() ? "write" : null);
+      setReadingWorkflow(
+        readingSourceType === "pdf" && readingIsSaved
+          ? "pdf"
+          : readingText.trim()
+            ? "write"
+            : null,
+      );
       setReadingKingdomError("");
     }}
     className="rounded-2xl bg-orange-50 p-4 text-center"
@@ -1233,7 +1381,10 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
       <div className="grid gap-3">
         <button
           type="button"
-          onClick={() => setReadingWorkflow("write")}
+          onClick={() => {
+            setReadingSourceType("pasted_text");
+            setReadingWorkflow("write");
+          }}
           className="rounded-2xl border border-orange-200 bg-white p-4 text-left shadow-sm"
         >
           <p className="font-bold text-slate-900">Write or Paste Reading</p>
@@ -1242,6 +1393,20 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
           </p>
         </button>
         <button
+          type="button"
+          onClick={() => {
+            setReadingSourceType("pdf");
+            setReadingWorkflow("pdf");
+            setReadingTitle((current) => current || lessonTitle);
+            setReadingPdfError("");
+          }}
+          className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left shadow-sm"
+        >
+          <p className="font-bold text-slate-900">Upload PDF Reading</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Upload a learner reading as a private PDF (maximum 25 MB).
+          </p>
+        </button>        <button
           type="button"
           onClick={() => {
             setReadingWorkflow("generate");
@@ -1259,6 +1424,62 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
       </div>
     )}
 
+    {readingWorkflow === "pdf" && (
+      <div className="space-y-4">
+        {readingPdfPath && readingIsSaved && !readingPdfFile && (
+          <p className="rounded-2xl border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-700">
+            A PDF reading is currently attached.
+          </p>
+        )}
+        <div>
+          <label
+            htmlFor="reading-pdf"
+            className="mb-1 block text-sm font-bold text-slate-700"
+          >
+            PDF file
+          </label>
+          <input
+            id="reading-pdf"
+            type="file"
+            accept=".pdf,application/pdf"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              setReadingPdfFile(file);
+              setReadingPdfError("");
+              if (file && !readingTitle.trim()) {
+                setReadingTitle(file.name.replace(/\.pdf$/i, ""));
+              }
+            }}
+            className="block w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 file:mr-3 file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-semibold"
+          />
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            PDF only, up to {Math.round(LESSON_READING_PDF_MAX_BYTES / 1024 / 1024)} MB.
+            Kingdom will use the saved PDF itself when generating a quiz.
+          </p>
+        </div>
+        {readingPdfError && (
+          <p className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+            {readingPdfError}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void uploadPdfReading()}
+          disabled={isUploadingReadingPdf}
+          className="w-full rounded-2xl bg-orange-500 py-3 font-semibold text-white disabled:opacity-60"
+        >
+          {isUploadingReadingPdf ? "Uploading PDF..." : "Save PDF Reading"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setReadingWorkflow(null)}
+          disabled={isUploadingReadingPdf}
+          className="w-full py-2 text-sm font-semibold text-slate-500 disabled:opacity-60"
+        >
+          Back to reading options
+        </button>
+      </div>
+    )}
     {readingWorkflow === "write" && (
       <div className="space-y-4">
         <textarea
@@ -1485,6 +1706,14 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
 
        {activeContentPanel === "quiz" && (
   <div className="space-y-4">
+    {readingSourceType === "pdf" && hasReading && (
+      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-3">
+        <p className="text-sm font-medium text-blue-800">
+          Kingdom can now generate quiz questions from the saved PDF reading.
+        </p>
+      </div>
+    )}
+
     {!hasReading && (
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
         <p className="text-sm font-medium text-amber-800">
@@ -1926,8 +2155,3 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
 export default function BusinessStudiesClassroomPage() {
   return <TeacherSubjectClassroomPage />;
 }
-
-
-
-
-

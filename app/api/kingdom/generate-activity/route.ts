@@ -2,19 +2,27 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { buildBusinessStudiesKingdomPrompt } from "@/lib/kingdom/author/business-studies/cambridge/promptBuilder";
 import {
+  buildOpenAIReadingInput,
+  resolveAuthoritativeLessonReading,
+} from "@/lib/kingdom/lessonReadingGeneration";
+import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
-import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
-import { readingContentToPlainText } from "@/lib/readings/structuredReading";
+import {
+  buildUniversalEvidenceIntegrityPrompt,
+  type GeneratedQuestionIntegrityCheck,
+  validateGeneratedQuestionIntegrity,
+  validateQuestionPlansAgainstTextReading,
+} from "@/lib/subjects/questionEvidenceIntegrity";
+import {
+  getQuestionEvidenceRequirement,
+} from "@/lib/subjects/questionPresets";
 import {
   getSubjectConfiguration,
   isSubjectKey,
 } from "@/lib/subjects/subjectConfig";
-import {
-  hasSufficientEvidenceForQuestion,
-  isLanguageSubjectKey,
-} from "@/lib/subjects/languageSourceIntegrity";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -32,60 +40,29 @@ type ActivityQuestionPlan = {
 type GeneratedActivityQuestion = {
   id: number;
   questionText: string;
+  integrityCheck?: GeneratedQuestionIntegrityCheck;
 };
 
-function validateLanguageSourceIntegrity(args: {
-  subjectKey: Parameters<typeof getSubjectConfiguration>[0];
-  readingContent: string;
-  generatedQuestions: GeneratedActivityQuestion[];
-  plannedQuestions: ActivityQuestionPlan[];
-}) {
-  if (!isLanguageSubjectKey(args.subjectKey)) {
-    return [] as string[];
-  }
+type ActivityResponseInput = NonNullable<
+  Parameters<typeof openai.responses.create>[0]["input"]
+>;
 
-  const planById = new Map(
-    args.plannedQuestions.map((question) => [question.id, question]),
-  );
+function pickPdfDetail(subjectKey: Parameters<typeof getSubjectConfiguration>[0], questions: ActivityQuestionPlan[]) {
+  return questions.some((question) => {
+    const requirement =
+      typeof question.questionType === "string"
+        ? getQuestionEvidenceRequirement(subjectKey, question.questionType)
+        : undefined;
 
-  return args.generatedQuestions.flatMap((question) => {
-    const plan = planById.get(question.id);
-    const result = hasSufficientEvidenceForQuestion({
-      subjectKey: args.subjectKey,
-      questionText: question.questionText,
-      questionType: plan?.questionType ?? null,
-      guidance: plan?.guidance ?? null,
-      readingContent: args.readingContent,
-    });
-
-    if (result.ok) {
-      return [];
-    }
-
-    if (result.reason === "not_required" || result.reason === "sufficient") {
-      return [];
-    }
-
-    const reasons: Record<typeof result.reason, string> = {
-      no_substantial_source:
-        "the lesson reading does not contain a substantial learner-facing source",
-      insufficient_examples:
-        "the lesson reading does not contain enough defensible evidence for the requested examples",
-      missing_second_text:
-        "the lesson reading does not contain two suitable texts to compare",
-      insufficient_structure:
-        "the lesson reading does not contain enough structure to support the requested beginning/end analysis",
-      insufficient_quoted_material:
-        "the lesson reading does not contain enough quotable material for the requested evidence",
-    };
-
-    return [
-      `Question ${question.id} is not source aligned because ${reasons[result.reason]}. Generated text: ${question.questionText}`,
-    ];
-  });
+    return requirement?.acceptedEvidenceKinds.includes("visual-source");
+  })
+    ? ("high" as const)
+    : ("auto" as const);
 }
 
 export async function POST(request: Request) {
+  let cleanup = async () => {};
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const subjectKey =
@@ -106,102 +83,25 @@ export async function POST(request: Request) {
     if (typeof lessonId !== "string" || !lessonId.trim()) {
       return NextResponse.json(
         { error: "Select a published lesson before asking Kingdom." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!Array.isArray(questions) || questions.length === 0) {
       return NextResponse.json(
         { error: "At least one question is required." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const incompleteQuestion = questions.find(
-      (question) => !question.paper || !question.questionType
+      (question) => !question.paper || !question.questionType,
     );
 
     if (incompleteQuestion) {
       return NextResponse.json(
         { error: "Select a paper and question type for every question." },
-        { status: 400 }
-      );
-    }
-
-    const supabase = authorization.teacher.admin;
-    const { data: lesson, error: lessonError } = await supabase
-      .from("lessons")
-      .select("id, title, subject_id, status")
-      .eq("id", lessonId)
-      .maybeSingle();
-
-    if (lessonError) {
-      console.error("Kingdom lesson lookup failed:", {
-        lessonId,
-        code: lessonError.code,
-        message: lessonError.message,
-      });
-
-      return NextResponse.json(
-        { error: "The selected lesson could not be loaded." },
-        { status: 500 },
-      );
-    }
-
-    if (!lesson) {
-      return NextResponse.json(
-        { error: "The selected lesson does not exist." },
-        { status: 404 },
-      );
-    }
-
-    if (lesson.status !== "published") {
-      return NextResponse.json(
-        { error: "Only published lessons can be used by Kingdom." },
-        { status: 403 },
-      );
-    }
-
-    if (lesson.subject_id !== subject.databaseId) {
-      return NextResponse.json(
-        { error: `The selected lesson is not a ${subject.displayName} lesson.` },
-        { status: 403 },
-      );
-    }
-
-    const { data: readingMaterial, error: readingError } = await supabase
-      .from("lesson_materials")
-      .select("id, content_text")
-      .eq("lesson_id", lessonId)
-      .eq("material_type", "reading")
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (readingError) {
-      console.error("Kingdom lesson reading lookup failed:", {
-        lessonId,
-        code: readingError.code,
-        message: readingError.message,
-      });
-
-      return NextResponse.json(
-        { error: "The selected lesson reading could not be loaded." },
-        { status: 500 },
-      );
-    }
-
-    const lessonReading = readingContentToPlainText(
-      readingMaterial?.content_text ?? null,
-    ).trim();
-
-    if (!readingMaterial || !lessonReading) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected lesson has no reading content for Kingdom to use.",
-        },
-        { status: 422 },
+        { status: 400 },
       );
     }
 
@@ -217,22 +117,88 @@ export async function POST(request: Request) {
       }),
     );
 
+    const resolvedReading = await resolveAuthoritativeLessonReading({
+      admin: authorization.teacher.admin,
+      subjectKey,
+      lessonId,
+      lessonStatusMode: "published-only",
+    });
+
+    if (
+      resolvedReading.reading.sourceType === "pasted_text" &&
+      resolvedReading.reading.contentText
+    ) {
+      const preflight = validateQuestionPlansAgainstTextReading({
+        subjectKey,
+        readingContent: resolvedReading.reading.contentText,
+        questions: normalizedQuestions.map((question) => ({
+          id: question.id,
+          questionType: question.questionType,
+          guidance: question.guidance,
+        })),
+      });
+
+      if (preflight.issues.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "One or more selected question types need evidence that the saved lesson reading does not actually contain.",
+            details: preflight.issues.map(
+              (issue) => `Question ${issue.questionId}: ${issue.reason}.`,
+            ),
+          },
+          { status: 422 },
+        );
+      }
+    }
+
     const subjectContext = buildKingdomSubjectContext({
       subjectKey,
       role: "Author",
       taskType: "Generate assessment activity",
     });
+    const universalEvidenceIntegrityPrompt =
+      buildUniversalEvidenceIntegrityPrompt({
+        subjectKey,
+        readingSourceType: resolvedReading.reading.sourceType,
+        readingContent: resolvedReading.reading.contentText,
+        questions: normalizedQuestions.map((question) => ({
+          id: question.id,
+          questionType: question.questionType,
+          guidance: question.guidance,
+        })),
+      });
     const prompt = buildBusinessStudiesKingdomPrompt({
       subjectContext,
-      lessonTitle: lesson.title,
-      lessonReading,
+      lessonTitle: resolvedReading.lesson.title,
+      lessonReading:
+        resolvedReading.reading.plainText ??
+        "Authoritative saved lesson reading is attached separately as a PDF file input.",
+      readingSourceType: resolvedReading.reading.sourceType,
       activityTitle,
       questions: normalizedQuestions,
+      universalEvidenceIntegrityPrompt,
     });
+
+    const readingInput = await buildOpenAIReadingInput({
+      admin: authorization.teacher.admin,
+      openai,
+      resolvedReading,
+      pdfDetail: pickPdfDetail(subjectKey, normalizedQuestions),
+    });
+    cleanup = readingInput.cleanup;
 
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
-      input: prompt,
+      input: [
+        {
+          role: "user",
+          content: [
+            { type: "input_text", text: prompt },
+            ...readingInput.content,
+          ],
+        },
+      ] satisfies ActivityResponseInput,
     });
 
     const outputText = response.output_text?.trim();
@@ -240,7 +206,7 @@ export async function POST(request: Request) {
     if (!outputText) {
       return NextResponse.json(
         { error: "Kingdom returned an empty response." },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
@@ -256,23 +222,47 @@ export async function POST(request: Request) {
     if (!Array.isArray(generatedActivity.questions)) {
       return NextResponse.json(
         { error: "Kingdom returned an invalid question structure." },
-        { status: 500 }
+        { status: 500 },
       );
     }
 
-    const sourceIntegrityIssues = validateLanguageSourceIntegrity({
-      subjectKey,
-      readingContent: readingMaterial.content_text ?? lessonReading,
-      generatedQuestions: generatedActivity.questions,
-      plannedQuestions: normalizedQuestions,
-    });
+    const planById = new Map(
+      normalizedQuestions.map((question) => [question.id, question]),
+    );
+    const integrityIssues: string[] = [];
 
-    if (sourceIntegrityIssues.length > 0) {
+    for (const generatedQuestion of generatedActivity.questions) {
+      const plannedQuestion = planById.get(generatedQuestion.id);
+      if (!plannedQuestion) {
+        integrityIssues.push(
+          `Kingdom returned an unexpected question id (${generatedQuestion.id}).`,
+        );
+        continue;
+      }
+
+      const result = validateGeneratedQuestionIntegrity({
+        subjectKey,
+        questionType: plannedQuestion.questionType,
+        guidance: plannedQuestion.guidance,
+        questionText: generatedQuestion.questionText ?? "",
+        readingSourceType: resolvedReading.reading.sourceType,
+        readingContent: resolvedReading.reading.contentText,
+        integrityCheck: generatedQuestion.integrityCheck,
+      });
+
+      if (!result.ok) {
+        integrityIssues.push(
+          `Question ${generatedQuestion.id} is not source aligned because ${result.reason}.`,
+        );
+      }
+    }
+
+    if (integrityIssues.length > 0) {
       return NextResponse.json(
         {
           error:
-            "Kingdom generated one or more language questions that require source evidence the learner has not actually been given. Review the reading source material or regenerate with source-aligned questions.",
-          details: sourceIntegrityIssues,
+            "Kingdom generated one or more questions that require evidence the learner has not actually been given in the linked lesson reading.",
+          details: integrityIssues,
         },
         { status: 422 },
       );
@@ -280,7 +270,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      questions: generatedActivity.questions,
+      questions: generatedActivity.questions.map((question) => ({
+        id: question.id,
+        questionText: question.questionText,
+      })),
     });
   } catch (error) {
     console.error("Kingdom generation error:", {
@@ -288,8 +281,15 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { error: "Kingdom could not generate the activity." },
-      { status: 500 }
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Kingdom could not generate the activity.",
+      },
+      { status: 500 },
     );
+  } finally {
+    await cleanup();
   }
 }

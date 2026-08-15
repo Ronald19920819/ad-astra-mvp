@@ -94,6 +94,7 @@ export type LearnerWorkDetail = LearnerWorkSummary & {
   teacherComment: string | null;
   reading: {
     title: string;
+    sourceType: "pasted_text" | "pdf";
     contentText: string;
   };
   questions: LearnerWorkQuestion[];
@@ -473,6 +474,7 @@ export async function getLearnerWorkDetail(
       teacherComment: submission.teacher_comment ?? null,
       reading: {
         title: snapshot.reading.title,
+        sourceType: snapshot.reading.sourceType,
         contentText: snapshot.reading.contentText,
       },
       questions,
@@ -511,7 +513,11 @@ export async function getLearnerWorkDetail(
 
   let reading =
     material.material_type === "reading" && material.content_text?.trim()
-      ? { title: material.title, contentText: material.content_text }
+      ? {
+          title: material.title,
+          sourceType: "pasted_text" as const,
+          contentText: material.content_text,
+        }
       : null;
 
   if (!reading) {
@@ -528,6 +534,7 @@ export async function getLearnerWorkDetail(
     if (readingData?.content_text?.trim()) {
       reading = {
         title: readingData.title,
+        sourceType: "pasted_text" as const,
         contentText: readingData.content_text,
       };
     }

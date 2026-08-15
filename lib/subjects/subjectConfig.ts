@@ -25,6 +25,7 @@ export type SubjectConfiguration = {
   slug: string;
   code: string;
   databaseId: string;
+  activityBannerSrc: string;
   colourTheme: SubjectColourTheme;
   iconKey: "bar-chart" | "book-open" | "languages" | "scroll-text";
   framework: string;
@@ -115,6 +116,7 @@ export const subjectConfigurations = {
     slug: "business-studies-0450-igcse-2",
     code: "BS0450-IG2",
     databaseId: "c472f3c9-0e6f-40de-a748-3ad9400ac069",
+    activityBannerSrc: "/kingdom-business-studies.png",
     colourTheme: {
       primary: "#F97316",
       softBackground: "#FFF3E6",
@@ -146,6 +148,7 @@ export const subjectConfigurations = {
     slug: "business-studies-0450-igcse-1",
     code: "BS0450-IG1",
     databaseId: "7d6c9b24-7d9a-4f8b-9c4c-7f6d1e3a0b11",
+    activityBannerSrc: "/kingdom-business-studies.png",
     colourTheme: {
       primary: "#F97316",
       softBackground: "#FFF3E6",
@@ -177,6 +180,7 @@ export const subjectConfigurations = {
     slug: "english-0861-stage-9",
     code: "ENG0861-S9",
     databaseId: "0d0f5c7f-23c6-4022-a5c3-f6e1c779b681",
+    activityBannerSrc: "/kingdom-english-stage-9.png",
     colourTheme: {
       primary: "#2563EB",
       softBackground: "#EEF5FF",
@@ -212,6 +216,7 @@ export const subjectConfigurations = {
     slug: "english-0861-stage-8",
     code: "ENG0861-S8",
     databaseId: "9f2a6c13-3d7e-4f1b-8c55-4b8c7d6e2f33",
+    activityBannerSrc: "/kingdom-english-stage-8.png",
     colourTheme: {
       primary: "#2563EB",
       softBackground: "#EEF5FF",
@@ -247,6 +252,7 @@ export const subjectConfigurations = {
     slug: "afrikaans-stage-9",
     code: "AFR-S9",
     databaseId: "e26c1112-3627-4a56-8f6a-4eab5d209b23",
+    activityBannerSrc: "/kingdom-afrikaans-stage-9.png",
     colourTheme: {
       primary: "#EB2525",
       softBackground: "#FFF1F1",
@@ -280,6 +286,7 @@ export const subjectConfigurations = {
     slug: "afrikaans-stage-8",
     code: "AFR-S8",
     databaseId: "a03b7d24-4e8f-4a2c-9d66-5c9d8e7f3044",
+    activityBannerSrc: "/kingdom-afrikaans-stage-8.png",
     colourTheme: {
       primary: "#EB2525",
       softBackground: "#FFF1F1",
@@ -313,6 +320,7 @@ export const subjectConfigurations = {
     slug: "history-0470-igcse-2",
     code: "HIS0470-IG2",
     databaseId: "dca2600c-932f-46bf-904c-a99be158e7f0",
+    activityBannerSrc: "/kingdom-history.png",
     colourTheme: {
       primary: "#3AAA35",
       softBackground: "#EEFBEA",
@@ -350,6 +358,7 @@ export const subjectConfigurations = {
     slug: "history-0470-igcse-1",
     code: "HIS0470-IG1",
     databaseId: "8e1f5b92-2b6c-4e0c-9d44-3a7b6c5d1e22",
+    activityBannerSrc: "/kingdom-history.png",
     colourTheme: {
       primary: "#3AAA35",
       softBackground: "#EEFBEA",
@@ -451,3 +460,4 @@ export function resolveSubjectConfigurationForFamily(
 
 export const businessStudiesSubject =
   subjectConfigurations["business-studies"];
+
