@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import { buildBusinessStudiesKingdomPrompt } from "@/lib/kingdom/author/business-studies/cambridge/promptBuilder";
 import {
   buildOpenAIReadingInput,
+  extractPdfFileId,
   resolveAuthoritativeLessonReading,
 } from "@/lib/kingdom/lessonReadingGeneration";
 import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import { verifyQuestionsAgainstPdf } from "@/lib/kingdom/pdfQuestionVerification";
 import {
   authorizeTeacher,
   teacherAuthorizationResponse,
@@ -13,6 +15,7 @@ import {
 import {
   buildUniversalEvidenceIntegrityPrompt,
   type GeneratedQuestionIntegrityCheck,
+  type PdfVerificationQuestionInput,
   validateGeneratedQuestionIntegrity,
   validateQuestionPlansAgainstTextReading,
 } from "@/lib/subjects/questionEvidenceIntegrity";
@@ -180,11 +183,12 @@ export async function POST(request: Request) {
       universalEvidenceIntegrityPrompt,
     });
 
+    const pdfDetail = pickPdfDetail(subjectKey, normalizedQuestions);
     const readingInput = await buildOpenAIReadingInput({
       admin: authorization.teacher.admin,
       openai,
       resolvedReading,
-      pdfDetail: pickPdfDetail(subjectKey, normalizedQuestions),
+      pdfDetail,
     });
     cleanup = readingInput.cleanup;
 
@@ -230,6 +234,7 @@ export async function POST(request: Request) {
       normalizedQuestions.map((question) => [question.id, question]),
     );
     const integrityIssues: string[] = [];
+    const selfReportedSupportedIds = new Set<number>();
 
     for (const generatedQuestion of generatedActivity.questions) {
       const plannedQuestion = planById.get(generatedQuestion.id);
@@ -254,6 +259,65 @@ export async function POST(request: Request) {
         integrityIssues.push(
           `Question ${generatedQuestion.id} is not source aligned because ${result.reason}.`,
         );
+        continue;
+      }
+
+      selfReportedSupportedIds.add(generatedQuestion.id);
+    }
+
+    // Independent second-pass verification for PDF-backed questions that
+    // depend on specific evidence (per questionPresets evidenceRequirement).
+    // The generation model's own integrityCheck self-report is not trusted
+    // alone here — a fresh model call inspects the same PDF and confirms
+    // support. Only questions that already passed the self-report check are
+    // worth the extra call; a question already flagged above stays flagged.
+    if (
+      integrityIssues.length === 0 &&
+      resolvedReading.reading.sourceType === "pdf"
+    ) {
+      const verificationCandidates = generatedActivity.questions
+        .filter((question) => selfReportedSupportedIds.has(question.id))
+        .flatMap((question): PdfVerificationQuestionInput[] => {
+          const plannedQuestion = planById.get(question.id);
+          const requirement = plannedQuestion
+            ? getQuestionEvidenceRequirement(subjectKey, plannedQuestion.questionType)
+            : undefined;
+
+          if (!requirement) return [];
+
+          return [
+            {
+              id: question.id,
+              questionText: question.questionText ?? "",
+              requirementLabel: requirement.teacherFacingLabel,
+            },
+          ];
+        });
+
+      if (verificationCandidates.length > 0) {
+        const pdfFileId = extractPdfFileId(readingInput.content);
+
+        if (!pdfFileId) {
+          integrityIssues.push(
+            "Kingdom could not verify one or more source-dependent questions because the PDF could not be reloaded for verification.",
+          );
+        } else {
+          const verificationResults = await verifyQuestionsAgainstPdf({
+            openai,
+            subjectKey,
+            fileId: pdfFileId,
+            detail: pdfDetail,
+            questions: verificationCandidates,
+          });
+
+          for (const result of verificationResults) {
+            if (!result.supported) {
+              integrityIssues.push(
+                `Question ${result.questionId} is not source aligned because ${result.reason}`,
+              );
+            }
+          }
+        }
       }
     }
 

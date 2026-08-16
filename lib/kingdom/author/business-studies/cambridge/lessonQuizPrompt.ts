@@ -3,12 +3,14 @@ import {
   buildLessonQuizSubjectContext,
   type KingdomSubjectContext,
 } from "../../../subjectContext";
+import { buildLanguageActivitySourceIntegrityPrompt } from "../../../../subjects/languageSourceIntegrity";
 
 type BuildLessonQuizPromptArgs = {
   subjectContext: KingdomSubjectContext;
   readingTitle: string;
   readingSourceType: "pasted_text" | "pdf";
   readingText?: string | null;
+  quizEvidenceIntegrityPrompt: string;
 };
 
 const lessonQuizConstitution = `
@@ -41,6 +43,7 @@ export function buildLessonQuizPrompt({
   readingTitle,
   readingSourceType,
   readingText,
+  quizEvidenceIntegrityPrompt,
 }: BuildLessonQuizPromptArgs) {
   const lessonQuizSubjectContext = buildLessonQuizSubjectContext(subjectContext);
   const lessonContext =
@@ -58,6 +61,13 @@ export function buildLessonQuizPrompt({
     readingSourceType === "pdf"
       ? "- Inspect the attached PDF itself before drafting the quiz. The PDF may contain both written and visual information."
       : "";
+  const languageSourceIntegrityPrompt =
+    readingSourceType === "pasted_text"
+      ? buildLanguageActivitySourceIntegrityPrompt({
+          subjectKey: subjectContext.subjectKey,
+          lessonReading: readingText ?? "",
+        })
+      : "";
 
   return buildKingdomPromptPipeline({
     subjectContext: lessonQuizSubjectContext,
@@ -67,6 +77,8 @@ export function buildLessonQuizPrompt({
     currentTask:
       "Generate exactly 5 multiple-choice reading-retrieval questions with one clearly correct option each.",
     prompt: `${lessonQuizConstitution}
+${languageSourceIntegrityPrompt}
+${quizEvidenceIntegrityPrompt}
 
 ${pdfInstruction}
 - Never invent facts, labels, captions, quotations or visual details that are not present in the supplied lesson reading.

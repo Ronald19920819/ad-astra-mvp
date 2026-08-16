@@ -213,6 +213,7 @@ export function SubjectActivityPage({
     activityData ??
     (submissionSnapshot ? workspaceFromSnapshot(submissionSnapshot) : null);
   const activeQuestionCount = renderData?.questions.length ?? 0;
+  const canonicalActivityId = activityData?.activity.id ?? initialActivityData?.activity.id ?? null;
 
   function applySavedSubmission(savedSubmission: SavedActivitySubmission) {
     setSubmission(savedSubmission);
@@ -226,7 +227,221 @@ export function SubjectActivityPage({
     );
   }
 
+  useEffect(() => {
+    if (hasInitialActivityState) {
+      return;
+    }
+
+    if (!uuidPattern.test(activityId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPageState("invalid");
+      setActivityData(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadActivity() {
+      try {
+        setIsLoading(true);
+        const result = await getLearnerActivityData(activityId, subject.databaseId);
+        if (cancelled) return;
+
+        if (result.status === "success") {
+          setActivityData(result.data);
+          setPageState(null);
+        } else {
+          setActivityData(null);
+          setPageState(result.status);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(`Unable to load learner ${subject.displayName} activity:`, error);
+          setActivityData(null);
+          setPageState("error");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadActivity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activityId,
+    hasInitialActivityState,
+    subject.databaseId,
+    subject.displayName,
+  ]);
+
+  useEffect(() => {
+    if (!activityData) {
+      latestQuestionIdsRef.current = [];
+      latestActivityVersionRef.current = null;
+      latestAnswersRef.current = {};
+      return;
+    }
+
+    const nextQuestionIds = activityData.questions.map((question) => question.id);
+    const nextAnswers = reconcileAnswersForQuestionIds(
+      nextQuestionIds,
+      latestAnswersRef.current,
+    );
+
+    latestQuestionIdsRef.current = nextQuestionIds;
+    latestActivityVersionRef.current = activityData.activity.version;
+    latestAnswersRef.current = nextAnswers;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentQuestionIndex((currentIndex) =>
+      nextQuestionIds.length === 0
+        ? 0
+        : Math.min(currentIndex, nextQuestionIds.length - 1),
+    );
+  }, [activityData]);
+
+  useEffect(() => {
+    if (!activityData || !canonicalActivityId || submission) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsLoadingDraft(false);
+      return;
+    }
+
+    const draftActivityId = canonicalActivityId;
+    const currentActivity = activityData;
+    let cancelled = false;
+
+    async function loadDraft() {
+      setIsLoadingDraft(true);
+
+      try {
+        const response = await fetch(
+          "/api/learner/activity-drafts?activityId=" +
+            encodeURIComponent(draftActivityId),
+          { cache: "no-store" },
+        );
+        const result = (await response.json()) as DraftApiResponse;
+
+        if (!response.ok) {
+          throw new Error(result.error ?? "Unable to load activity draft");
+        }
+
+        if (cancelled) return;
+
+        setDraftLearnerId(result.learnerId);
+        localDraftCacheKeyRef.current = buildActivityDraftCacheKey({
+          learnerId: result.learnerId,
+          subjectId: subject.databaseId,
+          activityId: draftActivityId,
+        });
+
+        const currentActivityVersion = currentActivity.activity.version;
+        const localDraft = parseLocalLearnerActivityDraftCache(
+          typeof window === "undefined" || !localDraftCacheKeyRef.current
+            ? null
+            : window.localStorage.getItem(localDraftCacheKeyRef.current),
+        );
+        const validLocalDraft =
+          localDraft && localDraft.activityVersion === currentActivityVersion
+            ? localDraft
+            : null;
+        const validServerDraft =
+          result.draft && result.draft.activityVersion === currentActivityVersion
+            ? result.draft
+            : null;
+        const preferredDraft = choosePreferredDraftSource({
+          serverDraft: validServerDraft,
+          localDraft: validLocalDraft,
+        });
+
+        let nextAnswers: Record<string, string> = {};
+        let nextRevision = 0;
+        let nextUpdatedAt: string | undefined;
+
+        if (preferredDraft.winner === "server" && validServerDraft) {
+          nextAnswers = reconcileAnswersForQuestionIds(
+            latestQuestionIdsRef.current,
+            answersRecordFromDraft(validServerDraft.answers),
+          );
+          nextRevision = validServerDraft.revision;
+          nextUpdatedAt = validServerDraft.updatedAt;
+        } else if (preferredDraft.winner === "local" && validLocalDraft) {
+          nextAnswers = reconcileAnswersForQuestionIds(
+            latestQuestionIdsRef.current,
+            validLocalDraft.answers,
+          );
+          nextRevision = validLocalDraft.revision;
+          nextUpdatedAt = validLocalDraft.updatedAt;
+        }
+
+        latestDraftRevisionRef.current = nextRevision;
+        latestAnswersRef.current = nextAnswers;
+        lastConfirmedDraftPayloadRef.current = null;
+        pendingLifecycleDraftPayloadRef.current = null;
+        hasDirtyLocalDraftRef.current =
+          preferredDraft.winner === "local" && Boolean(validLocalDraft?.dirty);
+
+        setAnswers(nextAnswers);
+        setDraftSaveState(preferredDraft.winner === "none" ? "idle" : "saved");
+        setDraftNotice(
+          preferredDraft.newerDraftFound
+            ? "A newer draft was restored."
+            : "",
+        );
+
+        if (
+          preferredDraft.winner !== "none" &&
+          typeof window !== "undefined" &&
+          localDraftCacheKeyRef.current
+        ) {
+          const nextCache: LocalLearnerActivityDraftCache = {
+            learnerId: result.learnerId,
+            subjectId: subject.databaseId,
+            activityId: draftActivityId,
+            activityVersion: currentActivityVersion,
+            revision: nextRevision,
+            updatedAt: nextUpdatedAt ?? new Date().toISOString(),
+            answers: nextAnswers,
+            dirty: false,
+          };
+
+          window.localStorage.setItem(
+            localDraftCacheKeyRef.current,
+            JSON.stringify(nextCache),
+          );
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Unable to load learner activity draft:", error);
+          setDraftSaveState("error");
+          setDraftNotice("Unable to load draft");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingDraft(false);
+        }
+      }
+    }
+
+    void loadDraft();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activityData,
+    canonicalActivityId,
+    submission,
+    subject.databaseId,
+  ]);
+
   function readLocalDraftCache() {
+
     if (
       typeof window === "undefined" ||
       !localDraftCacheKeyRef.current
@@ -463,7 +678,7 @@ export function SubjectActivityPage({
     if (
       typeof window === "undefined" ||
       !pendingLifecycleDraftPayloadRef.current ||
-      !activityId ||
+      !canonicalActivityId ||
       !draftLearnerId ||
       !navigator.onLine ||
       submission ||
@@ -472,9 +687,11 @@ export function SubjectActivityPage({
       return;
     }
 
+    const draftActivityId = canonicalActivityId;
+
     try {
       const response = await fetch(
-        "/api/learner/activity-drafts?activityId=" + encodeURIComponent(activityId),
+        "/api/learner/activity-drafts?activityId=" + encodeURIComponent(draftActivityId),
       );
       const result = (await response.json()) as DraftApiResponse;
 
@@ -1047,8 +1264,4 @@ export function SubjectActivityPage({
 export default function BusinessStudiesActivityPage() {
   return <SubjectActivityPage />;
 }
-
-
-
-
 

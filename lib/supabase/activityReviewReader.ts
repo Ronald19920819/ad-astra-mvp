@@ -79,6 +79,7 @@ export type TeacherSubmissionReview = {
   reading: {
     title: string;
     contentText: string;
+    sourceType: "pasted_text" | "pdf";
   };
   questions: TeacherSubmissionReviewQuestion[];
 };
@@ -423,6 +424,7 @@ export async function getSubjectSubmissionReview(
       reading: {
         title: snapshot.reading.title,
         contentText: snapshot.reading.contentText,
+        sourceType: snapshot.reading.sourceType,
       },
       questions: reviewQuestions,
     };
@@ -445,6 +447,7 @@ export async function getSubjectSubmissionReview(
       material_type,
       title,
       content_text,
+      source_type,
       lessons!inner (
         id,
         subject_id,
@@ -476,13 +479,17 @@ export async function getSubjectSubmissionReview(
       ? {
           title: linkedMaterial.title,
           contentText: linkedMaterial.content_text,
+          sourceType:
+            linkedMaterial.source_type === "pdf"
+              ? ("pdf" as const)
+              : ("pasted_text" as const),
         }
       : null;
 
   if (!reading) {
     const { data: readingMaterial, error: readingError } = await supabase
       .from("lesson_materials")
-      .select("title, content_text")
+      .select("title, content_text, source_type")
       .eq("lesson_id", linkedMaterial.lesson_id)
       .eq("material_type", "reading")
       .order("display_order", { ascending: true })
@@ -494,6 +501,10 @@ export async function getSubjectSubmissionReview(
       reading = {
         title: readingMaterial.title,
         contentText: readingMaterial.content_text,
+        sourceType:
+          readingMaterial.source_type === "pdf"
+            ? ("pdf" as const)
+            : ("pasted_text" as const),
       };
     }
   }

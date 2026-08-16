@@ -2,6 +2,7 @@ import {
   classifyReadingSourceMaterial,
   hasSufficientEvidenceForQuestion,
   isLanguageSubjectKey,
+  questionRequiresSourceEvidence,
 } from "./languageSourceIntegrity";
 import {
   getQuestionEvidenceRequirement,
@@ -276,4 +277,232 @@ export function validateGeneratedQuestionIntegrity(args: {
   }
 
   return { ok: true, reason: null };
+}
+
+// Lesson quizzes have no paper/questionType presets (unlike activities), so
+// there is no per-question evidenceRequirement map to build from. These
+// helpers apply the same "never invent evidence" principle generically to a
+// plain 5-question multiple-choice quiz.
+
+const QUIZ_GENERIC_SOURCE_REFERENCE_PATTERN =
+  /\b(from the extract|from the source|from the passage|according to the (?:source|extract|text|passage)|use evidence from|quote|quotation|quoted|which phrase|which words?)\b/i;
+const QUIZ_SOURCE_LABEL_REFERENCE_PATTERN = /\bsource\s+[a-z0-9]\b/i;
+const QUIZ_VISUAL_REFERENCE_PATTERN =
+  /\b(the graph|the table|the map|the cartoon|the photograph|the photo|the image|the diagram|the chart|the statistics)\b/i;
+const QUIZ_CASE_STUDY_REFERENCE_PATTERN =
+  /\b(case study|the scenario|the business profile)\b/i;
+
+export type QuizQuestionForIntegrity = {
+  id: number;
+  questionText: string;
+};
+
+export type QuizIntegrityIssue = {
+  questionId: number;
+  reason: string;
+};
+
+export function buildQuizEvidenceIntegrityPrompt(args: {
+  subjectKey: SubjectKey;
+  readingSourceType: "pasted_text" | "pdf";
+  readingContent?: string | null;
+}) {
+  const readingSummary =
+    args.readingSourceType === "pdf"
+      ? "Authoritative reading format: PDF. You can inspect both the written content and the visual page evidence in the attached PDF."
+      : `Authoritative reading format: saved lesson text. ${describeReadingEvidenceSummary(
+          summarizeTextReadingEvidence(
+            args.subjectKey,
+            args.readingContent ?? "",
+          ),
+        )}`;
+
+  return `
+UNIVERSAL EVIDENCE INTEGRITY (QUIZ)
+
+- Generate every quiz question only from the supplied learner-visible lesson reading.
+- Every correct answer must be explicitly supported by the reading.
+- Every distractor must remain plausible but must never depend on an invented fact.
+- Never claim a source, extract, quotation, image, map, cartoon, photograph, graph, table or case study exists unless it genuinely exists in the supplied reading.
+- Never ask learners to quote, identify examples from an extract, or use evidence from a source unless that evidence is genuinely available in the supplied reading.
+- If the reading does not support a particular kind of question, choose a different, ordinary knowledge or comprehension question instead of inventing evidence.
+- If the reading is an attached PDF, inspect the actual PDF pages before deciding what is genuinely present.
+- Ordinary questions about taught content are still allowed and do not need a special source, as long as the reading actually teaches the answer.
+
+${readingSummary}
+`;
+}
+
+export function validateQuizQuestionsAgainstTextReading(args: {
+  subjectKey: SubjectKey;
+  readingContent: string;
+  questions: QuizQuestionForIntegrity[];
+}) {
+  const summary = summarizeTextReadingEvidence(args.subjectKey, args.readingContent);
+  const issues: QuizIntegrityIssue[] = [];
+
+  for (const question of args.questions) {
+    const questionText = question.questionText.trim();
+    if (!questionText) continue;
+
+    if (isLanguageSubjectKey(args.subjectKey)) {
+      const sufficiency = hasSufficientEvidenceForQuestion({
+        subjectKey: args.subjectKey,
+        questionText,
+        readingContent: args.readingContent,
+      });
+
+      if (!sufficiency.ok) {
+        issues.push({
+          questionId: question.id,
+          reason: `this question needs source/extract evidence the saved reading does not contain (${sufficiency.reason})`,
+        });
+      }
+
+      continue;
+    }
+
+    if (
+      QUIZ_SOURCE_LABEL_REFERENCE_PATTERN.test(questionText) &&
+      summary.historySourceCount === 0
+    ) {
+      issues.push({
+        questionId: question.id,
+        reason:
+          "the question refers to a labelled source that does not exist in the saved reading",
+      });
+      continue;
+    }
+
+    if (
+      QUIZ_VISUAL_REFERENCE_PATTERN.test(questionText) &&
+      summary.visualSourceCount === 0
+    ) {
+      issues.push({
+        questionId: question.id,
+        reason:
+          "the question refers to a visual source (graph, table, map, cartoon, photograph, image, diagram or statistics) that does not exist in the saved reading",
+      });
+      continue;
+    }
+
+    if (
+      QUIZ_CASE_STUDY_REFERENCE_PATTERN.test(questionText) &&
+      summary.businessContextSignalCount === 0
+    ) {
+      issues.push({
+        questionId: question.id,
+        reason:
+          "the question refers to a case study or business scenario that does not exist in the saved reading",
+      });
+      continue;
+    }
+
+    if (
+      QUIZ_GENERIC_SOURCE_REFERENCE_PATTERN.test(questionText) &&
+      summary.historySourceCount === 0
+    ) {
+      issues.push({
+        questionId: question.id,
+        reason:
+          "the question refers to an extract, source or quotation that does not exist in the saved reading",
+      });
+    }
+  }
+
+  return { summary, issues };
+}
+
+// --- Independent PDF verification (Task 2C.3) ---
+//
+// For PDF readings there is no deterministic text classifier to check the
+// generated question against (the evidence may be purely visual). Instead,
+// a SECOND, independent model call inspects the same PDF the learner will
+// receive and confirms whether the specific generated question is actually
+// supported. This is only worth the extra OpenAI call for questions that
+// plausibly depend on specific evidence — ordinary knowledge/recall
+// questions never trigger it.
+
+export type PdfVerificationQuestionInput = {
+  id: number;
+  questionText: string;
+  requirementLabel?: string | null;
+};
+
+/**
+ * Wording-only "does this question CLAIM special evidence" check, usable
+ * without any reading content (unlike hasSufficientEvidenceForQuestion,
+ * which needs the actual reading to judge sufficiency). Used to decide
+ * whether a PDF-backed quiz question needs independent verification, since
+ * quizzes have no per-question evidenceRequirement metadata to key off.
+ */
+export function quizQuestionClaimsSpecialEvidence(
+  subjectKey: SubjectKey,
+  questionText: string,
+): boolean {
+  const text = questionText.trim();
+  if (!text) return false;
+
+  if (
+    isLanguageSubjectKey(subjectKey) &&
+    questionRequiresSourceEvidence({ subjectKey, questionText: text })
+  ) {
+    return true;
+  }
+
+  return (
+    QUIZ_SOURCE_LABEL_REFERENCE_PATTERN.test(text) ||
+    QUIZ_VISUAL_REFERENCE_PATTERN.test(text) ||
+    QUIZ_CASE_STUDY_REFERENCE_PATTERN.test(text) ||
+    QUIZ_GENERIC_SOURCE_REFERENCE_PATTERN.test(text)
+  );
+}
+
+/** Mirrors the activity route's pickPdfDetail strategy for the verification call: only ask for high-fidelity PDF rendering when a candidate question actually claims visual evidence. */
+export function pickPdfVerificationDetail(
+  questions: Array<{ questionText: string }>,
+): "auto" | "high" {
+  return questions.some((question) =>
+    QUIZ_VISUAL_REFERENCE_PATTERN.test(question.questionText),
+  )
+    ? "high"
+    : "auto";
+}
+
+export function buildPdfQuestionVerificationPrompt(args: {
+  subjectKey: SubjectKey;
+  questions: PdfVerificationQuestionInput[];
+}) {
+  const questionList = args.questions
+    .map((question) => {
+      const requirement = question.requirementLabel
+        ? ` (requires: ${question.requirementLabel})`
+        : "";
+      return `- Question ${question.id}: "${question.questionText}"${requirement}`;
+    })
+    .join("\n");
+
+  return `
+INDEPENDENT PDF EVIDENCE VERIFICATION
+
+You are verifying, not generating. Do not answer, rewrite or improve any question below.
+
+For each question, determine whether it is fully answerable using only the attached PDF.
+Check that every source, extract, map, cartoon, image, photograph, table, graph, statistics, case study, quotation, comparison target, or named factual detail referenced by the question actually exists and is sufficiently available in the attached PDF.
+If a question requires comparing two sources, confirm at least two genuinely usable, distinct sources exist in the PDF.
+Do not infer or assume material that is not actually present in the PDF.
+
+Questions to verify:
+${questionList}
+
+Return valid JSON only using this exact structure:
+{
+  "results": [
+    { "questionId": 1, "supported": true, "reason": "Brief reason." }
+  ]
+}
+
+Return exactly one result for every question listed above, using the same question id.
+Do not include markdown. Do not include explanations outside the JSON.
+`;
 }

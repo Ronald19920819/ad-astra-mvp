@@ -5,6 +5,7 @@ import { buildLessonQuizPrompt } from "./lessonQuizPrompt";
 import { buildBusinessStudiesKingdomPrompt } from "./promptBuilder";
 import { buildReadingGenerationPrompt } from "./readingGenerationPrompt";
 import { buildReadingStructurePrompt } from "./readingStructurePrompt";
+import { buildQuizEvidenceIntegrityPrompt } from "../../../../subjects/questionEvidenceIntegrity";
 
 const authorContext = buildKingdomSubjectContext({
   subjectKey: "business-studies",
@@ -51,11 +52,17 @@ test("reading structure stays formatting-only and preserves order", () => {
 });
 
 test("lesson quiz generation strips Cambridge assessment instructions from the compiled text-reading prompt", () => {
+  const readingText = "Inputs include land, labour, capital and enterprise.";
   const prompt = buildLessonQuizPrompt({
     subjectContext: authorContext,
     readingTitle: "Business Inputs",
     readingSourceType: "pasted_text",
-    readingText: "Inputs include land, labour, capital and enterprise.",
+    readingText,
+    quizEvidenceIntegrityPrompt: buildQuizEvidenceIntegrityPrompt({
+      subjectKey: "business-studies",
+      readingSourceType: "pasted_text",
+      readingContent: readingText,
+    }),
   });
 
   assert.match(prompt, /exactly 5 multiple-choice reading-retrieval questions/i);
@@ -64,6 +71,8 @@ test("lesson quiz generation strips Cambridge assessment instructions from the c
   assert.match(prompt, /"optionA": "\.\.\."/);
   assert.match(prompt, /"optionD": "\.\.\."/);
   assert.match(prompt, /"correctOption": "B"/);
+  assert.match(prompt, /UNIVERSAL EVIDENCE INTEGRITY \(QUIZ\)/);
+  assert.match(prompt, /Never claim a source, extract, quotation/i);
   assert.doesNotMatch(prompt, /Paper 1/i);
   assert.doesNotMatch(prompt, /Paper 2/i);
   assert.doesNotMatch(prompt, /Use Cambridge Business Studies command words\./i);
@@ -77,11 +86,17 @@ test("lesson quiz prompt tells Kingdom to inspect the attached PDF when the save
     subjectContext: authorContext,
     readingTitle: "The Cold War Sources",
     readingSourceType: "pdf",
+    quizEvidenceIntegrityPrompt: buildQuizEvidenceIntegrityPrompt({
+      subjectKey: "history",
+      readingSourceType: "pdf",
+    }),
   });
 
   assert.match(prompt, /attached separately as a PDF file input/i);
   assert.match(prompt, /Inspect the attached PDF itself before drafting the quiz/i);
   assert.match(prompt, /Never invent facts/i);
+  assert.match(prompt, /UNIVERSAL EVIDENCE INTEGRITY \(QUIZ\)/);
+  assert.match(prompt, /inspect the actual PDF pages/i);
 });
 
 test("activity generation preserves question plans, output IDs and the integrity-check contract", () => {

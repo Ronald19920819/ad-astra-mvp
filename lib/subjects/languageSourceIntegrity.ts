@@ -24,8 +24,6 @@ const ENGLISH_SOURCE_LABEL_PATTERN =
   /\b(teaching extract|practice extract|extract|passage|poem|dialogue|story|article|speech|letter|text|example)\b/i;
 const AFRIKAANS_SOURCE_LABEL_PATTERN =
   /\b(voorbeeld|uittreksel|teks|gedig|dialoog|drama-uittreksel|verhaal)\b/i;
-const TEACHING_LABEL_PATTERN =
-  /\b(let'?s analyse it|what the example shows|teaching explanation|summary|key takeaways|definisie|kom ons ontleed dit|wat die voorbeeld wys|opsomming)\b/i;
 
 const ENGLISH_EVIDENCE_PATTERN =
   /\b(from the extract|from the text|from the passage|quote|quotation|quoted|textual evidence|evidence from the (?:extract|text|passage|story|poem)|words? or phrases?|writer'?s language|effect on the reader|structure of the extract|identify (?:two )?examples? from the (?:extract|text)|compare the two texts?|compare the writers'? perspectives?)\b/i;
@@ -143,10 +141,6 @@ function isSourceLabel(subjectKey: SubjectKey, label: string | null) {
     : ENGLISH_SOURCE_LABEL_PATTERN.test(label);
 }
 
-function blockLooksLikeDialogueOrVerse(text: string) {
-  return /["“”]/.test(text);
-}
-
 function classifySegment(
   subjectKey: SubjectKey,
   label: string | null,
@@ -156,9 +150,14 @@ function classifySegment(
   const wordCount = countWords(normalizedText);
   const candidateEvidenceCount = countCandidateEvidenceUnits(normalizedText);
   const labelledSource = isSourceLabel(subjectKey, label);
-  const teachingLabel = label ? TEACHING_LABEL_PATTERN.test(label) : false;
-  const dialogueOrVerse = blockLooksLikeDialogueOrVerse(normalizedText);
 
+  // A segment can only be a genuine learner-facing source when it carries an
+  // explicit source label (Extract, Passage, Uittreksel, etc.). Word count and
+  // the presence of quoted dialogue inside otherwise didactic prose are not
+  // reliable signals on their own — teaching sections routinely quote a short
+  // illustrative line while explaining a technique, which previously caused
+  // long unlabelled instructional prose to be misclassified as a substantial
+  // source (see the "Non-linear Narratives" regression case).
   let kind: ReadingSourceMaterialKind = "teaching-prose";
 
   if (labelledSource) {
@@ -166,8 +165,6 @@ function classifySegment(
       wordCount >= 35 && candidateEvidenceCount >= 2
         ? "substantial-source"
         : "short-illustrative-example";
-  } else if (!teachingLabel && dialogueOrVerse && wordCount >= 60) {
-    kind = "substantial-source";
   } else if (wordCount > 0 && wordCount <= 35 && candidateEvidenceCount <= 1) {
     kind = "short-illustrative-example";
   }

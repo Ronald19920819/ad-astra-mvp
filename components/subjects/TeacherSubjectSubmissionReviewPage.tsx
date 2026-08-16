@@ -156,9 +156,9 @@ export async function TeacherSubjectSubmissionReviewPage({
               {review.reading.title}
             </h2>
           </div>
-          {(review.reading as { sourceType?: "pasted_text" | "pdf" }).sourceType === "pdf" ? (
+          {review.reading.sourceType === "pdf" ? (
             <ProtectedPdfReading
-              sourceUrl={`/api/teacher/business-studies/reviews/${encodeURIComponent(review.id)}/reading-pdf`}
+              sourceUrl={`/api/teacher/business-studies/reviews/${encodeURIComponent(review.id)}/reading-pdf?subjectId=${encodeURIComponent(subject.databaseId)}`}
             />
           ) : (
             <div className="max-h-[32rem] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4">

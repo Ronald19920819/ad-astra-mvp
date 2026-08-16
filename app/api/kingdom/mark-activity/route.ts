@@ -337,7 +337,7 @@ export async function POST(request: Request) {
     if (
       !material ||
       material.material_type !== "reading" ||
-      !material.content_text?.trim()
+      (material.source_type !== "pdf" && !material.content_text?.trim())
     ) {
       return NextResponse.json(
         { error: "Activity not found", code: "NOT_FOUND" },

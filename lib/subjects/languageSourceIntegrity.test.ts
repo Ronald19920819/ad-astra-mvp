@@ -50,6 +50,33 @@ Heading: Text 2
 A dry wind swept the field as Musa opened the letter. He smiled, but his hands were shaking. The paper trembled while he read the final paragraph for a second time, and the silence around him felt sharper than before. He looked toward the gate, then folded the page carefully as if one careless movement might change what the words had already decided.
 `;
 
+// Reproduces the real "Understanding Narrative Structure" lesson content that
+// previously produced the known bad question: "Identify two examples from
+// the extract where the writer uses language to create suspense in a
+// non-linear narrative, and explain how these examples affect the reader."
+// The reading is instructional teaching prose ABOUT non-linear narratives —
+// it is not itself a genuine learner-facing extract — but it is long (well
+// over 60 words) and embeds a short illustrative quoted line, which is
+// exactly the combination the old classifier mistook for a substantial
+// source.
+const nonLinearNarrativeTeachingProseWithQuote = `
+Heading: Non-linear Narratives
+
+A non-linear narrative does not tell events in the order they happened.
+
+Instead, the writer deliberately changes the sequence of events. A story might begin near the end before returning to the beginning, or it may jump backwards and forwards between different periods of time.
+
+Imagine opening a novel with these words:
+
+"The old castle burned as James watched everything disappear into the flames."
+
+The reader immediately wonders how the castle caught fire and why James is there.
+
+The writer then returns to events that happened several weeks earlier to explain the story.
+
+Non-linear narratives encourage readers to think carefully about how different events connect and often create greater suspense or mystery.
+`;
+
 test("questionRequiresSourceEvidence detects extract-dependent English wording", () => {
   assert.equal(
     questionRequiresSourceEvidence({
@@ -207,4 +234,40 @@ test("lessonRequiresSubstantialSourceMaterial detects Afrikaans analytical lesso
 test("two-text reading is classified as substantial source material", () => {
   const classification = classifyReadingSourceMaterial(twoTextReading, "english");
   assert.equal(classification.substantialSourceCount >= 2, true);
+});
+
+test("Narrative Structure regression: long unlabelled teaching prose with an embedded quote is not a substantial source", () => {
+  const classification = classifyReadingSourceMaterial(
+    nonLinearNarrativeTeachingProseWithQuote,
+    "english",
+  );
+
+  assert.equal(classification.substantialSourceCount, 0);
+  assert.notEqual(classification.overallKind, "substantial-source");
+});
+
+test("Narrative Structure regression: the known bad question is detected as source-dependent", () => {
+  assert.equal(
+    questionRequiresSourceEvidence({
+      subjectKey: "english",
+      questionText:
+        "Identify two examples from the extract where the writer uses language to create suspense in a non-linear narrative, and explain how these examples affect the reader.",
+      questionType: "language-analysis",
+    }),
+    true,
+  );
+});
+
+test("Narrative Structure regression: the known bad question is blocked because no substantial source exists", () => {
+  const result = hasSufficientEvidenceForQuestion({
+    subjectKey: "english",
+    questionText:
+      "Identify two examples from the extract where the writer uses language to create suspense in a non-linear narrative, and explain how these examples affect the reader.",
+    questionType: "language-analysis",
+    readingContent: nonLinearNarrativeTeachingProseWithQuote,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "no_substantial_source");
+  assert.equal(result.classification.substantialSourceCount, 0);
 });

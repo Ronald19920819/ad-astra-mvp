@@ -45,6 +45,18 @@ export type OpenAIReadingInput = {
 
 export type OpenAIReadingInputContent = OpenAIReadingInput["content"];
 
+// Lets a second, independent Kingdom call (PDF question verification) reuse
+// the same already-uploaded OpenAI file instead of uploading the PDF again.
+export function extractPdfFileId(
+  content: OpenAIReadingInputContent,
+): string | null {
+  const fileEntry = content.find(
+    (item): item is Extract<OpenAIReadingInputContent[number], { type: "input_file" }> =>
+      item.type === "input_file",
+  );
+  return fileEntry?.file_id ?? null;
+}
+
 function cleanTitleForFilename(title: string) {
   const normalized = title
     .normalize("NFKD")

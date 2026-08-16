@@ -3,14 +3,23 @@ import { NextResponse } from "next/server";
 import { buildLessonQuizPrompt } from "@/lib/kingdom/author/business-studies/cambridge/lessonQuizPrompt";
 import {
   buildOpenAIReadingInput,
+  extractPdfFileId,
   resolveAuthoritativeLessonReading,
 } from "@/lib/kingdom/lessonReadingGeneration";
 import { buildKingdomSubjectContext } from "@/lib/kingdom/subjectContext";
+import { verifyQuestionsAgainstPdf } from "@/lib/kingdom/pdfQuestionVerification";
 import { isCompleteLessonQuizQuestion } from "@/lib/lessons/lessonQuiz";
 import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
+import {
+  buildQuizEvidenceIntegrityPrompt,
+  pickPdfVerificationDetail,
+  quizQuestionClaimsSpecialEvidence,
+  validateQuizQuestionsAgainstTextReading,
+  type PdfVerificationQuestionInput,
+} from "@/lib/subjects/questionEvidenceIntegrity";
 import {
   getSubjectConfiguration,
   isSubjectKey,
@@ -209,11 +218,17 @@ export async function POST(request: Request) {
       role: "Author",
       taskType: "Generate lesson reading quiz",
     });
+    const quizEvidenceIntegrityPrompt = buildQuizEvidenceIntegrityPrompt({
+      subjectKey,
+      readingSourceType: resolvedReading.reading.sourceType,
+      readingContent: resolvedReading.reading.contentText,
+    });
     const basePrompt = buildLessonQuizPrompt({
       subjectContext,
       readingTitle: resolvedReading.reading.title,
       readingSourceType: resolvedReading.reading.sourceType,
       readingText: resolvedReading.reading.plainText,
+      quizEvidenceIntegrityPrompt,
     });
 
     const readingInput = await buildOpenAIReadingInput({
@@ -272,6 +287,86 @@ IMPORTANT CORRECTION:
         },
         { status: 500 },
       );
+    }
+
+    if (
+      resolvedReading.reading.sourceType === "pasted_text" &&
+      resolvedReading.reading.contentText
+    ) {
+      const integrity = validateQuizQuestionsAgainstTextReading({
+        subjectKey,
+        readingContent: resolvedReading.reading.contentText,
+        questions: questions.map((question) => ({
+          id: question.id,
+          questionText: question.questionText,
+        })),
+      });
+
+      if (integrity.issues.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "Kingdom generated one or more quiz questions that require evidence the saved lesson reading does not actually contain.",
+            details: integrity.issues.map(
+              (issue) => `Question ${issue.questionId}: ${issue.reason}.`,
+            ),
+          },
+          { status: 422 },
+        );
+      }
+    }
+
+    // Independent second-pass verification for PDF-backed quizzes. Quizzes
+    // have no per-question evidenceRequirement metadata, so candidates are
+    // selected by wording alone (the same detection introduced in Task
+    // 2C.2). Ordinary knowledge questions never trigger the extra call.
+    if (resolvedReading.reading.sourceType === "pdf") {
+      const verificationCandidates: PdfVerificationQuestionInput[] = questions
+        .filter((question) =>
+          quizQuestionClaimsSpecialEvidence(subjectKey, question.questionText),
+        )
+        .map((question) => ({
+          id: question.id,
+          questionText: question.questionText,
+        }));
+
+      if (verificationCandidates.length > 0) {
+        const pdfFileId = extractPdfFileId(readingInput.content);
+        const verificationIssues: string[] = [];
+
+        if (!pdfFileId) {
+          verificationIssues.push(
+            "Kingdom could not verify one or more source-dependent questions because the PDF could not be reloaded for verification.",
+          );
+        } else {
+          const verificationResults = await verifyQuestionsAgainstPdf({
+            openai,
+            subjectKey,
+            fileId: pdfFileId,
+            detail: pickPdfVerificationDetail(verificationCandidates),
+            questions: verificationCandidates,
+          });
+
+          for (const result of verificationResults) {
+            if (!result.supported) {
+              verificationIssues.push(
+                `Question ${result.questionId}: ${result.reason}`,
+              );
+            }
+          }
+        }
+
+        if (verificationIssues.length > 0) {
+          return NextResponse.json(
+            {
+              error:
+                "Kingdom generated one or more quiz questions that require evidence the saved PDF reading does not actually contain.",
+              details: verificationIssues,
+            },
+            { status: 422 },
+          );
+        }
+      }
     }
 
     return NextResponse.json({
