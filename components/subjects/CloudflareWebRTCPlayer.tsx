@@ -41,6 +41,13 @@ export type CloudflareWebRTCLogContext = {
 type CloudflareWebRTCPlayerProps = {
   whepUrl: string;
   onConnected?: () => void;
+  // As of the Stage 1 reliability pass, hard failures (WHEP/SDP/pre-track
+  // connection errors) are no longer reported through this callback once
+  // the bounded retry budget is exhausted -- the player now shows its own
+  // recoverable FAILED UI with a manual Try Again action instead of handing
+  // off to the caller (LiveClassroomPlayer's HLS iframe fallback) silently.
+  // The prop is kept, still accepted, and still wired by callers, but is
+  // currently never invoked; left in place in case a future stage needs it.
   onFailure?: () => void;
   requireExplicitAudioJoin?: boolean;
   onDiagnosticsChange?: (diagnostics: CloudflarePlaybackDiagnostics) => void;
@@ -56,8 +63,11 @@ type WebRTCStatus =
   | "connecting"
   | "waiting-for-user"
   | "playing"
+  | "reconnecting"
   | "ended"
   | "failed";
+
+type FailedReason = "initial" | "connection-lost";
 
 type FailurePhase =
   | "peer-connection"
@@ -76,6 +86,21 @@ type FailurePhase =
 const WEBRTC_TIMEOUT_MS = 8000;
 const OFFLINE_RETRY_MS = 5000;
 const DISCONNECT_GRACE_MS = 3000;
+// Bounded backoff for hard failures (WHEP request/response errors, SDP
+// negotiation errors, pre-track peer-connection/ICE failures) — a
+// conceptually separate budget from the unbounded offline/waiting retry
+// above. Index 0 is the delay before retry attempt 1, etc. Once this many
+// consecutive hard failures have occurred, the player stops retrying
+// automatically and shows the FAILED UI with a manual Try Again action.
+const HARD_FAILURE_RETRY_DELAYS_MS = [1000, 2000, 4000];
+// Bounded backoff for MID-SESSION recovery -- used only after a live track
+// had already arrived and the connection subsequently degrades beyond the
+// short disconnect-grace window. Conceptually separate from both the
+// unbounded offline/waiting retry and the bounded initial hard-failure
+// retry above: a teacher starting OBS late must never consume this budget,
+// and a mid-lesson network blip must never consume the initial hard-failure
+// budget.
+const RECONNECT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 const IS_DEVELOPMENT = process.env.NODE_ENV === "development";
 const OFFLINE_IMAGE_SRC = "/live/currently-offline.png";
 let playbackAttemptCounter = 0;
@@ -197,6 +222,18 @@ export function CloudflareWebRTCPlayer({
   const sessionLocationRef = useRef<string | null>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
   const retryTimerRef = useRef<number | null>(null);
+  const hardFailureRetryTimerRef = useRef<number | null>(null);
+  const hardFailureAttemptRef = useRef(0);
+  const reconnectRetryTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  // Marks the NEXT attempt as originating from a mid-session reconnect
+  // retry, so that if that attempt itself fails (no track within the
+  // startup timeout, or a WHEP/SDP error), the failure counts against the
+  // bounded reconnect budget rather than silently falling back to the
+  // unbounded offline retry or the separate initial hard-failure budget.
+  // Set immediately before the attemptNonce bump that starts the attempt,
+  // and consumed (read once, then reset) at the top of that attempt.
+  const attemptOriginRef = useRef<"other" | "reconnect">("other");
   const disconnectGraceTimerRef = useRef<number | null>(null);
   const timeoutTimerRef = useRef<number | null>(null);
   const attemptActiveRef = useRef(false);
@@ -214,6 +251,7 @@ export function CloudflareWebRTCPlayer({
   const [status, setStatus] = useState<WebRTCStatus>("connecting");
   const [attemptNonce, setAttemptNonce] = useState(0);
   const [joinMessage, setJoinMessage] = useState<string | null>(null);
+  const [failedReason, setFailedReason] = useState<FailedReason>("initial");
   const [diagnostics, setDiagnostics] = useState<CloudflarePlaybackDiagnostics>({
     status: "connecting",
     muted: false,
@@ -501,6 +539,20 @@ export function CloudflareWebRTCPlayer({
       }
     };
 
+    const clearHardFailureRetryTimer = () => {
+      if (hardFailureRetryTimerRef.current !== null) {
+        window.clearTimeout(hardFailureRetryTimerRef.current);
+        hardFailureRetryTimerRef.current = null;
+      }
+    };
+
+    const clearReconnectRetryTimer = () => {
+      if (reconnectRetryTimerRef.current !== null) {
+        window.clearTimeout(reconnectRetryTimerRef.current);
+        reconnectRetryTimerRef.current = null;
+      }
+    };
+
     const clearDisconnectGraceTimer = () => {
       if (disconnectGraceTimerRef.current !== null) {
         window.clearTimeout(disconnectGraceTimerRef.current);
@@ -604,10 +656,113 @@ export function CloudflareWebRTCPlayer({
       }, OFFLINE_RETRY_MS);
     };
 
-    const transitionToOffline = (reason: string, nextStatus: "offline" | "ended") => {
-      invalidatePlaybackAttempt(`transition_to_${nextStatus}`);
+    const scheduleHardFailureRetry = (delayMs: number, phase: FailurePhase) => {
+      if (
+        !isMountedRef.current ||
+        hardFailureRetryTimerRef.current !== null ||
+        attemptActiveRef.current
+      ) {
+        return;
+      }
+
+      console.info(
+        `${logLabelRef.current} Hard failure (${phase}); scheduling retry attempt ${hardFailureAttemptRef.current + 1}/${HARD_FAILURE_RETRY_DELAYS_MS.length + 1} in ${delayMs}ms.`,
+      );
+
+      hardFailureRetryTimerRef.current = window.setTimeout(() => {
+        hardFailureRetryTimerRef.current = null;
+        if (!isMountedRef.current || attemptActiveRef.current) {
+          return;
+        }
+        silentRetryRef.current = true;
+        setAttemptNonce((current) => current + 1);
+      }, delayMs);
+    };
+
+    const scheduleReconnectRetry = (delayMs: number) => {
+      if (
+        !isMountedRef.current ||
+        reconnectRetryTimerRef.current !== null ||
+        attemptActiveRef.current
+      ) {
+        return;
+      }
+
+      reconnectRetryTimerRef.current = window.setTimeout(() => {
+        reconnectRetryTimerRef.current = null;
+        if (!isMountedRef.current || attemptActiveRef.current) {
+          return;
+        }
+        silentRetryRef.current = true;
+        attemptOriginRef.current = "reconnect";
+        setAttemptNonce((current) => current + 1);
+      }, delayMs);
+    };
+
+    // Mid-session recovery: only reached when a live track had already
+    // arrived and the connection subsequently degraded beyond the short
+    // disconnect-grace window. Deliberately distinct from
+    // transitionToOffline: we do NOT know from client-side WHEP alone
+    // whether the teacher ended OBS, the learner's network failed, or
+    // Cloudflare's session failed, so we neither claim the lesson "ended"
+    // nor fall back to the unbounded offline/waiting retry -- we run a
+    // bounded fresh-WHEP recovery attempt sequence, and only fall through
+    // to the existing Stage 1 FAILED UI (with connection-lost wording) once
+    // that budget is exhausted.
+    const transitionToReconnecting = (reason: string) => {
+      if (isCancelled) return;
+
+      invalidatePlaybackAttempt(`transition_to_reconnecting:${reason}`);
       clearAttemptTimeout();
       clearDisconnectGraceTimer();
+      clearHardFailureRetryTimer();
+      cleanupSession();
+      stopRemoteStream();
+      // Deliberately NOT calling clearVideoElement() here: we want the
+      // video element's last rendered frame to remain visible (dimmed,
+      // with a small "Reconnecting..." indicator) rather than blanking to
+      // the offline placeholder, per the Stage 2 RECONNECTING UI design.
+      closeExistingPeerConnection(reason);
+      hasLiveTrackRef.current = false;
+      attemptActiveRef.current = false;
+      setJoinMessage(null);
+
+      reconnectAttemptRef.current += 1;
+      const reconnectAttemptNumber = reconnectAttemptRef.current;
+
+      if (isMountedRef.current && !isCancelled) {
+        setStatus("reconnecting");
+      }
+
+      if (reconnectAttemptNumber <= RECONNECT_RETRY_DELAYS_MS.length) {
+        const delay = RECONNECT_RETRY_DELAYS_MS[reconnectAttemptNumber - 1];
+        console.info(
+          `${logLabelRef.current} Reconnecting (${reason}); attempt ${reconnectAttemptNumber}/${RECONNECT_RETRY_DELAYS_MS.length} in ${delay}ms.`,
+        );
+        scheduleReconnectRetry(delay);
+        return;
+      }
+
+      console.error(
+        `${logLabelRef.current} Mid-session reconnect budget exhausted after ${reconnectAttemptNumber} attempts (${reason}); showing FAILED UI.`,
+      );
+
+      setFailedReason("connection-lost");
+      if (isMountedRef.current) {
+        setStatus("failed");
+      }
+    };
+
+    const transitionToOffline = (reason: string, nextStatus: "offline" | "ended") => {
+      invalidatePlaybackAttempt(`transition_to_${nextStatus}`);
+      // Reaching a clean offline/ended determination means any prior hard
+      // failure or mid-session reconnect streak is no longer relevant to
+      // this attempt's health.
+      hardFailureAttemptRef.current = 0;
+      reconnectAttemptRef.current = 0;
+      clearAttemptTimeout();
+      clearDisconnectGraceTimer();
+      clearReconnectRetryTimer();
       cleanupSession();
       stopRemoteStream();
       clearVideoElement();
@@ -626,9 +781,30 @@ export function CloudflareWebRTCPlayer({
     const reportFailure = (phase: FailurePhase, details?: unknown) => {
       if (isCancelled) return;
 
+      console.error(`${logLabelRef.current} Cloudflare WHEP playback failed`);
+      console.error("WHEP attempt:", attemptId);
+      console.error("WHEP phase:", phase);
+      console.error("WHEP URL:", whepUrl);
+      console.error("WHEP details:", stringifyDetails(details));
+      logUnexpectedErrorDetails("WHEP diagnostic", details);
+
+      if (isReconnectAttempt) {
+        // This attempt was itself a mid-session reconnect retry -- a
+        // failure here (WHEP/SDP error, pre-track connection issue) stays
+        // on the reconnect budget rather than switching to the separate
+        // initial hard-failure budget, so messaging/UX stays consistent
+        // ("Connection to the live lesson was lost") and neither budget
+        // can silently borrow the other's allowance.
+        transitionToReconnecting(`reconnect_attempt_failure:${phase}`);
+        return;
+      }
+
       invalidatePlaybackAttempt(`failure:${phase}`);
+      reconnectAttemptRef.current = 0;
       clearAttemptTimeout();
       clearDisconnectGraceTimer();
+      clearHardFailureRetryTimer();
+      clearReconnectRetryTimer();
       cleanupSession();
       stopRemoteStream();
       clearVideoElement();
@@ -637,18 +813,43 @@ export function CloudflareWebRTCPlayer({
       attemptActiveRef.current = false;
       setJoinMessage(null);
 
+      // Bounded hard-failure retry, deliberately separate from the
+      // unbounded offline/waiting retry above. This covers WHEP
+      // request/response failures, SDP negotiation failures, and pre-track
+      // peer-connection/ICE failures -- previously these left the player
+      // permanently stuck with no automatic recovery and no visible UI.
+      //
+      // Note: a non-NotAllowedError autoplay failure (see the "autoplay"
+      // call site below) also reports through here today, so it now shares
+      // this same bounded retry rather than being a separate dead end --
+      // safe (still bounded, still fully torn down and rebuilt each try)
+      // but audio-policy failures and connection-health failures remain
+      // conflated. Decoupling that is left for a later stage.
+      hardFailureAttemptRef.current += 1;
+      const hardFailureAttemptNumber = hardFailureAttemptRef.current;
+
+      if (hardFailureAttemptNumber <= HARD_FAILURE_RETRY_DELAYS_MS.length) {
+        scheduleHardFailureRetry(
+          HARD_FAILURE_RETRY_DELAYS_MS[hardFailureAttemptNumber - 1],
+          phase,
+        );
+        return;
+      }
+
+      console.error(
+        `${logLabelRef.current} Hard failure retry budget exhausted after ${hardFailureAttemptNumber} attempts (${phase}); showing FAILED UI.`,
+      );
+
+      setFailedReason("initial");
       if (isMountedRef.current) {
         setStatus("failed");
       }
 
-      console.error(`${logLabelRef.current} Cloudflare WHEP playback failed`);
-      console.error("WHEP attempt:", attemptId);
-      console.error("WHEP phase:", phase);
-      console.error("WHEP URL:", whepUrl);
-      console.error("WHEP details:", stringifyDetails(details));
-      logUnexpectedErrorDetails("WHEP diagnostic", details);
-
-      onFailureRef.current?.();
+      // Deliberately NOT calling onFailureRef here (see component-level
+      // comment on the `onFailure` prop): the player now has its own
+      // recoverable FAILED UI with a manual Try Again action, which is a
+      // strictly more informative and recoverable outcome than the prior
+      // silent, permanent hand-off to the HLS iframe fallback.
     };
 
     if (IS_DEVELOPMENT) {
@@ -658,6 +859,8 @@ export function CloudflareWebRTCPlayer({
     }
 
     clearRetryTimer();
+    clearHardFailureRetryTimer();
+    clearReconnectRetryTimer();
     clearDisconnectGraceTimer();
     clearAttemptTimeout();
     cleanupSession();
@@ -669,6 +872,12 @@ export function CloudflareWebRTCPlayer({
     attemptActiveRef.current = true;
     const isSilentRetry = silentRetryRef.current;
     silentRetryRef.current = false;
+    // Consumed once per attempt: whether THIS attempt was scheduled by the
+    // mid-session reconnect retry mechanism, so failures within it stay on
+    // the reconnect budget (see reportFailure and the no-track timeout
+    // below) instead of switching to a different budget/messaging mid-flow.
+    const isReconnectAttempt = attemptOriginRef.current === "reconnect";
+    attemptOriginRef.current = "other";
     if (isMountedRef.current && !isSilentRetry) {
       setStatus("connecting");
     }
@@ -683,6 +892,18 @@ export function CloudflareWebRTCPlayer({
 
     timeoutTimerRef.current = window.setTimeout(() => {
       if (!hasLiveTrackRef.current) {
+        if (isReconnectAttempt) {
+          // A mid-session reconnect attempt that itself never received a
+          // live track is a failed reconnect attempt, not a fresh "OBS
+          // hasn't started" reading -- keep it on the bounded reconnect
+          // budget instead of falling back to the unbounded offline retry.
+          console.info(
+            `${logLabelRef.current} Reconnect attempt ${attemptId} timed out after ${WEBRTC_TIMEOUT_MS}ms without a live track.`,
+          );
+          transitionToReconnecting("reconnect_attempt_no_track_timeout");
+          return;
+        }
+
         // Always-on (not IS_DEVELOPMENT-gated): this is the exact transition
         // that produces the "stuck on offline placeholder" symptom, and it
         // is the one diagnostic signal needed to tell whether this viewer's
@@ -730,11 +951,55 @@ export function CloudflareWebRTCPlayer({
         return;
       }
 
-      const handleTrackEnded = (kind: string) => {
-        if (IS_DEVELOPMENT) {
-          console.info(`Cloudflare WHEP ${kind} track ended`);
+      // A single track ending is not, by itself, proof the whole session
+      // died -- Cloudflare/OBS may drop only audio or only video briefly.
+      // If a track of the OTHER kind is still live, give it a short settle
+      // window (reusing the existing disconnect-grace duration) before
+      // deciding the session genuinely needs full recovery. Deliberately
+      // simple: no per-track reconstruction, just "is anything still live".
+      const handleTrackEnded = (endedTrack: MediaStreamTrack) => {
+        if (peerConnectionRef.current !== peerConnection || isCancelled) {
+          return;
         }
-        transitionToOffline(`track_ended_${kind}`, "ended");
+
+        if (IS_DEVELOPMENT) {
+          console.info(`Cloudflare WHEP ${endedTrack.kind} track ended`);
+        }
+
+        const remainingLiveTracks = remoteStream
+          .getTracks()
+          .filter((track) => track !== endedTrack && track.readyState === "live");
+
+        if (remainingLiveTracks.length > 0) {
+          console.info(
+            `${logLabelRef.current} ${endedTrack.kind} track ended; ${remainingLiveTracks.length} other track(s) still live, waiting briefly before recovering.`,
+          );
+
+          clearDisconnectGraceTimer();
+          disconnectGraceTimerRef.current = window.setTimeout(() => {
+            disconnectGraceTimerRef.current = null;
+            if (isCancelled || peerConnectionRef.current !== peerConnection) {
+              return;
+            }
+
+            const stillHasLiveTrack = remoteStreamRef.current
+              ? remoteStreamRef.current
+                  .getTracks()
+                  .some((track) => track.readyState === "live")
+              : false;
+
+            if (stillHasLiveTrack) {
+              return;
+            }
+
+            transitionToReconnecting(
+              `track_ended_${endedTrack.kind}_no_remaining_live_tracks`,
+            );
+          }, DISCONNECT_GRACE_MS);
+          return;
+        }
+
+        transitionToReconnecting(`track_ended_${endedTrack.kind}`);
       };
 
       peerConnection.addEventListener("track", (event) => {
@@ -746,11 +1011,15 @@ export function CloudflareWebRTCPlayer({
           }
 
           track.onended = () => {
-            handleTrackEnded(track.kind);
+            handleTrackEnded(track);
           };
         }
 
         hasLiveTrackRef.current = true;
+        // A live track arriving means any prior hard failure or mid-session
+        // reconnect streak is over.
+        hardFailureAttemptRef.current = 0;
+        reconnectAttemptRef.current = 0;
         clearDisconnectGraceTimer();
         clearAttemptTimeout();
         syncMediaDiagnostics();
@@ -866,12 +1135,28 @@ export function CloudflareWebRTCPlayer({
       });
 
       peerConnection.addEventListener("connectionstatechange", () => {
+        // Stale-connection guard: once a peer connection has been replaced
+        // or intentionally closed (closeExistingPeerConnection nulls the
+        // ref synchronously), any later event it still fires -- including
+        // the "closed" transition close() itself causes -- must not trigger
+        // recovery. This also prevents connectionState and
+        // iceConnectionState from both independently reacting to the same
+        // real degradation once the first one has already started recovery.
+        if (peerConnectionRef.current !== peerConnection) {
+          return;
+        }
+
         updateDiagnostics({ connectionState: peerConnection.connectionState });
         if (IS_DEVELOPMENT) {
           console.info("WHEP connection state:", peerConnection.connectionState);
         }
 
         if (peerConnection.connectionState === "connected") {
+          if (disconnectGraceTimerRef.current !== null) {
+            console.info(
+              `${logLabelRef.current} Connection recovered within the disconnect grace window.`,
+            );
+          }
           clearDisconnectGraceTimer();
           return;
         }
@@ -881,7 +1166,7 @@ export function CloudflareWebRTCPlayer({
           peerConnection.connectionState === "closed"
         ) {
           if (hasLiveTrackRef.current) {
-            transitionToOffline(`connection_${peerConnection.connectionState}`, "ended");
+            transitionToReconnecting(`connection_${peerConnection.connectionState}`);
             return;
           }
 
@@ -893,16 +1178,20 @@ export function CloudflareWebRTCPlayer({
 
         if (peerConnection.connectionState === "disconnected") {
           clearDisconnectGraceTimer();
+          console.info(
+            `${logLabelRef.current} Connection disconnected; starting ${DISCONNECT_GRACE_MS}ms grace period.`,
+          );
           disconnectGraceTimerRef.current = window.setTimeout(() => {
+            disconnectGraceTimerRef.current = null;
             if (
-              !peerConnectionRef.current ||
-              peerConnectionRef.current.connectionState !== "disconnected"
+              peerConnectionRef.current !== peerConnection ||
+              peerConnection.connectionState !== "disconnected"
             ) {
               return;
             }
 
             if (hasLiveTrackRef.current) {
-              transitionToOffline("connection_disconnected_grace_elapsed", "ended");
+              transitionToReconnecting("connection_disconnected_grace_elapsed");
               return;
             }
 
@@ -914,6 +1203,10 @@ export function CloudflareWebRTCPlayer({
       });
 
       peerConnection.addEventListener("iceconnectionstatechange", () => {
+        if (peerConnectionRef.current !== peerConnection) {
+          return;
+        }
+
         updateDiagnostics({ iceConnectionState: peerConnection.iceConnectionState });
         if (IS_DEVELOPMENT) {
           console.info("WHEP ICE connection state:", peerConnection.iceConnectionState);
@@ -923,6 +1216,11 @@ export function CloudflareWebRTCPlayer({
           peerConnection.iceConnectionState === "connected" ||
           peerConnection.iceConnectionState === "completed"
         ) {
+          if (disconnectGraceTimerRef.current !== null) {
+            console.info(
+              `${logLabelRef.current} ICE connection recovered within the disconnect grace window.`,
+            );
+          }
           clearDisconnectGraceTimer();
           return;
         }
@@ -932,7 +1230,7 @@ export function CloudflareWebRTCPlayer({
           peerConnection.iceConnectionState === "closed"
         ) {
           if (hasLiveTrackRef.current) {
-            transitionToOffline(`ice_${peerConnection.iceConnectionState}`, "ended");
+            transitionToReconnecting(`ice_${peerConnection.iceConnectionState}`);
             return;
           }
 
@@ -944,16 +1242,20 @@ export function CloudflareWebRTCPlayer({
 
         if (peerConnection.iceConnectionState === "disconnected") {
           clearDisconnectGraceTimer();
+          console.info(
+            `${logLabelRef.current} ICE connection disconnected; starting ${DISCONNECT_GRACE_MS}ms grace period.`,
+          );
           disconnectGraceTimerRef.current = window.setTimeout(() => {
+            disconnectGraceTimerRef.current = null;
             if (
-              !peerConnectionRef.current ||
-              peerConnectionRef.current.iceConnectionState !== "disconnected"
+              peerConnectionRef.current !== peerConnection ||
+              peerConnection.iceConnectionState !== "disconnected"
             ) {
               return;
             }
 
             if (hasLiveTrackRef.current) {
-              transitionToOffline("ice_disconnected_grace_elapsed", "ended");
+              transitionToReconnecting("ice_disconnected_grace_elapsed");
               return;
             }
 
@@ -1089,6 +1391,8 @@ export function CloudflareWebRTCPlayer({
       clearAttemptTimeout();
       clearDisconnectGraceTimer();
       clearRetryTimer();
+      clearHardFailureRetryTimer();
+      clearReconnectRetryTimer();
       abortController.abort();
       cleanupSession();
       stopRemoteStream();
@@ -1099,8 +1403,36 @@ export function CloudflareWebRTCPlayer({
     };
   }, [attemptNonce, whepUrl]);
 
+  const handleTryAgain = () => {
+    if (attemptActiveRef.current) {
+      return;
+    }
+
+    if (hardFailureRetryTimerRef.current !== null) {
+      window.clearTimeout(hardFailureRetryTimerRef.current);
+      hardFailureRetryTimerRef.current = null;
+    }
+
+    if (reconnectRetryTimerRef.current !== null) {
+      window.clearTimeout(reconnectRetryTimerRef.current);
+      reconnectRetryTimerRef.current = null;
+    }
+
+    console.info(
+      `${logLabelRef.current} Manual Try Again requested; resetting hard failure and reconnect budgets.`,
+    );
+
+    hardFailureAttemptRef.current = 0;
+    reconnectAttemptRef.current = 0;
+    silentRetryRef.current = false;
+    setAttemptNonce((current) => current + 1);
+  };
+
   const showOfflineImage =
-    status === "offline" || status === "connecting" || status === "ended";
+    status === "offline" ||
+    status === "connecting" ||
+    status === "ended" ||
+    status === "failed";
   const showJoinOverlay = status === "waiting-for-user" && requireExplicitAudioJoin;
 
   return (
@@ -1127,6 +1459,15 @@ export function CloudflareWebRTCPlayer({
       {status === "connecting" ? (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/25 px-4 text-center text-sm font-medium text-white">
           Connecting to the live stream...
+        </div>
+      ) : null}
+
+      {status === "reconnecting" ? (
+        <div className="absolute inset-0 flex items-end justify-center bg-slate-950/20 px-4 pb-6">
+          <div className="flex items-center gap-2 rounded-full bg-slate-950/80 px-4 py-2 text-sm font-medium text-white shadow-sm">
+            <span className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-amber-400" />
+            Reconnecting to the live lesson…
+          </div>
         </div>
       ) : null}
 
@@ -1249,6 +1590,28 @@ export function CloudflareWebRTCPlayer({
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-900 shadow-sm"
             >
               Join Live Lesson
+            </button>
+          </div>
+        </div>
+      ) : status === "failed" ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/65 px-4 text-center">
+          <div className="max-w-sm space-y-4 rounded-[1.5rem] border border-white/15 bg-slate-950/75 p-6 shadow-lg backdrop-blur-sm">
+            <div className="space-y-2">
+              <p className="text-lg font-bold text-white">
+                {failedReason === "connection-lost"
+                  ? "Connection to the live lesson was lost."
+                  : "Unable to connect to the live lesson."}
+              </p>
+              <p className="text-sm text-white/90">
+                Check your connection and try again.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleTryAgain}
+              className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-900 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
+            >
+              Try Again
             </button>
           </div>
         </div>
