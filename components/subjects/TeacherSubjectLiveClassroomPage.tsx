@@ -107,6 +107,7 @@ export async function TeacherSubjectLiveClassroomPage({
             <LiveClassroomPlayer
               subjectColour={subject.colourTheme.primary}
               subjectSoftBackground={subject.colourTheme.softBackground}
+              logContext={{ role: "teacher", subjectKey }}
             />
           </section>
 

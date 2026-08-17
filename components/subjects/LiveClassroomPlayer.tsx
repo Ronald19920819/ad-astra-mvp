@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import CloudflareWebRTCPlayer, {
   type CloudflarePlaybackDiagnostics,
   type CloudflarePerformanceDiagnostics,
+  type CloudflareWebRTCLogContext,
 } from "@/components/subjects/CloudflareWebRTCPlayer";
 
 const CLOUDFLARE_STREAM_HOST = "customer-txjjmf9yh6vpwg3s.cloudflarestream.com";
@@ -48,11 +49,13 @@ export function LiveClassroomPlayer({
   subjectSoftBackground,
   requireExplicitAudioJoin = false,
   showLearnerSupportInfo = false,
+  logContext,
 }: {
   subjectColour: string;
   subjectSoftBackground: string;
   requireExplicitAudioJoin?: boolean;
   showLearnerSupportInfo?: boolean;
+  logContext?: CloudflareWebRTCLogContext;
 }) {
   const [hasIframeLoadError, setHasIframeLoadError] = useState(false);
   const [useHlsFallback, setUseHlsFallback] = useState(false);
@@ -86,6 +89,7 @@ export function LiveClassroomPlayer({
             collectPerformanceDiagnostics={shouldCollectPerformanceDiagnostics}
             onDiagnosticsChange={setDiagnostics}
             onPerformanceDiagnosticsChange={setPerformanceDiagnostics}
+            logContext={logContext}
             onFailure={() => {
               setUseHlsFallback(true);
               setPerformanceDiagnostics(null);

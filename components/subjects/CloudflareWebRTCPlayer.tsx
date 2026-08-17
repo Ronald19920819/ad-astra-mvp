@@ -33,6 +33,11 @@ export type CloudflarePerformanceDiagnostics = {
   transportLabel: string | null;
 };
 
+export type CloudflareWebRTCLogContext = {
+  role: "teacher" | "learner";
+  subjectKey: string;
+};
+
 type CloudflareWebRTCPlayerProps = {
   whepUrl: string;
   onConnected?: () => void;
@@ -43,6 +48,7 @@ type CloudflareWebRTCPlayerProps = {
   onPerformanceDiagnosticsChange?: (
     diagnostics: CloudflarePerformanceDiagnostics | null,
   ) => void;
+  logContext?: CloudflareWebRTCLogContext;
 };
 
 type WebRTCStatus =
@@ -181,7 +187,11 @@ export function CloudflareWebRTCPlayer({
   onDiagnosticsChange,
   collectPerformanceDiagnostics = false,
   onPerformanceDiagnosticsChange,
+  logContext,
 }: CloudflareWebRTCPlayerProps) {
+  const logLabel = logContext
+    ? `[${logContext.role}:${logContext.subjectKey}]`
+    : "[live-classroom]";
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const sessionLocationRef = useRef<string | null>(null);
@@ -196,6 +206,7 @@ export function CloudflareWebRTCPlayer({
   const onFailureRef = useRef(onFailure);
   const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
   const onPerformanceDiagnosticsChangeRef = useRef(onPerformanceDiagnosticsChange);
+  const logLabelRef = useRef(logLabel);
   const mediaPlaybackTokenRef = useRef(0);
   const silentRetryRef = useRef(false);
   const hasLearnerJoinedRef = useRef(false);
@@ -227,6 +238,10 @@ export function CloudflareWebRTCPlayer({
   useEffect(() => {
     onPerformanceDiagnosticsChangeRef.current = onPerformanceDiagnosticsChange;
   }, [onPerformanceDiagnosticsChange]);
+
+  useEffect(() => {
+    logLabelRef.current = logLabel;
+  }, [logLabel]);
 
   useEffect(() => {
     onDiagnosticsChangeRef.current?.(diagnostics);
@@ -626,7 +641,7 @@ export function CloudflareWebRTCPlayer({
         setStatus("failed");
       }
 
-      console.error("Cloudflare WHEP playback failed");
+      console.error(`${logLabelRef.current} Cloudflare WHEP playback failed`);
       console.error("WHEP attempt:", attemptId);
       console.error("WHEP phase:", phase);
       console.error("WHEP URL:", whepUrl);
@@ -668,10 +683,13 @@ export function CloudflareWebRTCPlayer({
 
     timeoutTimerRef.current = window.setTimeout(() => {
       if (!hasLiveTrackRef.current) {
-        if (IS_DEVELOPMENT) {
-          console.info("Offline WHEP check timed out; remaining offline.");
-          console.info("WHEP attempt:", attemptId);
-        }
+        // Always-on (not IS_DEVELOPMENT-gated): this is the exact transition
+        // that produces the "stuck on offline placeholder" symptom, and it
+        // is the one diagnostic signal needed to tell whether this viewer's
+        // WHEP session ever received a live track. Contains no secrets.
+        console.info(
+          `${logLabelRef.current} WHEP attempt ${attemptId} timed out after ${WEBRTC_TIMEOUT_MS}ms without a live track; showing offline placeholder.`,
+        );
         transitionToOffline("offline_start_timeout", "offline");
         return;
       }
