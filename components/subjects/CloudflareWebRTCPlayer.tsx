@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import type { WebRTCStatus } from "@/lib/liveClass/playerStatus";
 
 export type CloudflarePlaybackDiagnostics = {
   status: WebRTCStatus;
@@ -50,6 +51,12 @@ type CloudflareWebRTCPlayerProps = {
   // currently never invoked; left in place in case a future stage needs it.
   onFailure?: () => void;
   requireExplicitAudioJoin?: boolean;
+  // Fires whenever the player's own status changes. Purely additive/
+  // read-only from the connection state machine's perspective -- it does
+  // not participate in any retry/cleanup/race-protection logic. Lets a
+  // parent page reflect real player state (e.g. "Live now", "Reconnecting")
+  // without coupling page layout to WebRTC internals.
+  onStatusChange?: (status: WebRTCStatus) => void;
   onDiagnosticsChange?: (diagnostics: CloudflarePlaybackDiagnostics) => void;
   collectPerformanceDiagnostics?: boolean;
   onPerformanceDiagnosticsChange?: (
@@ -57,15 +64,6 @@ type CloudflareWebRTCPlayerProps = {
   ) => void;
   logContext?: CloudflareWebRTCLogContext;
 };
-
-type WebRTCStatus =
-  | "offline"
-  | "connecting"
-  | "waiting-for-user"
-  | "playing"
-  | "reconnecting"
-  | "ended"
-  | "failed";
 
 type FailedReason = "initial" | "connection-lost";
 
@@ -209,6 +207,7 @@ export function CloudflareWebRTCPlayer({
   onConnected,
   onFailure,
   requireExplicitAudioJoin = false,
+  onStatusChange,
   onDiagnosticsChange,
   collectPerformanceDiagnostics = false,
   onPerformanceDiagnosticsChange,
@@ -241,6 +240,7 @@ export function CloudflareWebRTCPlayer({
   const isMountedRef = useRef(false);
   const onConnectedRef = useRef(onConnected);
   const onFailureRef = useRef(onFailure);
+  const onStatusChangeRef = useRef(onStatusChange);
   const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
   const onPerformanceDiagnosticsChangeRef = useRef(onPerformanceDiagnosticsChange);
   const logLabelRef = useRef(logLabel);
@@ -270,8 +270,16 @@ export function CloudflareWebRTCPlayer({
   }, [onFailure]);
 
   useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+
+  useEffect(() => {
     onDiagnosticsChangeRef.current = onDiagnosticsChange;
   }, [onDiagnosticsChange]);
+
+  useEffect(() => {
+    onStatusChangeRef.current?.(status);
+  }, [status]);
 
   useEffect(() => {
     onPerformanceDiagnosticsChangeRef.current = onPerformanceDiagnosticsChange;

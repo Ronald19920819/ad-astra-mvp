@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
-import { ArrowLeft, MonitorPlay, Radio } from "lucide-react";
+import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
-import LiveClassChatPanel from "@/components/subjects/LiveClassChatPanel";
-import LiveClassroomPlayer from "@/components/subjects/LiveClassroomPlayer";
+import LiveClassroomWorkspace from "@/components/subjects/LiveClassroomWorkspace";
+import { getMediaProviderForSubject } from "@/lib/liveClass/mediaProvider";
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
 import { verifyLearnerSubjectAccessForProfile } from "@/lib/supabase/subjectAccess";
 import {
@@ -20,6 +20,20 @@ export async function SubjectLiveClassroomPage({
   subjectKey?: SubjectKey;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
+  const mediaProvider = getMediaProviderForSubject(subjectKey);
+
+  // TEMPORARY DIAGNOSTIC (Stage 3 pilot activation): server-side only,
+  // development-only, never rendered in the learner-facing UI -- lets a
+  // developer confirm which media provider a given subject resolved to
+  // without needing to expose that detail to learners.
+  if (process.env.NODE_ENV === "development") {
+    console.info("[Live Classroom] media provider:", {
+      mediaProvider,
+      subjectKey,
+      subjectId: subject.databaseId,
+    });
+  }
+
   const themeStyle = {
     "--subject-primary": subject.colourTheme.primary,
     "--subject-soft": subject.colourTheme.softBackground,
@@ -96,50 +110,21 @@ export async function SubjectLiveClassroomPage({
           </div>
         </section>
 
-        <div className="mb-5 grid grid-cols-1 gap-5 md:gap-6 lg:mb-8 lg:grid-cols-[minmax(0,7fr)_minmax(20rem,3fr)] lg:items-start lg:gap-6">
-          <section className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Live Classroom
-              </h2>
-              <p className="text-sm text-slate-500">
-                Join your teacher&apos;s live lesson when it is in session.
-              </p>
-            </div>
-
-            <LiveClassroomPlayer
-              subjectColour={subject.colourTheme.primary}
-              subjectSoftBackground={subject.colourTheme.softBackground}
-              requireExplicitAudioJoin
-              logContext={{ role: "learner", subjectKey }}
-            />
-          </section>
-
-          <LiveClassChatPanel
-            subjectId={subject.databaseId}
-            subjectColour={subject.colourTheme.primary}
-            subjectSoftBackground={subject.colourTheme.softBackground}
-            presenceIdentity={{
-              profileId: activeLearnerProfile!.profileId,
-              displayName: activeLearnerProfile!.displayName,
-              role: "learner",
-            }}
-          />
-        </div>
-
-        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:mb-8">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="rounded-2xl bg-[var(--subject-soft)] p-3 text-[var(--subject-primary)]">
-              <Radio size={20} />
-            </div>
-            <h2 className="text-lg font-bold text-[#102A43]">
-              Today&apos;s Live Lesson
-            </h2>
-          </div>
-          <p className="text-sm text-slate-600">
-            No live lesson is currently in progress.
-          </p>
-        </section>
+        <LiveClassroomWorkspace
+          subjectKey={subjectKey}
+          subjectDatabaseId={subject.databaseId}
+          subjectColour={subject.colourTheme.primary}
+          subjectSoftBackground={subject.colourTheme.softBackground}
+          role="learner"
+          presenceIdentity={{
+            profileId: activeLearnerProfile!.profileId,
+            displayName: activeLearnerProfile!.displayName,
+            role: "learner",
+          }}
+          requireExplicitAudioJoin
+          videoCardSubtitle="Join your teacher's live lesson when it is in session."
+          mediaProvider={mediaProvider}
+        />
 
         <section className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-bold text-[#102A43]">

@@ -1,7 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MessageCircle, Send } from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
 type LiveClassMessage = {
@@ -22,6 +31,23 @@ type PresenceIdentity = {
 
 type PresenceEntry = PresenceIdentity & {
   joinedAt: string;
+  raisedHand: boolean;
+};
+
+export type LearnerPresenceInfo = {
+  profileId: string;
+  displayName: string;
+  raisedHand: boolean;
+};
+
+export type LiveClassChatPanelHandle = {
+  raiseHand: () => void;
+  lowerHand: () => void;
+  clearLearnerHand: (learnerProfileId: string) => void;
+};
+
+type TeacherClearHandPayload = {
+  learnerProfileId: string;
 };
 
 type ConnectionState = "connected" | "reconnecting" | "unavailable";
@@ -40,6 +66,11 @@ type RealtimeMessageRow = {
 type BufferedRealtimeEvent =
   | { kind: "insert"; row: RealtimeMessageRow }
   | { kind: "update"; row: RealtimeMessageRow };
+
+// A learner who disappears from presence and reappears within this window is
+// treated as a blip (e.g. a brief realtime reconnect), not a genuine leave/
+// rejoin -- keeps the teacher's join/leave sounds restrained.
+const LEAVE_SOUND_GRACE_MS = 8000;
 
 function formatTimestamp(createdAt: string) {
   const date = new Date(createdAt);
@@ -128,37 +159,102 @@ function mergeFetchedMessages(
   );
 }
 
-function countUniqueLearners(entries: PresenceEntry[][]) {
-  const learnerIds = new Set<string>();
+// --- Lightweight, dependency-free notification sounds ---
+//
+// Static audio assets were the preferred approach, but generating real
+// binary audio files isn't something this tooling can produce -- instead we
+// synthesize short, restrained tones via the standard Web Audio API. No
+// external file, no library, and any failure (blocked autoplay policy,
+// unsupported browser, etc.) is swallowed silently so it can never affect
+// chat, presence, video, or Raise Hand.
+type WindowWithWebkitAudioContext = Window & {
+  webkitAudioContext?: typeof AudioContext;
+};
 
-  for (const group of entries) {
-    for (const presence of group) {
-      if (presence.role === "learner") {
-        learnerIds.add(presence.profileId);
-      }
+function playTone(frequencies: number[], noteDurationMs: number) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const AudioContextClass =
+      window.AudioContext ?? (window as WindowWithWebkitAudioContext).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const context = new AudioContextClass();
+    const noteDurationSeconds = noteDurationMs / 1000;
+    const noteGapSeconds = 0.09;
+    const now = context.currentTime;
+
+    frequencies.forEach((frequency, index) => {
+      const startTime = now + index * noteGapSeconds;
+      const oscillator = context.createOscillator();
+      const gainNode = context.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.value = frequency;
+
+      gainNode.gain.setValueAtTime(0.0001, startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.12, startTime + 0.015);
+      gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + noteDurationSeconds);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(context.destination);
+      oscillator.start(startTime);
+      oscillator.stop(startTime + noteDurationSeconds + 0.02);
+    });
+
+    const totalDurationMs =
+      (frequencies.length - 1) * noteGapSeconds * 1000 + noteDurationMs + 100;
+
+    window.setTimeout(() => {
+      void context.close().catch(() => undefined);
+    }, totalDurationMs);
+
+    const resumeResult = context.resume();
+    if (resumeResult && typeof resumeResult.catch === "function") {
+      resumeResult.catch(() => undefined);
     }
+  } catch {
+    // Notification sounds are best-effort only.
   }
-
-  return learnerIds.size;
 }
 
-export function LiveClassChatPanel({
-  subjectId,
-  subjectColour,
-  subjectSoftBackground,
-  presenceIdentity,
-  messagePlaceholder = "Ask your teacher...",
-  showLearnerPresenceList = false,
-  composerVariant = "default",
-}: {
-  subjectId: string;
-  subjectColour: string;
-  subjectSoftBackground: string;
-  presenceIdentity: PresenceIdentity;
-  messagePlaceholder?: string;
-  showLearnerPresenceList?: boolean;
-  composerVariant?: "default" | "teacher";
-}) {
+function playJoinSound() {
+  playTone([523.25, 659.25], 140);
+}
+
+function playLeaveSound() {
+  playTone([523.25, 392.0], 140);
+}
+
+function playMessageSound() {
+  playTone([880], 90);
+}
+
+export const LiveClassChatPanel = forwardRef<
+  LiveClassChatPanelHandle,
+  {
+    subjectId: string;
+    subjectColour: string;
+    subjectSoftBackground: string;
+    presenceIdentity: PresenceIdentity;
+    messagePlaceholder?: string;
+    composerVariant?: "default" | "teacher";
+    onPresenceChange?: (learners: LearnerPresenceInfo[]) => void;
+    onOwnHandRaisedChange?: (raised: boolean) => void;
+  }
+>(function LiveClassChatPanel(
+  {
+    subjectId,
+    subjectColour,
+    subjectSoftBackground,
+    presenceIdentity,
+    messagePlaceholder = "Ask your teacher...",
+    composerVariant = "default",
+    onPresenceChange,
+    onOwnHandRaisedChange,
+  },
+  ref,
+) {
   const [messages, setMessages] = useState<LiveClassMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -167,8 +263,6 @@ export function LiveClassChatPanel({
   const [isSending, setIsSending] = useState(false);
   const [didInitialLoad, setDidInitialLoad] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>("connected");
-  const [learnerPresenceCount, setLearnerPresenceCount] = useState(0);
-  const [learnerPresenceNames, setLearnerPresenceNames] = useState<string[]>([]);
 
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const shouldStickToBottomRef = useRef(true);
@@ -179,6 +273,14 @@ export function LiveClassChatPanel({
   const reconnectRecoveryInFlightRef = useRef(false);
   const wasEverSubscribedRef = useRef(false);
   const isTrackedRef = useRef(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const joinedAtRef = useRef<string | null>(null);
+  const raisedHandRef = useRef(false);
+  const presenceSoundsArmedRef = useRef(false);
+  const previousLearnerProfileIdsRef = useRef<Set<string>>(new Set());
+  const pendingLeaveTimersRef = useRef<Map<string, number>>(new Map());
+  const onPresenceChangeRef = useRef(onPresenceChange);
+  const onOwnHandRaisedChangeRef = useRef(onOwnHandRaisedChange);
 
   const remainingCharacters = useMemo(() => 500 - draft.length, [draft.length]);
   const connectionNotice = useMemo(() => {
@@ -192,12 +294,86 @@ export function LiveClassChatPanel({
 
     return "";
   }, [connectionState]);
-  const presenceLabel = useMemo(() => {
-    if (learnerPresenceCount === 0) return "No learners currently present";
-    if (learnerPresenceCount === 1) return "1 learner present";
-    return `${learnerPresenceCount} learners present`;
-  }, [learnerPresenceCount]);
   const isTeacherComposer = composerVariant === "teacher";
+
+  useEffect(() => {
+    onPresenceChangeRef.current = onPresenceChange;
+  }, [onPresenceChange]);
+
+  useEffect(() => {
+    onOwnHandRaisedChangeRef.current = onOwnHandRaisedChange;
+  }, [onOwnHandRaisedChange]);
+
+  const buildPresenceMeta = useCallback((): PresenceEntry => {
+    if (!joinedAtRef.current) {
+      joinedAtRef.current = new Date().toISOString();
+    }
+
+    return {
+      profileId: presenceIdentity.profileId,
+      displayName: presenceIdentity.displayName,
+      role: presenceIdentity.role,
+      joinedAt: joinedAtRef.current,
+      raisedHand: raisedHandRef.current,
+    };
+  }, [presenceIdentity.displayName, presenceIdentity.profileId, presenceIdentity.role]);
+
+  const setRaisedHand = useCallback(
+    (nextRaised: boolean) => {
+      if (presenceIdentity.role !== "learner") return;
+      if (raisedHandRef.current === nextRaised) return;
+
+      raisedHandRef.current = nextRaised;
+      onOwnHandRaisedChangeRef.current?.(nextRaised);
+      console.info(nextRaised ? "Live Chat hand raised:" : "Live Chat hand lowered:", {
+        subjectId,
+        profileId: presenceIdentity.profileId,
+      });
+
+      const channel = channelRef.current;
+      if (!channel || !isTrackedRef.current) return;
+
+      void channel.track(buildPresenceMeta()).catch((error) => {
+        console.error("Live Chat raise-hand re-track failed:", {
+          subjectId,
+          profileId: presenceIdentity.profileId,
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
+      });
+    },
+    [buildPresenceMeta, presenceIdentity.profileId, presenceIdentity.role, subjectId],
+  );
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      raiseHand: () => setRaisedHand(true),
+      lowerHand: () => setRaisedHand(false),
+      clearLearnerHand: (learnerProfileId: string) => {
+        const channel = channelRef.current;
+        if (!channel) return;
+
+        void channel
+          .send({
+            type: "broadcast",
+            event: "teacher-clear-hand",
+            payload: { learnerProfileId } satisfies TeacherClearHandPayload,
+          })
+          .catch((error) => {
+            console.error("Live Chat teacher-clear-hand broadcast failed:", {
+              subjectId,
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+          });
+
+        console.info("Live Chat teacher cleared a learner's raised hand:", {
+          subjectId,
+          learnerProfileId,
+        });
+      },
+    }),
+    [setRaisedHand, subjectId],
+  );
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     const container = messagesContainerRef.current;
@@ -210,7 +386,7 @@ export function LiveClassChatPanel({
   }, []);
 
   const fetchLatestMessages = useCallback(
-    async (options?: { showLoading?: boolean; recovery?: boolean }) => {
+    async (options?: { showLoading?: boolean; recovery?: boolean; signal?: AbortSignal }) => {
       const showLoading = options?.showLoading ?? false;
       const recovery = options?.recovery ?? false;
 
@@ -224,6 +400,7 @@ export function LiveClassChatPanel({
         {
           method: "GET",
           credentials: "same-origin",
+          signal: options?.signal,
         },
       );
 
@@ -261,11 +438,31 @@ export function LiveClassChatPanel({
   useEffect(() => {
     isMountedRef.current = true;
 
+    // Per-effect-run guard, distinct from isMountedRef: isMountedRef is
+    // shared across a component instance's whole lifetime (used elsewhere
+    // in this file for realtime/recovery guards), so under React Strict
+    // Mode's synthetic mount->cleanup->remount in development, the second
+    // (real) invocation flips it back to true before the first (discarded)
+    // invocation's request can resolve -- meaning a stale first response
+    // could still be applied. `cancelled` and the AbortController below are
+    // scoped to THIS run only, so the first run's request is aborted and
+    // its result can never be applied, leaving the second invocation as the
+    // sole authoritative initial load.
+    let cancelled = false;
+    const controller = new AbortController();
+
     async function loadInitialMessages() {
       try {
-        await fetchLatestMessages({ showLoading: true });
+        await fetchLatestMessages({ showLoading: true, signal: controller.signal });
       } catch (error) {
-        if (!isMountedRef.current) return;
+        // A cleanup-triggered abort is expected teardown (Strict Mode's
+        // synthetic first run, or a real unmount/subjectId change
+        // mid-fetch), not a chat failure -- never surface it as one.
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        if (cancelled || !isMountedRef.current) return;
 
         setLoadError(
           error instanceof Error && error.message
@@ -273,7 +470,7 @@ export function LiveClassChatPanel({
             : "Live Chat is temporarily unavailable.",
         );
       } finally {
-        if (isMountedRef.current) {
+        if (!cancelled && isMountedRef.current) {
           setIsLoading(false);
         }
       }
@@ -282,6 +479,8 @@ export function LiveClassChatPanel({
     void loadInitialMessages();
 
     return () => {
+      cancelled = true;
+      controller.abort();
       isMountedRef.current = false;
     };
   }, [fetchLatestMessages, subjectId]);
@@ -306,15 +505,26 @@ export function LiveClassChatPanel({
       },
     });
 
+    channelRef.current = channel;
+
     initialLoadCompleteRef.current = false;
     bufferedEventsRef.current = [];
     reconnectRecoveryInFlightRef.current = false;
     isTrackedRef.current = false;
+    joinedAtRef.current = null;
+    raisedHandRef.current = false;
+    presenceSoundsArmedRef.current = false;
+    previousLearnerProfileIdsRef.current = new Set();
+    for (const timer of pendingLeaveTimersRef.current.values()) {
+      window.clearTimeout(timer);
+    }
+    pendingLeaveTimersRef.current = new Map();
+    onOwnHandRaisedChangeRef.current?.(false);
+    onPresenceChangeRef.current?.([]);
+
     queueMicrotask(() => {
       if (!isMountedRef.current) return;
       setConnectionState("reconnecting");
-      setLearnerPresenceCount(0);
-      setLearnerPresenceNames([]);
     });
 
     const handlePresenceSync = () => {
@@ -322,21 +532,77 @@ export function LiveClassChatPanel({
       const learnerEntries = Object.values(presenceState)
         .flat()
         .filter((entry) => entry.role === "learner");
-      const learnersByProfileId = new Map<string, string>();
+      const learnersByProfileId = new Map<string, LearnerPresenceInfo>();
 
       for (const learnerEntry of learnerEntries) {
-        if (!learnersByProfileId.has(learnerEntry.profileId)) {
-          learnersByProfileId.set(learnerEntry.profileId, learnerEntry.displayName);
+        const existing = learnersByProfileId.get(learnerEntry.profileId);
+        if (!existing) {
+          learnersByProfileId.set(learnerEntry.profileId, {
+            profileId: learnerEntry.profileId,
+            displayName: learnerEntry.displayName,
+            raisedHand: Boolean(learnerEntry.raisedHand),
+          });
+        } else if (learnerEntry.raisedHand && !existing.raisedHand) {
+          // Multiple tabs/devices for the same learner: reflect a raised
+          // hand if ANY of their sessions has one raised.
+          learnersByProfileId.set(learnerEntry.profileId, { ...existing, raisedHand: true });
         }
       }
 
-      const learnerCount = countUniqueLearners(Object.values(presenceState));
-      const learnerNames = [...learnersByProfileId.values()].sort((left, right) =>
-        left.localeCompare(right, "en-ZA", { sensitivity: "base" }),
+      const roster = [...learnersByProfileId.values()].sort((left, right) =>
+        left.displayName.localeCompare(right.displayName, "en-ZA", { sensitivity: "base" }),
       );
 
-      setLearnerPresenceCount(learnerCount);
-      setLearnerPresenceNames(learnerNames);
+      onPresenceChangeRef.current?.(roster);
+
+      // Join/leave sounds: teacher view only, and only for genuine
+      // transitions -- never on the initial roster population, and never
+      // for a learner who disappears/reappears within the grace window
+      // (a realtime reconnect blip, not a real departure).
+      if (presenceIdentity.role !== "teacher") {
+        return;
+      }
+
+      const nextIds = new Set(roster.map((learner) => learner.profileId));
+
+      if (!presenceSoundsArmedRef.current) {
+        previousLearnerProfileIdsRef.current = nextIds;
+        presenceSoundsArmedRef.current = true;
+        return;
+      }
+
+      const previousIds = previousLearnerProfileIdsRef.current;
+
+      for (const id of nextIds) {
+        if (previousIds.has(id)) continue;
+
+        const pendingLeaveTimer = pendingLeaveTimersRef.current.get(id);
+        if (pendingLeaveTimer !== undefined) {
+          window.clearTimeout(pendingLeaveTimer);
+          pendingLeaveTimersRef.current.delete(id);
+          continue;
+        }
+
+        console.info("Live Chat learner presence joined:", { subjectId, profileId: id });
+        // TEMPORARY DIAGNOSTIC:
+        // Notification audio disabled while testing WebRTC jitter.
+        // playJoinSound();
+      }
+
+      for (const id of previousIds) {
+        if (nextIds.has(id) || pendingLeaveTimersRef.current.has(id)) continue;
+
+        const timer = window.setTimeout(() => {
+          pendingLeaveTimersRef.current.delete(id);
+          console.info("Live Chat learner presence left:", { subjectId, profileId: id });
+          // TEMPORARY DIAGNOSTIC:
+          // Notification audio disabled while testing WebRTC jitter.
+          // playLeaveSound();
+        }, LEAVE_SOUND_GRACE_MS);
+        pendingLeaveTimersRef.current.set(id, timer);
+      }
+
+      previousLearnerProfileIdsRef.current = nextIds;
     };
 
     channel
@@ -360,6 +626,20 @@ export function LiveClassChatPanel({
           }
 
           setMessages((current) => applyRealtimeEvent(current, event, subjectId));
+
+          // New-message sound: never for the sender's own message, never
+          // during initial load/recovery (both handled above/elsewhere),
+          // and for the teacher only when a learner sent it.
+          const isOwnMessage = row.sender_profile_id === presenceIdentity.profileId;
+          const shouldNotify =
+            !isOwnMessage &&
+            (presenceIdentity.role === "teacher" ? row.sender_role === "learner" : true);
+
+          if (shouldNotify) {
+            // TEMPORARY DIAGNOSTIC:
+            // Notification audio disabled while testing WebRTC jitter.
+            // playMessageSound();
+          }
         },
       )
       .on(
@@ -384,7 +664,59 @@ export function LiveClassChatPanel({
           setMessages((current) => applyRealtimeEvent(current, event, subjectId));
         },
       )
-      .on("presence", { event: "sync" }, handlePresenceSync);
+      .on("presence", { event: "sync" }, handlePresenceSync)
+      .on(
+        "broadcast",
+        { event: "teacher-clear-hand" },
+        (payload) => {
+          const targetProfileId = (
+            payload?.payload as TeacherClearHandPayload | undefined
+          )?.learnerProfileId;
+
+          if (!targetProfileId || targetProfileId !== presenceIdentity.profileId) {
+            return;
+          }
+
+          if (!raisedHandRef.current) return;
+
+          raisedHandRef.current = false;
+          onOwnHandRaisedChangeRef.current?.(false);
+          console.info("Live Chat hand cleared by teacher:", {
+            subjectId,
+            profileId: presenceIdentity.profileId,
+          });
+
+          if (!isTrackedRef.current) return;
+
+          void channel.track(buildPresenceMeta()).catch((error) => {
+            console.error("Live Chat re-track after teacher hand clear failed:", {
+              subjectId,
+              profileId: presenceIdentity.profileId,
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+          });
+        },
+      );
+
+    // The server-side presence entry is tied to the underlying realtime
+    // connection: once that connection drops (TIMED_OUT/CHANNEL_ERROR/
+    // CLOSED), the server forgets it, even though the SAME RealtimeChannel
+    // object typically survives and gets resubscribed automatically on
+    // reconnect (this is exactly what lets the chat recovery fetch below
+    // re-run on every reconnect). Presence must be re-announced the same
+    // way, so isTrackedRef is reset on every disconnect-class status and
+    // re-checked on every SUBSCRIBED -- not just the very first one.
+    const resetTrackedStateOnDisconnect = (reason: string) => {
+      if (isTrackedRef.current) {
+        console.info("Live Chat presence tracking reset:", {
+          subjectId,
+          profileId: presenceIdentity.profileId,
+          role: presenceIdentity.role,
+          reason,
+        });
+      }
+      isTrackedRef.current = false;
+    };
 
     void channel.subscribe(async (status) => {
       if (!isMountedRef.current) return;
@@ -393,13 +725,40 @@ export function LiveClassChatPanel({
         setConnectionState("connected");
 
         if (!isTrackedRef.current) {
-          isTrackedRef.current = true;
-          await channel.track({
-            profileId: presenceIdentity.profileId,
-            displayName: presenceIdentity.displayName,
-            role: presenceIdentity.role,
-            joinedAt: new Date().toISOString(),
-          } satisfies PresenceEntry);
+          const isRetrackAfterReconnect = wasEverSubscribedRef.current;
+
+          try {
+            // buildPresenceMeta() reads raisedHandRef/joinedAtRef, both
+            // stable component-level refs untouched by reconnects, so a
+            // re-track after reconnect reproduces whatever raised-hand
+            // state the learner actually had -- it is never silently reset
+            // to false just because the connection dropped and came back.
+            await channel.track(buildPresenceMeta());
+
+            // Only mark tracking as successful once channel.track(...) has
+            // actually resolved -- if it throws, isTrackedRef.current stays
+            // false so the next SUBSCRIBED event (e.g. another reconnect)
+            // gets a fresh chance instead of being permanently skipped.
+            isTrackedRef.current = true;
+
+            console.info(
+              isRetrackAfterReconnect
+                ? "Live Chat presence re-tracked after reconnect:"
+                : "Live Chat presence tracking succeeded:",
+              {
+                subjectId,
+                profileId: presenceIdentity.profileId,
+                role: presenceIdentity.role,
+              },
+            );
+          } catch (error) {
+            console.error("Live Chat presence tracking failed:", {
+              subjectId,
+              profileId: presenceIdentity.profileId,
+              role: presenceIdentity.role,
+              message: error instanceof Error ? error.message : "Unknown error",
+            });
+          }
         }
 
         if (wasEverSubscribedRef.current && !reconnectRecoveryInFlightRef.current) {
@@ -426,16 +785,19 @@ export function LiveClassChatPanel({
       }
 
       if (status === "TIMED_OUT") {
+        resetTrackedStateOnDisconnect("TIMED_OUT");
         setConnectionState("reconnecting");
         return;
       }
 
       if (status === "CHANNEL_ERROR") {
+        resetTrackedStateOnDisconnect("CHANNEL_ERROR");
         setConnectionState("unavailable");
         return;
       }
 
       if (status === "CLOSED") {
+        resetTrackedStateOnDisconnect("CLOSED");
         setConnectionState("reconnecting");
       }
     });
@@ -444,11 +806,22 @@ export function LiveClassChatPanel({
       bufferedEventsRef.current = [];
       initialLoadCompleteRef.current = false;
       reconnectRecoveryInFlightRef.current = false;
-      setLearnerPresenceCount(0);
-      setLearnerPresenceNames([]);
+      for (const timer of pendingLeaveTimersRef.current.values()) {
+        window.clearTimeout(timer);
+      }
+      pendingLeaveTimersRef.current = new Map();
+      channelRef.current = null;
+      onPresenceChangeRef.current?.([]);
       void supabase.removeChannel(channel);
     };
-  }, [fetchLatestMessages, presenceIdentity.displayName, presenceIdentity.profileId, presenceIdentity.role, subjectId]);
+  }, [
+    buildPresenceMeta,
+    fetchLatestMessages,
+    presenceIdentity.displayName,
+    presenceIdentity.profileId,
+    presenceIdentity.role,
+    subjectId,
+  ]);
 
   async function handleSubmit() {
     if (isSending) return;
@@ -524,8 +897,7 @@ export function LiveClassChatPanel({
       aria-label="Live Chat"
       className="flex min-h-[26rem] min-w-0 flex-col rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:h-[32rem]"
     >
-      <div className="mb-4 flex shrink-0 items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="mb-4 flex shrink-0 items-center gap-3">
         <div
           className="rounded-2xl p-3"
           style={{
@@ -541,29 +913,7 @@ export function LiveClassChatPanel({
             Ask questions and follow the lesson conversation.
           </p>
         </div>
-        </div>
-        <p
-          aria-live="polite"
-          className="shrink-0 text-right text-xs font-semibold text-slate-500"
-        >
-          {presenceLabel}
-        </p>
       </div>
-
-      {showLearnerPresenceList && learnerPresenceNames.length > 0 ? (
-        <div className="mb-4 shrink-0 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-            Learners in room
-          </p>
-          <ul className="mt-2 space-y-1">
-            {learnerPresenceNames.map((learnerName) => (
-              <li key={learnerName} className="text-sm font-medium text-slate-700">
-                {learnerName}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       {connectionNotice ? (
         <p
@@ -737,6 +1087,6 @@ export function LiveClassChatPanel({
       </form>
     </section>
   );
-}
+});
 
 export default LiveClassChatPanel;

@@ -2,8 +2,8 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ArrowLeft, MonitorPlay } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
-import LiveClassChatPanel from "@/components/subjects/LiveClassChatPanel";
-import LiveClassroomPlayer from "@/components/subjects/LiveClassroomPlayer";
+import LiveClassroomWorkspace from "@/components/subjects/LiveClassroomWorkspace";
+import { getMediaProviderForSubject } from "@/lib/liveClass/mediaProvider";
 import { authorizeTeacher } from "@/lib/supabase/teacherAuth";
 import { getAuthenticatedTeacherProfile } from "@/lib/supabase/teacherProfile";
 import {
@@ -20,6 +20,20 @@ export async function TeacherSubjectLiveClassroomPage({
   subjectKey?: SubjectKey;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
+  const mediaProvider = getMediaProviderForSubject(subjectKey);
+
+  // TEMPORARY DIAGNOSTIC (Stage 3 pilot activation): server-side only,
+  // development-only, never rendered in the learner-facing UI -- lets a
+  // developer confirm which media provider a given subject resolved to
+  // without needing to expose that detail to learners.
+  if (process.env.NODE_ENV === "development") {
+    console.info("[Live Classroom] media provider:", {
+      mediaProvider,
+      subjectKey,
+      subjectId: subject.databaseId,
+    });
+  }
+
   const themeStyle = {
     "--subject-primary": subject.colourTheme.primary,
     "--subject-soft": subject.colourTheme.softBackground,
@@ -93,38 +107,22 @@ export async function TeacherSubjectLiveClassroomPage({
           </div>
         </section>
 
-        <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(22rem,3fr)]">
-          <section className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Live Classroom
-              </h2>
-              <p className="text-sm text-slate-500">
-                Open the live stream and manage learner chat for this subject.
-              </p>
-            </div>
-
-            <LiveClassroomPlayer
-              subjectColour={subject.colourTheme.primary}
-              subjectSoftBackground={subject.colourTheme.softBackground}
-              logContext={{ role: "teacher", subjectKey }}
-            />
-          </section>
-
-          <LiveClassChatPanel
-            subjectId={subject.databaseId}
-            subjectColour={subject.colourTheme.primary}
-            subjectSoftBackground={subject.colourTheme.softBackground}
-            presenceIdentity={{
-              profileId: teacherProfile!.profileId,
-              displayName: teacherProfile!.displayName,
-              role: "teacher",
-            }}
-            messagePlaceholder="Send a message to the class..."
-            showLearnerPresenceList
-            composerVariant="teacher"
-          />
-        </div>
+        <LiveClassroomWorkspace
+          subjectKey={subjectKey}
+          subjectDatabaseId={subject.databaseId}
+          subjectColour={subject.colourTheme.primary}
+          subjectSoftBackground={subject.colourTheme.softBackground}
+          role="teacher"
+          presenceIdentity={{
+            profileId: teacherProfile!.profileId,
+            displayName: teacherProfile!.displayName,
+            role: "teacher",
+          }}
+          videoCardSubtitle="Open the live stream and manage learner chat for this subject."
+          messagePlaceholder="Send a message to the class..."
+          composerVariant="teacher"
+          mediaProvider={mediaProvider}
+        />
       </div>
     </main>
   );

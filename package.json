@@ -11,8 +11,12 @@
     "audit-language-source-integrity": "node scripts/run-language-source-integrity-audit.mjs"
   },
   "dependencies": {
+    "@livekit/components-react": "^2.9.24",
+    "@livekit/components-styles": "^1.2.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.110.1",
+    "livekit-client": "^2.22.0",
+    "livekit-server-sdk": "^2.17.0",
     "lucide-react": "^1.17.0",
     "next": "16.2.6",
     "openai": "^6.46.0",

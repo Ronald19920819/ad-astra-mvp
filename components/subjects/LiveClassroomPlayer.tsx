@@ -1,11 +1,26 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { forwardRef, useMemo, useState, type CSSProperties } from "react";
+import type { LearnerPresenceInfo } from "@/components/subjects/LiveClassChatPanel";
 import CloudflareWebRTCPlayer, {
   type CloudflarePlaybackDiagnostics,
   type CloudflarePerformanceDiagnostics,
   type CloudflareWebRTCLogContext,
 } from "@/components/subjects/CloudflareWebRTCPlayer";
+import LiveKitClassroomPlayer, {
+  type LiveKitClassroomPlayerHandle,
+} from "@/components/subjects/LiveKitClassroomPlayer";
+import type { LiveClassMediaProvider } from "@/lib/liveClass/mediaProvider";
+import {
+  describeLiveClassroomStatus,
+  type WebRTCStatus,
+} from "@/lib/liveClass/playerStatus";
+
+// Re-exported so existing callers (e.g. LiveClassroomWorkspace) keep working
+// unchanged -- the type and function now live in the provider-neutral
+// lib/liveClass/playerStatus.ts, but their values/behavior are identical.
+export { describeLiveClassroomStatus };
+export type { WebRTCStatus };
 
 const CLOUDFLARE_STREAM_HOST = "customer-txjjmf9yh6vpwg3s.cloudflarestream.com";
 const CLOUDFLARE_LIVE_INPUT_UID = "c13fb9977d632eecc10c4bc824ed7f40";
@@ -44,19 +59,42 @@ function formatFramesPerSecond(value: number | null) {
   return `${value.toFixed(1)} fps`;
 }
 
-export function LiveClassroomPlayer({
-  subjectColour,
-  subjectSoftBackground,
-  requireExplicitAudioJoin = false,
-  showLearnerSupportInfo = false,
-  logContext,
-}: {
-  subjectColour: string;
-  subjectSoftBackground: string;
-  requireExplicitAudioJoin?: boolean;
-  showLearnerSupportInfo?: boolean;
-  logContext?: CloudflareWebRTCLogContext;
-}) {
+export const LiveClassroomPlayer = forwardRef<
+  LiveKitClassroomPlayerHandle,
+  {
+    subjectColour: string;
+    subjectSoftBackground: string;
+    requireExplicitAudioJoin?: boolean;
+    showLearnerSupportInfo?: boolean;
+    logContext?: CloudflareWebRTCLogContext;
+    onStatusChange?: (status: WebRTCStatus) => void;
+    mediaProvider?: LiveClassMediaProvider;
+    // Only required when mediaProvider is "livekit" -- Cloudflare's own
+    // stream identity is unrelated to the AD Astra subject UUID.
+    subjectDatabaseId?: string;
+    // Only meaningful when mediaProvider is "livekit" -- Cloudflare's
+    // Raise Hand/attendance continues to flow entirely through
+    // LiveClassChatPanel, untouched by this component.
+    role?: "teacher" | "learner";
+    onPresenceChange?: (learners: LearnerPresenceInfo[]) => void;
+    onOwnHandRaisedChange?: (raised: boolean) => void;
+  }
+>(function LiveClassroomPlayer(
+  {
+    subjectColour,
+    subjectSoftBackground,
+    requireExplicitAudioJoin = false,
+    showLearnerSupportInfo = false,
+    logContext,
+    onStatusChange,
+    mediaProvider = "cloudflare",
+    subjectDatabaseId,
+    role = "learner",
+    onPresenceChange,
+    onOwnHandRaisedChange,
+  },
+  ref,
+) {
   const [hasIframeLoadError, setHasIframeLoadError] = useState(false);
   const [useHlsFallback, setUseHlsFallback] = useState(false);
   const [supportInfoExpanded, setSupportInfoExpanded] = useState(false);
@@ -68,6 +106,31 @@ export function LiveClassroomPlayer({
   const whepUrl = useMemo(() => buildCloudflareWhepUrl(), []);
   const shouldCollectPerformanceDiagnostics =
     showLearnerSupportInfo && supportInfoExpanded && !useHlsFallback;
+
+  // Clean provider switch point: LiveKit-specific and Cloudflare-specific
+  // rendering never mix. The Cloudflare branch below (including its
+  // diagnostics panel and HLS iframe fallback, neither of which have a
+  // LiveKit equivalent) is returned completely unchanged from before this
+  // stage. All hooks above are still called unconditionally on every
+  // render regardless of provider, so this early return stays
+  // rules-of-hooks-safe.
+  if (mediaProvider === "livekit" && subjectDatabaseId) {
+    return (
+      <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-sm">
+        <div className="aspect-video w-full bg-slate-950">
+          <LiveKitClassroomPlayer
+            ref={ref}
+            subjectDatabaseId={subjectDatabaseId}
+            role={role}
+            requireExplicitAudioJoin={requireExplicitAudioJoin}
+            onStatusChange={onStatusChange}
+            onPresenceChange={onPresenceChange}
+            onOwnHandRaisedChange={onOwnHandRaisedChange}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-[2rem] border border-slate-800 bg-slate-950 shadow-sm">
@@ -87,6 +150,7 @@ export function LiveClassroomPlayer({
             whepUrl={whepUrl}
             requireExplicitAudioJoin={requireExplicitAudioJoin}
             collectPerformanceDiagnostics={shouldCollectPerformanceDiagnostics}
+            onStatusChange={onStatusChange}
             onDiagnosticsChange={setDiagnostics}
             onPerformanceDiagnosticsChange={setPerformanceDiagnostics}
             logContext={logContext}
@@ -265,6 +329,6 @@ export function LiveClassroomPlayer({
       ) : null}
     </div>
   );
-}
+});
 
 export default LiveClassroomPlayer;
