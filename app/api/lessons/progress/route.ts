@@ -1,3 +1,4 @@
+import { evaluateAndPersistLessonCompletion } from "@/lib/lessons/lessonCompletionService";
 import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
@@ -7,10 +8,14 @@ import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-type ProgressEvent = "lesson_view" | "video_progress";
+type ProgressEvent = "lesson_view" | "video_progress" | "reading_complete";
 
 function isProgressEvent(value: unknown): value is ProgressEvent {
-  return value === "lesson_view" || value === "video_progress";
+  return (
+    value === "lesson_view" ||
+    value === "video_progress" ||
+    value === "reading_complete"
+  );
 }
 
 function isFiniteNonNegative(value: unknown): value is number {
@@ -73,7 +78,9 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const { data: existing, error: existingError } = await admin
       .from("learner_lesson_progress")
-      .select("video_started_at, video_progress_percent, video_position_seconds")
+      .select(
+        "video_started_at, video_progress_percent, video_position_seconds, reading_completed_at",
+      )
       .eq("learner_profile_id", access.learnerProfileId)
       .eq("lesson_id", lessonId)
       .maybeSingle();
@@ -130,13 +137,62 @@ export async function POST(request: Request) {
       });
     }
 
+    if (event === "reading_complete") {
+      const readingMaterialId = payload.readingMaterialId;
+
+      if (
+        typeof readingMaterialId !== "string" ||
+        !uuidPattern.test(readingMaterialId)
+      ) {
+        return Response.json(
+          { error: "A valid reading material ID is required." },
+          { status: 400 },
+        );
+      }
+
+      const { data: readingMaterial, error: readingMaterialError } = await admin
+        .from("lesson_materials")
+        .select("id")
+        .eq("id", readingMaterialId)
+        .eq("lesson_id", lessonId)
+        .eq("material_type", "reading")
+        .maybeSingle();
+
+      if (readingMaterialError) throw readingMaterialError;
+      if (!readingMaterial) {
+        return Response.json(
+          { error: "The lesson reading was not found." },
+          { status: 404 },
+        );
+      }
+
+      // Explicit, persisted, set-once signal -- independent of quiz state.
+      // This is the reliable MVP reading-completion mechanism: an explicit
+      // learner action, not a scroll/time-on-page heuristic.
+      Object.assign(progressUpdate, {
+        reading_completed_at: existing?.reading_completed_at ?? now,
+      });
+    }
+
     const { error: saveError } = await admin
       .from("learner_lesson_progress")
       .upsert(progressUpdate, { onConflict: "learner_profile_id,lesson_id" });
 
     if (saveError) throw saveError;
 
-    return Response.json({ saved: true });
+    // Reevaluate adaptive completion after every event -- video_progress
+    // and reading_complete because they can directly satisfy a
+    // requirement, and lesson_view too, so that a learner who already
+    // satisfied every requirement (including learners with data that
+    // predates this evaluator) is reconciled to "complete" simply by
+    // opening the lesson again, with no separate action required.
+    const lessonCompletion = await evaluateAndPersistLessonCompletion({
+      authUserId: user.id,
+      learnerProfileId: access.learnerProfileId,
+      lessonId,
+    });
+
+    return Response.json({ saved: true, lessonCompletion });
   } catch (error) {
     console.error("Lesson progress save failed:", {
       lessonId,

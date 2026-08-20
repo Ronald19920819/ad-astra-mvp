@@ -72,12 +72,13 @@ function progressIndicator(
 
 function statusClasses(status: TrackerLessonStatus) {
   if (status === "Complete") return "bg-green-100 text-green-700";
+  if (status === "Late") return "bg-amber-100 text-amber-700";
   if (status === "Incomplete") return "bg-slate-100 text-slate-600";
   return "bg-red-100 text-red-700";
 }
 
 function statusSymbol(status: TrackerLessonStatus) {
-  if (status === "Complete") {
+  if (status === "Complete" || status === "Late") {
     return <Check size={14} strokeWidth={3} aria-hidden="true" />;
   }
 
@@ -86,6 +87,7 @@ function statusSymbol(status: TrackerLessonStatus) {
 
 function statusLabel(status: TrackerLessonStatus) {
   if (status === "Complete") return "Complete";
+  if (status === "Late") return "Complete (Late)";
   if (status === "Incomplete") return "Incomplete";
   return "Attention Required";
 }

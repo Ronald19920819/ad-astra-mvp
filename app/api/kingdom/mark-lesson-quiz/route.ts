@@ -4,6 +4,7 @@ import {
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
 import { hasPassedLessonQuiz } from "@/lib/lessons/lessonAssessment";
+import { evaluateAndPersistLessonCompletion } from "@/lib/lessons/lessonCompletionService";
 import {
   isLessonQuizOptionLetter,
   scoreLessonQuizAnswers,
@@ -86,6 +87,7 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
+    let learnerProfileId: string | null = null;
     if (user) {
       const access = await verifyLearnerSubjectAccess(user.id, lesson.subject_id);
       if (!access.allowed) {
@@ -94,6 +96,7 @@ export async function POST(request: Request) {
           { status: 403 },
         );
       }
+      learnerProfileId = access.learnerProfileId;
     }
 
     if (user) {
@@ -203,9 +206,12 @@ export async function POST(request: Request) {
       submittedAnswers,
     );
     const passed = hasPassedLessonQuiz(score, total);
-    let completionToken: string | null = null;
+    let lessonCompletion: Awaited<
+      ReturnType<typeof evaluateAndPersistLessonCompletion>
+    > | null = null;
+
     if (user) {
-      const { data: attempt, error: attemptError } = await supabase
+      const { error: attemptError } = await supabase
         .from("learner_quiz_attempts")
         .insert({
           learner_id: user.id,
@@ -219,8 +225,15 @@ export async function POST(request: Request) {
 
       if (attemptError) throw new Error(attemptError.message);
 
-      if (passed) {
-        completionToken = attempt.id;
+      // A passed quiz can be the final requirement a lesson needed --
+      // reevaluate and auto-persist completion immediately, no separate
+      // learner action required.
+      if (passed && learnerProfileId) {
+        lessonCompletion = await evaluateAndPersistLessonCompletion({
+          authUserId: user.id,
+          learnerProfileId,
+          lessonId,
+        });
       }
     }
 
@@ -229,8 +242,7 @@ export async function POST(request: Request) {
       total,
       passed,
       results,
-      completionToken,
-      completionAvailable: Boolean(completionToken),
+      lessonCompletion,
     });
   } catch (error) {
     console.error("Lesson quiz marking error:", error);

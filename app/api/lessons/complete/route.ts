@@ -1,28 +1,28 @@
 import { NextResponse } from "next/server";
+import { evaluateAndPersistLessonCompletion } from "@/lib/lessons/lessonCompletionService";
 import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
-import {
-  hasPassedLessonQuiz,
-  LESSON_QUIZ_PASS_PERCENT,
-} from "@/lib/lessons/lessonAssessment";
 import { verifyLearnerSubjectAccess } from "@/lib/supabase/subjectAccess";
 
+// Phase 2: lesson completion is now automatic and adaptive -- the learner
+// no longer presses a separate "Complete Lesson" button, and this route no
+// longer gates completion behind a single quiz-attempt completionToken
+// (which made quiz-less lessons impossible to complete at all). It is kept
+// as a thin, reusable manual-reconciliation endpoint: given a lessonId, it
+// runs the same canonical evaluator every other trigger point uses
+// (lib/lessons/lessonCompletionService.ts) and returns the current
+// completion state. Useful as an explicit fallback if a learner's client
+// ever needs to force a fresh evaluation.
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const lessonId = body.lessonId;
-    const completionToken = body.completionToken;
 
-    if (
-      typeof lessonId !== "string" ||
-      !lessonId ||
-      typeof completionToken !== "string" ||
-      !completionToken
-    ) {
+    if (typeof lessonId !== "string" || !lessonId) {
       return NextResponse.json(
-        { error: "Valid completion details are required." },
+        { error: "A valid lesson is required." },
         { status: 400 },
       );
     }
@@ -55,94 +55,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const subjectAccess = await verifyLearnerSubjectAccess(
-      user.id,
-      lesson.subject_id,
-    );
-    if (!subjectAccess.allowed) {
+    const access = await verifyLearnerSubjectAccess(user.id, lesson.subject_id);
+    if (!access.allowed) {
       return NextResponse.json(
         { error: "Learner access to this subject is required." },
         { status: 403 },
       );
     }
 
-    const { data: attempt, error: attemptError } = await supabase
-      .from("learner_quiz_attempts")
-      .select("id, learner_id, lesson_id, quiz_score, quiz_total, passed, completed_at")
-      .eq("id", completionToken)
-      .eq("learner_id", user.id)
-      .eq("lesson_id", lessonId)
-      .maybeSingle();
+    const lessonCompletion = await evaluateAndPersistLessonCompletion({
+      authUserId: user.id,
+      learnerProfileId: access.learnerProfileId,
+      lessonId,
+    });
 
-    if (attemptError) throw new Error(attemptError.message);
-    if (
-      !attempt ||
-      !attempt.passed ||
-      !hasPassedLessonQuiz(attempt.quiz_score, attempt.quiz_total) ||
-      attempt.completed_at
-    ) {
-      return NextResponse.json(
-        {
-          error: `A verified quiz score of at least ${LESSON_QUIZ_PASS_PERCENT}% is required.`,
-        },
-        { status: 403 },
-      );
-    }
-
-    const { data: videoMaterial, error: videoMaterialError } = await supabase
-      .from("lesson_materials")
-      .select("id")
-      .eq("lesson_id", lessonId)
-      .eq("material_type", "video")
-      .order("display_order", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (videoMaterialError) throw new Error(videoMaterialError.message);
-
-    if (videoMaterial) {
-      const { data: videoProgress, error: videoProgressError } = await supabase
-        .from("learner_lesson_progress")
-        .select("video_progress_percent")
-        .eq("learner_profile_id", subjectAccess.learnerProfileId)
-        .eq("lesson_id", lessonId)
-        .maybeSingle();
-
-      if (videoProgressError) throw new Error(videoProgressError.message);
-      if (Number(videoProgress?.video_progress_percent ?? 0) < 90) {
-        return NextResponse.json(
-          { error: "Watch at least 90% of the lesson video before completing the lesson." },
-          { status: 403 },
-        );
-      }
-    }
-
-    const completedAt = new Date().toISOString();
-    const { error: completionError } = await supabase
-      .from("learner_lesson_completions")
-      .upsert(
-        {
-          learner_id: user.id,
-          lesson_id: lessonId,
-          completed_at: completedAt,
-          quiz_score: attempt.quiz_score,
-        },
-        { onConflict: "learner_id,lesson_id", ignoreDuplicates: true },
-      );
-
-    if (completionError) throw new Error(completionError.message);
-
-    const { error: updateAttemptError } = await supabase
-      .from("learner_quiz_attempts")
-      .update({ completed_at: completedAt })
-      .eq("id", attempt.id)
-      .is("completed_at", null);
-
-    if (updateAttemptError) throw new Error(updateAttemptError.message);
-
-    return NextResponse.json({ completed: true, completedAt });
+    return NextResponse.json({
+      completed: lessonCompletion.isComplete,
+      completedAt: lessonCompletion.completedAt,
+      lessonCompletion,
+    });
   } catch (error) {
-    console.error("Lesson completion error:", error);
+    console.error("Lesson completion evaluation error:", error);
 
     return NextResponse.json(
       { error: "The lesson could not be completed. Please try again." },

@@ -247,7 +247,7 @@ export async function getLearnerLessonDataServer(
   if (lessonError) throw new Error(lessonError.message);
   if (!lesson) return null;
 
-  const [materialsResult, attemptResult, completionResult] =
+  const [materialsResult, attemptResult, completionResult, progressResult] =
     await Promise.all([
       supabase
         .from("lesson_materials")
@@ -269,11 +269,18 @@ export async function getLearnerLessonDataServer(
         .eq("learner_id", profile.userId)
         .eq("lesson_id", lessonId)
         .maybeSingle(),
+      supabase
+        .from("learner_lesson_progress")
+        .select("reading_completed_at")
+        .eq("learner_profile_id", profile.learnerProfileId)
+        .eq("lesson_id", lessonId)
+        .maybeSingle(),
     ]);
 
   if (materialsResult.error) throw new Error(materialsResult.error.message);
   if (attemptResult.error) throw new Error(attemptResult.error.message);
   if (completionResult.error) throw new Error(completionResult.error.message);
+  if (progressResult.error) throw new Error(progressResult.error.message);
 
   const materials = materialsResult.data ?? [];
   const readingMaterial =
@@ -348,6 +355,7 @@ export async function getLearnerLessonDataServer(
     quiz,
     passedQuizAttempt: attemptResult.data,
     completion: completionResult.data,
+    readingCompletedAt: progressResult.data?.reading_completed_at ?? null,
   };
 }
 

@@ -123,12 +123,14 @@ function progressDisplay(value: TrackerContentState, isOverdue: boolean) {
 
 function lessonStatusLabel(status: TrackerLessonStatus) {
   if (status === "Complete") return "Complete";
+  if (status === "Late") return "Complete (Late)";
   if (status === "Incomplete") return "Incomplete";
   return "Attention Required";
 }
 
 function lessonStatusBadge(status: TrackerLessonStatus) {
   if (status === "Complete") return "bg-green-100 text-green-700";
+  if (status === "Late") return "bg-amber-100 text-amber-700";
   if (status === "Incomplete") return "bg-slate-100 text-slate-600";
   return "bg-red-100 text-red-700";
 }
@@ -326,7 +328,8 @@ export async function TeacherSubjectLearnerProfilePage({
   );
 
   const completedLessons = learnerLessons.filter(
-    (lesson) => lesson.learner.status === "Complete",
+    (lesson) =>
+      lesson.learner.status === "Complete" || lesson.learner.status === "Late",
   ).length;
   const totalLessons = lessons.length;
   const completedActivities = learnerActivities.filter((record) => {

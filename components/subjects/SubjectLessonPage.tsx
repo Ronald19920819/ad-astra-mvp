@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
@@ -20,6 +20,7 @@ import { TrackedYouTubePlayer } from "@/components/lessons/TrackedYouTubePlayer"
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
 import { LESSON_QUIZ_PASS_PERCENT } from "@/lib/lessons/lessonAssessment";
+import type { LessonRequiredMaterialType } from "@/lib/lessons/adaptiveLessonCompletion";
 import {
   buildLessonQuizOptionMap,
   type LessonQuizOptionLetter,
@@ -38,13 +39,20 @@ type QuizResult = {
   feedback: string;
 };
 
+type LessonCompletionResponse = {
+  requiredTypes: LessonRequiredMaterialType[];
+  satisfiedTypes: LessonRequiredMaterialType[];
+  isComplete: boolean;
+  completedAt: string | null;
+  quizScore: number | null;
+};
+
 type MarkingResponse = {
   score: number;
   total: number;
   passed: boolean;
   results: QuizResult[];
-  completionToken: string | null;
-  completionAvailable: boolean;
+  lessonCompletion: LessonCompletionResponse | null;
   error?: string;
 };
 
@@ -128,13 +136,55 @@ export function SubjectLessonPage({
   const [submitMessage, setSubmitMessage] = useState("");
   const [isMarking, setIsMarking] = useState(false);
   const [markingResult, setMarkingResult] = useState<MarkingResponse | null>(null);
-  const [completionToken, setCompletionToken] = useState<string | null>(null);
-  const [isCompleting, setIsCompleting] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [completedAt, setCompletedAt] = useState<string | null>(null);
+  const [requiredMaterialTypes, setRequiredMaterialTypes] = useState<
+    LessonRequiredMaterialType[]
+  >([]);
+  const [satisfiedMaterialTypes, setSatisfiedMaterialTypes] = useState<
+    LessonRequiredMaterialType[]
+  >([]);
+  const [isReadingComplete, setIsReadingComplete] = useState(false);
+  const [isMarkingReadingComplete, setIsMarkingReadingComplete] = useState(false);
   const [completionMessage, setCompletionMessage] = useState("");
   const [isCelebrating, setIsCelebrating] = useState(false);
   const teacherLabel = formatSubjectTeacherLabel(initialTeacherNames);
+
+  // Canonical client-side application of a lessonCompletion result --
+  // lesson completion is automatic and adaptive (Phase 2): there is no
+  // learner "Complete Lesson" action anymore, only reading/video/quiz
+  // events that may satisfy the last remaining requirement. `celebrate`
+  // is only set true from a live action (not the initial page load /
+  // reconciliation), so revisiting an already-complete lesson never
+  // replays the celebration animation.
+  const applyLessonCompletion = useCallback(
+    (
+      result: LessonCompletionResponse | null | undefined,
+      options?: { celebrate?: boolean },
+    ) => {
+      if (!result) return;
+
+      setRequiredMaterialTypes(result.requiredTypes);
+      setSatisfiedMaterialTypes(result.satisfiedTypes);
+
+      if (result.isComplete && !isCompleted && options?.celebrate) {
+        setCompletionMessage("Lesson complete — excellent work!");
+        setIsCelebrating(true);
+        window.setTimeout(() => setIsCelebrating(false), 1100);
+      }
+
+      setIsCompleted(result.isComplete);
+      setCompletedAt(result.completedAt);
+    },
+    [isCompleted],
+  );
+  // Ref-backed so the lesson_view reconciliation effect below can call the
+  // latest version without re-running (and re-POSTing) every time
+  // isCompleted changes identity of applyLessonCompletion.
+  const applyLessonCompletionRef = useRef(applyLessonCompletion);
+  useEffect(() => {
+    applyLessonCompletionRef.current = applyLessonCompletion;
+  }, [applyLessonCompletion]);
 
   useEffect(() => {
     if (hasInitialState) {
@@ -153,11 +203,7 @@ export function SubjectLessonPage({
           setLessonData(data);
           setIsCompleted(Boolean(data?.completion));
           setCompletedAt(data?.completion?.completed_at ?? null);
-          setCompletionToken(
-            data?.passedQuizAttempt && !data.completion
-              ? data.passedQuizAttempt.id
-              : null,
-          );
+          setIsReadingComplete(Boolean(data?.readingCompletedAt));
         }
       } catch (error) {
         console.error("Unable to load learner lesson:", error);
@@ -179,7 +225,9 @@ export function SubjectLessonPage({
   useEffect(() => {
     if (!lessonData?.lesson.id) return;
 
-    void fetch("/api/lessons/progress", {
+    let isActive = true;
+
+    fetch("/api/lessons/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -187,7 +235,19 @@ export function SubjectLessonPage({
         lessonId: lessonData.lesson.id,
       }),
       keepalive: true,
-    }).catch((error) => console.error("Unable to save lesson engagement:", error));
+    })
+      .then((response) => response.json())
+      .then((result: { lessonCompletion?: LessonCompletionResponse }) => {
+        // Self-healing reconciliation: a learner who already satisfied
+        // every requirement for this lesson (including before this
+        // evaluator existed) becomes complete simply by opening the page.
+        if (isActive) applyLessonCompletionRef.current(result?.lessonCompletion);
+      })
+      .catch((error) => console.error("Unable to save lesson engagement:", error));
+
+    return () => {
+      isActive = false;
+    };
   }, [lessonData?.lesson.id]);
 
   async function submitQuiz() {
@@ -224,7 +284,6 @@ export function SubjectLessonPage({
       }
 
       setMarkingResult(result);
-      setCompletionToken(result.completionToken);
       const minimumPassingScore = Math.ceil(
         (result.total * LESSON_QUIZ_PASS_PERCENT) / 100,
       );
@@ -234,6 +293,12 @@ export function SubjectLessonPage({
           ? `Excellent work \u2014 you passed with ${result.score}/${result.total}!`
           : `You scored ${result.score}/${result.total}. You need ${minimumPassingScore}/${result.total} to pass.`,
       );
+
+      // A passed quiz may be the last requirement this lesson needed --
+      // the server has already auto-persisted completion if so.
+      if (result.passed) {
+        applyLessonCompletion(result.lessonCompletion, { celebrate: true });
+      }
     } catch (error) {
       setSubmitMessage(
         error instanceof Error
@@ -248,44 +313,51 @@ export function SubjectLessonPage({
   function tryAgain() {
     setAnswers({});
     setMarkingResult(null);
-    setCompletionToken(null);
     setSubmitMessage("");
   }
 
-  async function completeLesson() {
-    if (!completionToken || !markingResult?.passed || isCompleting) return;
+  async function markReadingComplete() {
+    if (
+      !lessonData?.reading ||
+      isReadingComplete ||
+      isMarkingReadingComplete
+    ) {
+      return;
+    }
 
     try {
-      setIsCompleting(true);
+      setIsMarkingReadingComplete(true);
       setCompletionMessage("");
-      const response = await fetch("/api/lessons/complete", {
+
+      const response = await fetch("/api/lessons/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId, completionToken }),
+        body: JSON.stringify({
+          event: "reading_complete",
+          lessonId,
+          readingMaterialId: lessonData.reading.id,
+        }),
       });
       const result = (await response.json()) as {
-        completed?: boolean;
-        completedAt?: string;
+        saved?: boolean;
+        lessonCompletion?: LessonCompletionResponse;
         error?: string;
       };
 
-      if (!response.ok || !result.completed) {
-        throw new Error(result.error || "The lesson could not be completed.");
+      if (!response.ok || !result.saved) {
+        throw new Error(result.error || "The reading could not be marked complete.");
       }
 
-      setIsCompleted(true);
-      setCompletedAt(result.completedAt ?? new Date().toISOString());
-      setCompletionMessage("Lesson complete \u2014 excellent work!");
-      setIsCelebrating(true);
-      window.setTimeout(() => setIsCelebrating(false), 1100);
+      setIsReadingComplete(true);
+      applyLessonCompletion(result.lessonCompletion, { celebrate: true });
     } catch (error) {
       setCompletionMessage(
         error instanceof Error
           ? error.message
-          : "The lesson could not be completed. Please try again.",
+          : "The reading could not be marked complete. Please try again.",
       );
     } finally {
-      setIsCompleting(false);
+      setIsMarkingReadingComplete(false);
     }
   }
 
@@ -342,6 +414,23 @@ export function SubjectLessonPage({
     : 0;
   const failedReviewResult = markingResult && !markingResult.passed ? markingResult : null;
 
+  // Adaptive completion checklist: which material types this lesson
+  // actually requires, and whether each is satisfied. requiredTypes falls
+  // back to a direct, synchronous derivation from lessonData so the
+  // checklist renders correctly immediately on load, before the first
+  // server round-trip (lesson_view reconciliation) confirms it.
+  const requiredTypes: LessonRequiredMaterialType[] =
+    requiredMaterialTypes.length > 0
+      ? requiredMaterialTypes
+      : [
+          ...(reading ? (["reading"] as const) : []),
+          ...(video ? (["video"] as const) : []),
+          ...(quiz ? (["quiz"] as const) : []),
+        ];
+  const isReadingSatisfied = isReadingComplete;
+  const isQuizSatisfied = quizHasBeenPassed;
+  const isVideoSatisfied = satisfiedMaterialTypes.includes("video");
+
   return (
     <main className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`} style={themeStyle}>
       <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-7xl lg:space-y-8 xl:max-w-[1400px]">
@@ -367,6 +456,13 @@ export function SubjectLessonPage({
                 materialId={video.id}
                 title={video.title}
                 videoId={videoId}
+                onProgressSaved={(result) =>
+                  applyLessonCompletion(
+                    (result as { lessonCompletion?: LessonCompletionResponse })
+                      ?.lessonCompletion,
+                    { celebrate: true },
+                  )
+                }
               />
             ) : (
               <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">This video link cannot be embedded right now.</p>
@@ -402,6 +498,20 @@ export function SubjectLessonPage({
                   ) : (
                     <ProtectedReading content={reading.content_text} scrollable />
                   )}
+                </div>
+                <div className={hasPdfReading ? "mt-4 shrink-0" : "mt-4"}>
+                  <button
+                    type="button"
+                    disabled={isReadingComplete || isMarkingReadingComplete}
+                    onClick={markReadingComplete}
+                    className="w-full rounded-2xl bg-[var(--subject-primary)] py-3 font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-green-600 disabled:opacity-100"
+                  >
+                    {isReadingComplete
+                      ? "Reading Complete ✓"
+                      : isMarkingReadingComplete
+                        ? "Saving..."
+                        : "Mark Reading Complete"}
+                  </button>
                 </div>
               </section>
             )}
@@ -598,125 +708,134 @@ export function SubjectLessonPage({
           </div>
         )}
 
-        {quizHasBeenPassed ? (
-              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
-                <Sparkles className="mx-auto text-[var(--subject-primary)]" size={24} />
-                <h2 className="mt-2 text-xl font-bold text-slate-900">
-                  {isCompleted ? "Lesson Completed" : "Ready to Complete"}
-                </h2>
-                <p className="mt-2 text-sm text-slate-500">
-                  {isCompleted
-                    ? "Your progress has been saved."
-                    : completionToken
-                      ? `Your verified ${LESSON_QUIZ_PASS_PERCENT}% quiz pass has unlocked completion.`
-                      : "Learner sign-in must be connected before completion can be saved."}
+        {requiredTypes.length > 0 && (
+          <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
+            <Sparkles className="mx-auto text-[var(--subject-primary)]" size={24} />
+            <h2 className="mt-2 text-xl font-bold text-slate-900">
+              {isCompleted ? "Lesson Completed" : "Lesson Progress"}
+            </h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {isCompleted
+                ? "Your progress has been saved."
+                : "This lesson completes automatically once everything below is done — no extra step needed."}
+            </p>
+
+            <div className="mt-5 space-y-2 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-left">
+              {requiredTypes.includes("reading") && (
+                <p
+                  className={`flex items-center gap-2 text-sm font-semibold ${
+                    isReadingSatisfied ? "text-green-700" : "text-slate-400"
+                  }`}
+                >
+                  <CheckCircle2 size={17} className={isReadingSatisfied ? "" : "text-slate-300"} />
+                  Reading {isReadingSatisfied ? "completed" : "not yet completed"}
                 </p>
-                {isCompleted && (
-                  <div className="mt-5 space-y-4 text-left">
-                    <div className="grid grid-cols-2 gap-3 rounded-2xl bg-green-50 p-4">
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Score
-                        </p>
-                        <p className="mt-1 font-bold text-green-700">
-                          {completedScore}/{completedTotal}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Percentage
-                        </p>
-                        <p className="mt-1 font-bold text-green-700">
-                          {completedPercentage === null
-                            ? "Unavailable"
-                            : `${completedPercentage}%`}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Result
-                        </p>
-                        <p className="mt-1 font-bold text-green-700">Passed</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
-                          Completion date
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-green-700">
-                          {completionDate
-                            ? formatCompletionDate(completionDate)
-                            : "Unavailable"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="space-y-2 rounded-2xl border border-green-100 p-4">
-                      {video && (
-                        <p className="flex items-center gap-2 text-sm font-semibold text-green-700">
-                          <CheckCircle2 size={17} /> Video watched
-                        </p>
-                      )}
-                      {reading && (
-                        <p className="flex items-center gap-2 text-sm font-semibold text-green-700">
-                          <CheckCircle2 size={17} /> Reading completed
-                        </p>
-                      )}
-                      <p className="flex items-center gap-2 text-sm font-semibold text-green-700">
-                        <CheckCircle2 size={17} /> Quiz passed
-                      </p>
-                    </div>
-                  </div>
-                )}
-                <div className="relative mt-5">
-                  {isCelebrating && celebrationParticles.map((particle, index) => (
-                      <span
-                        key={index}
-                        aria-hidden="true"
-                        className="kingdom-particle pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 rounded-full"
-                        style={{
-                          backgroundColor: particle.color,
-                          "--particle-x": `${particle.x}px`,
-                          "--particle-y": `${particle.y}px`,
-                        } as CSSProperties & Record<string, string>}
-                      />
-                    ))}
-                  {!isCompleted && (
-                    <button
-                      type="button"
-                      disabled={!completionToken || isCompleting}
-                      onClick={completeLesson}
-                      className="kingdom-complete-button w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      {isCompleting ? "Saving completion..." : "Complete Lesson"}
-                    </button>
-                  )}
-                  {isCompleted && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.push(
-                          buildSubjectRoute(subject, "learnerClassroom"),
-                        )
-                      }
-                      className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm"
-                    >
-                      Done
-                    </button>
-                  )}
-                </div>
-                {completionMessage && (
-                  <p className={`mt-4 rounded-2xl p-3 text-sm font-semibold ${isCompleted ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
-                    {completionMessage}
+              )}
+              {requiredTypes.includes("video") && (
+                <p
+                  className={`flex items-center gap-2 text-sm font-semibold ${
+                    isVideoSatisfied ? "text-green-700" : "text-slate-400"
+                  }`}
+                >
+                  <CheckCircle2 size={17} className={isVideoSatisfied ? "" : "text-slate-300"} />
+                  Video {isVideoSatisfied ? "watched" : "not yet watched"}
+                </p>
+              )}
+              {requiredTypes.includes("quiz") && (
+                <p
+                  className={`flex items-center gap-2 text-sm font-semibold ${
+                    isQuizSatisfied ? "text-green-700" : "text-slate-400"
+                  }`}
+                >
+                  <CheckCircle2 size={17} className={isQuizSatisfied ? "" : "text-slate-300"} />
+                  Quiz {isQuizSatisfied ? "passed" : "not yet passed"}
+                </p>
+              )}
+            </div>
+
+            {isCompleted && quiz && (
+              <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-green-50 p-4 text-left">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Score
                   </p>
-                )}
-              </section>
-            ) : (
-              <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 text-center shadow-sm lg:mx-auto lg:max-w-4xl lg:p-6">
-                <LockKeyhole className="mx-auto text-slate-400" size={22} />
-                <p className="mt-2 text-sm font-semibold text-slate-500">
-                  Achieve at least {LESSON_QUIZ_PASS_PERCENT}% to complete this lesson.
+                  <p className="mt-1 font-bold text-green-700">
+                    {completedScore}/{completedTotal}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Percentage
+                  </p>
+                  <p className="mt-1 font-bold text-green-700">
+                    {completedPercentage === null
+                      ? "Unavailable"
+                      : `${completedPercentage}%`}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Result
+                  </p>
+                  <p className="mt-1 font-bold text-green-700">Passed</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                    Completion date
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-green-700">
+                    {completionDate ? formatCompletionDate(completionDate) : "Unavailable"}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {isCompleted && !quiz && (
+              <div className="mt-5 rounded-2xl bg-green-50 p-4 text-left">
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Completion date
                 </p>
-              </section>
-            )}      </div>
+                <p className="mt-1 text-sm font-bold text-green-700">
+                  {completionDate ? formatCompletionDate(completionDate) : "Unavailable"}
+                </p>
+              </div>
+            )}
+
+            <div className="relative mt-5">
+              {isCelebrating && celebrationParticles.map((particle, index) => (
+                  <span
+                    key={index}
+                    aria-hidden="true"
+                    className="kingdom-particle pointer-events-none absolute left-1/2 top-1/2 h-2.5 w-2.5 rounded-full"
+                    style={{
+                      backgroundColor: particle.color,
+                      "--particle-x": `${particle.x}px`,
+                      "--particle-y": `${particle.y}px`,
+                    } as CSSProperties & Record<string, string>}
+                  />
+                ))}
+              {isCompleted && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      buildSubjectRoute(subject, "learnerClassroom"),
+                    )
+                  }
+                  className="w-full rounded-2xl bg-[var(--subject-primary)] py-4 font-bold text-white shadow-sm"
+                >
+                  Done
+                </button>
+              )}
+            </div>
+            {completionMessage && (
+              <p className={`mt-4 rounded-2xl p-3 text-sm font-semibold ${isCompleted ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                {completionMessage}
+              </p>
+            )}
+          </section>
+        )}
+      </div>
       <style jsx>{`
         .kingdom-particle {
           animation: kingdom-particle-burst 900ms ease-out forwards;

@@ -1,10 +1,15 @@
 import "server-only";
 
+import { filterActivityBackedMaterialIds } from "@/lib/activities/activityBackedMaterial";
 import {
   isLearnerActivitySubmittedStatus,
   type LearnerActivitySubmissionStatus,
 } from "@/lib/activities/learnerActivityStatus";
 import { isDateOverdue } from "@/lib/dates/deadlineStatus";
+import {
+  isLessonCompletionLate,
+  isVideoProgressComplete,
+} from "@/lib/lessons/adaptiveLessonCompletion";
 import { hasPassedLessonQuiz } from "@/lib/lessons/lessonAssessment";
 import {
   authorizeTeacher,
@@ -17,7 +22,7 @@ export type TrackerContentState =
   | "not_started"
   | "unavailable";
 
-export type TrackerLessonStatus = "Complete" | "Incomplete" | "Overdue";
+export type TrackerLessonStatus = "Complete" | "Late" | "Incomplete" | "Overdue";
 
 export type LearningTrackerLearner = {
   learnerProfileId: string;
@@ -60,6 +65,7 @@ type ProgressRow = {
   video_started_at: string | null;
   video_progress_percent: number | string;
   video_updated_at: string | null;
+  reading_completed_at: string | null;
   last_engaged_at: string;
 };
 type QuizAttemptRow = {
@@ -207,7 +213,7 @@ export async function getSubjectLearningTracker(
       supabase
         .from("learner_lesson_progress")
         .select(
-          "learner_profile_id, lesson_id, video_started_at, video_progress_percent, video_updated_at, last_engaged_at",
+          "learner_profile_id, lesson_id, video_started_at, video_progress_percent, video_updated_at, reading_completed_at, last_engaged_at",
         )
         .in("lesson_id", lessonIds),
       supabase
@@ -242,7 +248,13 @@ export async function getSubjectLearningTracker(
   const progressRows = (progressResult.data ?? []) as ProgressRow[];
   const attempts = (attemptsResult.data ?? []) as QuizAttemptRow[];
   const completions = (completionsResult.data ?? []) as CompletionRow[];
-  const materialIds = materials.map((material) => material.id);
+  // Only reading/activity-type materials can back a genuine learner
+  // activity -- quiz-type materials have their own `activities` row
+  // internally, but a learner can never submit to it (quizzes are scored
+  // via learner_quiz_attempts), so it must be excluded here or every
+  // activity total/completion count below is inflated by one phantom,
+  // permanently-unfulfillable "activity" per quiz.
+  const materialIds = filterActivityBackedMaterialIds(materials);
   let activities: ActivityRow[] = [];
   let activitySubmissions: ActivitySubmissionRow[] = [];
 
@@ -437,14 +449,22 @@ export async function getSubjectLearningTracker(
       );
       const video: TrackerContentState = !hasVideo
         ? "unavailable"
-        : videoPercentage >= 90
+        : isVideoProgressComplete(videoPercentage)
           ? "complete"
           : progress?.video_started_at
             ? "partial"
             : "not_started";
+      // Reading completion is the genuine persisted signal
+      // (learner_lesson_progress.reading_completed_at) OR a passed quiz --
+      // product decision: for a lesson with both a reading and a quiz, a
+      // passed quiz is accepted evidence the learner engaged with the
+      // reading, so the tracker never shows a contradictory "quiz passed /
+      // reading incomplete" state. Display-only: this never writes
+      // reading_completed_at and never feeds lesson completion evaluation
+      // (lib/lessons/adaptiveLessonCompletion.ts, unchanged).
       const reading: TrackerContentState = !hasReading
         ? "unavailable"
-        : quizSuccessful
+        : progress?.reading_completed_at || quizSuccessful
           ? "complete"
           : "not_started";
       const quiz: TrackerContentState = !hasQuiz
@@ -454,7 +474,8 @@ export async function getSubjectLearningTracker(
           : quizCompleted
             ? "partial"
             : "not_started";
-      const isLessonComplete = learnerCompletions.length > 0;
+      const latestCompletion = learnerCompletions[0] ?? null;
+      const isLessonComplete = latestCompletion !== null;
       const isLessonOverdue =
         !isLessonComplete &&
         isDateOverdue(lesson.expected_completion_date);
@@ -463,8 +484,16 @@ export async function getSubjectLearningTracker(
           isDateOverdue(activity.due_date) &&
           !submittedActivityIds.has(activity.id),
       ).length;
+      // Locked rule: a complete lesson is never "Needs Attention"/Overdue,
+      // even if it was completed after its expected date -- that's "Late",
+      // a teacher-facing timing distinction, not an incompleteness signal.
       const status: TrackerLessonStatus = isLessonComplete
-        ? "Complete"
+        ? isLessonCompletionLate(
+            latestCompletion.completed_at,
+            lesson.expected_completion_date,
+          )
+          ? "Late"
+          : "Complete"
         : isLessonOverdue
           ? "Overdue"
           : "Incomplete";

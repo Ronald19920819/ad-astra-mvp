@@ -82,7 +82,9 @@ export async function TeacherSubjectLearnersPage({
         lastActiveValues: [],
       };
       current.statuses.push(learner.status);
-      if (learner.status === "Complete") current.completedLessons += 1;
+      if (learner.status === "Complete" || learner.status === "Late") {
+        current.completedLessons += 1;
+      }
       current.completedActivities += learner.submittedActivityCount;
       current.overdueItems += learner.overdueItemCount;
       current.lastActiveValues.push(learner.lastActiveAt);

@@ -71,8 +71,12 @@ export type LearnerLessonData = {
   } | null;
   completion: {
     completed_at: string;
-    quiz_score: number;
+    quiz_score: number | null;
   } | null;
+  // Explicit, persisted reading-completion signal (Phase 2) -- independent
+  // of quiz state. Null when there is no reading material, or the learner
+  // has not yet marked it complete.
+  readingCompletedAt: string | null;
 };
 
 export async function getTeacherPublishedLessons(
@@ -300,7 +304,7 @@ export async function getLearnerLessonData(
     }
   }
 
-  const [attemptResult, completionResult] = await Promise.all([
+  const [attemptResult, completionResult, progressResult] = await Promise.all([
     supabase
       .from("learner_quiz_attempts")
       .select("id, quiz_score, quiz_total, created_at, completed_at")
@@ -314,6 +318,11 @@ export async function getLearnerLessonData(
       .select("completed_at, quiz_score")
       .eq("lesson_id", lessonId)
       .maybeSingle(),
+    supabase
+      .from("learner_lesson_progress")
+      .select("reading_completed_at")
+      .eq("lesson_id", lessonId)
+      .maybeSingle(),
   ]);
 
   if (attemptResult.error) {
@@ -322,6 +331,10 @@ export async function getLearnerLessonData(
 
   if (completionResult.error) {
     throw new Error(completionResult.error.message);
+  }
+
+  if (progressResult.error) {
+    throw new Error(progressResult.error.message);
   }
 
   return {
@@ -351,5 +364,6 @@ export async function getLearnerLessonData(
     quiz,
     passedQuizAttempt: attemptResult.data,
     completion: completionResult.data,
+    readingCompletedAt: progressResult.data?.reading_completed_at ?? null,
   };
 }

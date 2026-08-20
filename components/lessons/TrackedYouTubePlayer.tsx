@@ -37,6 +37,12 @@ type TrackedYouTubePlayerProps = {
   materialId: string;
   title: string;
   videoId: string;
+  // Fired with the server's response every time a progress ping is saved,
+  // so the page can reflect adaptive lesson completion live (e.g. video
+  // crossing the completion threshold while the learner keeps watching)
+  // without needing to reload. Purely additive/read-only -- never affects
+  // playback or tracking behavior.
+  onProgressSaved?: (result: unknown) => void;
 };
 
 export function TrackedYouTubePlayer({
@@ -44,11 +50,17 @@ export function TrackedYouTubePlayer({
   materialId,
   title,
   videoId,
+  onProgressSaved,
 }: TrackedYouTubePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YouTubePlayer | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [apiReady, setApiReady] = useState(false);
+  const onProgressSavedRef = useRef(onProgressSaved);
+
+  useEffect(() => {
+    onProgressSavedRef.current = onProgressSaved;
+  }, [onProgressSaved]);
 
   const saveProgress = useCallback(() => {
     const player = playerRef.current;
@@ -58,7 +70,7 @@ export function TrackedYouTubePlayer({
     const durationSeconds = player.getDuration();
     if (!Number.isFinite(positionSeconds) || !Number.isFinite(durationSeconds) || durationSeconds <= 0) return;
 
-    void fetch("/api/lessons/progress", {
+    fetch("/api/lessons/progress", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -69,7 +81,10 @@ export function TrackedYouTubePlayer({
         durationSeconds,
       }),
       keepalive: true,
-    }).catch((error) => console.error("Unable to save video progress:", error));
+    })
+      .then((response) => response.json())
+      .then((result) => onProgressSavedRef.current?.(result))
+      .catch((error) => console.error("Unable to save video progress:", error));
   }, [lessonId, materialId]);
 
   const stopTracking = useCallback(() => {

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { filterActivityBackedMaterialIds } from "@/lib/activities/activityBackedMaterial";
 import { isLearnerActivitySubmittedStatus } from "@/lib/activities/learnerActivityStatus";
 import { isDateOverdue } from "@/lib/dates/deadlineStatus";
 import {
@@ -35,6 +36,7 @@ type LessonRow = {
 type MaterialRow = {
   id: string;
   lesson_id: string;
+  material_type: string;
 };
 
 type ActivityRow = {
@@ -198,7 +200,10 @@ export async function getTeacherDashboardInsights(
 
   const [materialsResult, completionsResult] = await Promise.all([
     lessonIds.length > 0
-      ? admin.from("lesson_materials").select("id, lesson_id").in("lesson_id", lessonIds)
+      ? admin
+          .from("lesson_materials")
+          .select("id, lesson_id, material_type")
+          .in("lesson_id", lessonIds)
       : Promise.resolve({ data: [], error: null }),
     lessonIds.length > 0 && activeAuthUserIds.length > 0
       ? admin
@@ -214,7 +219,12 @@ export async function getTeacherDashboardInsights(
 
   const materials = (materialsResult.data ?? []) as MaterialRow[];
   const completions = (completionsResult.data ?? []) as CompletionRow[];
-  const materialIds = materials.map((material) => material.id);
+  // Only reading/activity-type materials can back a genuine learner
+  // activity -- quiz-type materials have their own `activities` row
+  // internally (scored via learner_quiz_attempts instead), so it must be
+  // excluded here or overdueItemCount/support-status can be inflated by a
+  // phantom, permanently-unfulfillable "activity" per quiz.
+  const materialIds = filterActivityBackedMaterialIds(materials);
 
   const [activitiesResult] = await Promise.all([
     materialIds.length > 0
