@@ -1,3 +1,4 @@
+import { validateRequiredDueDate } from "@/lib/activities/dueDateValidation";
 import { deletePublishedSubjectActivity } from "@/lib/supabase/publishedContentDeleter";
 import {
   authorizeTeacher,
@@ -88,7 +89,6 @@ export async function PUT(
       !uuidPattern.test(lessonId) ||
       !Number.isInteger(totalMarks) ||
       Number(totalMarks) <= 0 ||
-      typeof dueDate !== "string" ||
       !Array.isArray(questions) ||
       questions.length === 0 ||
       questions.length > 100 ||
@@ -99,6 +99,21 @@ export async function PUT(
     ) {
       return Response.json(
         { error: "Invalid activity details.", code: "INVALID_REQUEST" },
+        { status: 400 },
+      );
+    }
+
+    // Locked reward-integrity policy: a linked lesson/activity pair must
+    // not be publishable without a valid due date -- see
+    // lib/activities/dueDateValidation.ts. Editing an activity can never
+    // clear or blank its due date.
+    const dueDateValidation = validateRequiredDueDate(dueDate);
+    if (!dueDateValidation.valid) {
+      return Response.json(
+        {
+          error: "A valid due date is required to save this activity.",
+          code: "INVALID_DUE_DATE",
+        },
         { status: 400 },
       );
     }
@@ -294,19 +309,28 @@ export async function PUT(
           p_instructions: instructions.trim(),
           p_total_marks: totalMarks,
           p_lesson_material_id: readingMaterial.id,
-          p_due_date: dueDate || null,
+          p_due_date: dueDateValidation.dueDate,
           p_questions: questionRows,
         },
       );
       if (updateError) throw updateError;
       version = Number(updatedVersion);
-    } else if ((activity.due_date ?? "") !== dueDate) {
+    } else if ((activity.due_date ?? "") !== dueDateValidation.dueDate) {
       const { error: dueDateError } = await admin
         .from("activities")
-        .update({ due_date: dueDate || null })
+        .update({ due_date: dueDateValidation.dueDate })
         .eq("id", activityId);
       if (dueDateError) throw dueDateError;
     }
+
+    // Keep the linked lesson's due date in lockstep, the same as the
+    // create path -- whichever branch above ran, the activity's due date
+    // is now dueDateValidation.dueDate, so the lesson must match it too.
+    const { error: lessonDueDateError } = await admin
+      .from("lessons")
+      .update({ expected_completion_date: dueDateValidation.dueDate })
+      .eq("id", lessonId);
+    if (lessonDueDateError) throw lessonDueDateError;
 
     return Response.json({
       success: true,

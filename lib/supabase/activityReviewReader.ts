@@ -35,6 +35,13 @@ export type TeacherActivityReviewLearner = {
   learnerName: string;
   status: TeacherActivityReviewMonitorStatus;
   submission: TeacherActivityReviewSubmission | null;
+  // True when this learner submitted the activity while enrolled in this
+  // subject but has since transferred to a different subject. Historical
+  // submission ownership follows the activity/subject it was submitted
+  // under, not the learner's current enrolment -- see the "not_submitted"/
+  // "overdue" placeholder rows below, which ARE current-enrolment-only,
+  // since a learner can only be overdue on work they're currently assigned.
+  isPastEnrolment: boolean;
 };
 
 export type TeacherActivityReview = {
@@ -251,6 +258,80 @@ export async function getSubjectActivityReviews(
         : [];
     })
     .sort((a, b) => a.learnerName.localeCompare(b.learnerName));
+  const currentLearnerAuthUserIds = new Set(
+    currentLearners.map((learner) => learner.learnerAuthUserId),
+  );
+
+  // Locked historical-ownership principle: a submission remains reviewable
+  // under the subject/activity it was genuinely submitted to, even after the
+  // learner transfers to a different subject. `submissions` above is already
+  // scoped only by activity_id (never by current enrolment), so any learner
+  // who submitted but has since moved elsewhere still appears here -- they
+  // just aren't in currentLearners. Resolve their names separately so they
+  // aren't silently dropped from the review list.
+  const pastEnrolmentAuthUserIds = [
+    ...new Set(
+      submissions
+        .map((submission) => submission.learner_id)
+        .filter((learnerAuthUserId) => !currentLearnerAuthUserIds.has(learnerAuthUserId)),
+    ),
+  ];
+
+  const pastEnrolmentLearners: {
+    learnerProfileId: string;
+    learnerAuthUserId: string;
+    learnerName: string;
+  }[] = [];
+
+  if (pastEnrolmentAuthUserIds.length > 0) {
+    const { data: pastProfilesData, error: pastProfilesError } = await supabase
+      .from("profiles")
+      .select("id, auth_user_id, full_name")
+      .eq("role", "learner")
+      .in("auth_user_id", pastEnrolmentAuthUserIds);
+
+    if (pastProfilesError) throw pastProfilesError;
+    const pastProfiles = (pastProfilesData ?? []) as ProfileRow[];
+    const profileIdByAuthUserId = new Map(
+      pastProfiles.map((profile) => [profile.auth_user_id, profile.id]),
+    );
+
+    const pastProfileIds = pastProfiles.map((profile) => profile.id);
+    let pastLearnerProfileIdByProfileId = new Map<string, string>();
+    if (pastProfileIds.length > 0) {
+      const { data: pastLearnerProfilesData, error: pastLearnerProfilesError } = await supabase
+        .from("learner_profiles")
+        .select("id, profile_id")
+        .in("profile_id", pastProfileIds);
+
+      if (pastLearnerProfilesError) throw pastLearnerProfilesError;
+      pastLearnerProfileIdByProfileId = new Map(
+        (pastLearnerProfilesData ?? []).map((row) => [row.profile_id, row.id]),
+      );
+    }
+
+    for (const authUserId of pastEnrolmentAuthUserIds) {
+      const profile = pastProfiles.find((row) => row.auth_user_id === authUserId);
+      if (!profile) continue; // no learner profile at all -- nothing genuine to show
+
+      const profileId = profileIdByAuthUserId.get(authUserId);
+      const learnerProfileId =
+        (profileId && pastLearnerProfileIdByProfileId.get(profileId)) ?? authUserId;
+
+      pastEnrolmentLearners.push({
+        learnerProfileId,
+        learnerAuthUserId: authUserId,
+        learnerName: profile.full_name,
+      });
+    }
+  }
+
+  const learnerNameByAuthUserId = new Map([
+    ...currentLearners.map((learner) => [learner.learnerAuthUserId, learner.learnerName] as const),
+    ...pastEnrolmentLearners.map(
+      (learner) => [learner.learnerAuthUserId, learner.learnerName] as const,
+    ),
+  ]);
 
   const submissionByActivityLearner = new Map<string, TeacherActivityReviewSubmission>();
 
@@ -259,8 +340,7 @@ export async function getSubjectActivityReviews(
     if (submissionByActivityLearner.has(key)) continue;
 
     const learnerName =
-      currentLearners.find((learner) => learner.learnerAuthUserId === submission.learner_id)
-        ?.learnerName ?? "Learner profile unavailable";
+      learnerNameByAuthUserId.get(submission.learner_id) ?? "Learner profile unavailable";
 
     submissionByActivityLearner.set(key, {
       id: submission.id,
@@ -279,18 +359,8 @@ export async function getSubjectActivityReviews(
   }
 
   return activities
-    .map((activity) => ({
-      id: activity.id,
-      title: activity.title,
-      totalMarks: activity.activity_questions.reduce(
-        (total, question) => total + question.marks,
-        0,
-      ),
-      termNumber: activity.lesson_materials.lessons.term_number,
-      weekNumber: activity.lesson_materials.lessons.week_number,
-      createdAt: activity.created_at,
-      dueDate: activity.due_date,
-      learners: currentLearners.map((learner) => {
+    .map((activity) => {
+      const currentRows = currentLearners.map((learner) => {
         const submission =
           submissionByActivityLearner.get(`${activity.id}:${learner.learnerAuthUserId}`) ?? null;
 
@@ -303,9 +373,44 @@ export async function getSubjectActivityReviews(
               ? "overdue"
               : "not_submitted",
           submission,
+          isPastEnrolment: false,
         };
-      }),
-    }))
+      });
+
+      // A transferred learner never gets a placeholder "not_submitted"/
+      // "overdue" row here -- they only appear when a genuine submission to
+      // THIS specific activity exists, since they're no longer currently
+      // assigned this activity's curriculum at all.
+      const pastEnrolmentRows = pastEnrolmentLearners.flatMap((learner) => {
+        const submission =
+          submissionByActivityLearner.get(`${activity.id}:${learner.learnerAuthUserId}`) ?? null;
+        if (!submission) return [];
+
+        return [
+          {
+            learnerProfileId: learner.learnerProfileId,
+            learnerName: learner.learnerName,
+            status: submission.status as TeacherActivityReviewMonitorStatus,
+            submission,
+            isPastEnrolment: true,
+          },
+        ];
+      });
+
+      return {
+        id: activity.id,
+        title: activity.title,
+        totalMarks: activity.activity_questions.reduce(
+          (total, question) => total + question.marks,
+          0,
+        ),
+        termNumber: activity.lesson_materials.lessons.term_number,
+        weekNumber: activity.lesson_materials.lessons.week_number,
+        createdAt: activity.created_at,
+        dueDate: activity.due_date,
+        learners: [...currentRows, ...pastEnrolmentRows],
+      };
+    })
     .sort((activityA, activityB) => {
       if (activityA.termNumber === null && activityB.termNumber !== null) return 1;
       if (activityB.termNumber === null && activityA.termNumber !== null) return -1;

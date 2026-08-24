@@ -240,18 +240,37 @@ export async function getTeacherDashboardInsights(
   const activities = (activitiesResult.data ?? []) as ActivityRow[];
   const activityIds = activities.map((activity) => activity.id);
 
-  const { data: submissionData, error: submissionError } =
+  const [submissionResult, allSubjectSubmissionsResult] = await Promise.all([
     activityIds.length > 0 && activeAuthUserIds.length > 0
-      ? await admin
+      ? admin
           .from("activity_submissions")
           .select("activity_id, learner_id, status")
           .in("activity_id", activityIds)
           .in("learner_id", activeAuthUserIds)
-      : { data: [], error: null };
+      : Promise.resolve({ data: [], error: null }),
+    // Awaiting-review counts must include historical submissions from
+    // learners who have since transferred to a different subject -- a
+    // submission stays owned by the subject/activity it was submitted
+    // under, not by the learner's current enrolment. Deliberately NOT
+    // filtered by activeAuthUserIds, unlike the query above (which still
+    // correctly scopes overdue/at-risk calculations to currently-enrolled
+    // learners only).
+    activityIds.length > 0
+      ? admin
+          .from("activity_submissions")
+          .select("activity_id, status")
+          .in("activity_id", activityIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
 
-  if (submissionError) throw submissionError;
+  if (submissionResult.error) throw submissionResult.error;
+  if (allSubjectSubmissionsResult.error) throw allSubjectSubmissionsResult.error;
 
-  const submissions = (submissionData ?? []) as SubmissionRow[];
+  const submissions = (submissionResult.data ?? []) as SubmissionRow[];
+  const allSubjectSubmissions = (allSubjectSubmissionsResult.data ?? []) as Pick<
+    SubmissionRow,
+    "activity_id" | "status"
+  >[];
 
   const lessonById = new Map(lessons.map((lesson) => [lesson.id, lesson]));
   const lessonIdByMaterialId = new Map(materials.map((material) => [material.id, material.lesson_id]));
@@ -288,7 +307,7 @@ export async function getTeacherDashboardInsights(
     ]),
   );
 
-  for (const submission of submissions) {
+  for (const submission of allSubjectSubmissions) {
     if (
       submission.status !== "submitted" &&
       submission.status !== "marking_failed" &&

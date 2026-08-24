@@ -32,3 +32,13 @@ export function isDateOverdue(
   return deadlineKey < dateKeyInTimeZone(now, timeZone);
 }
 
+// Pure date-key arithmetic -- deliberately UTC-anchored (not timeZone-aware)
+// since a "YYYY-MM-DD" key has no time-of-day component to convert; only
+// the initial key (from dateKeyInTimeZone) needs to be timezone-correct.
+export function addDaysToDateKey(dateKey: string, days: number): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+

@@ -5,7 +5,9 @@ import TutorSuggestion from "@/components/TutorSuggestion";
 import { Next24HoursCard } from "@/components/home/Next24HoursCard";
 import { TeacherAnnouncementsCard } from "@/components/home/TeacherAnnouncementsCard";
 import SchoolOverviewCard from "@/components/SchoolOverviewCard";
+import { getLearnerCoinBalance } from "@/lib/supabase/coinLedger";
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
+import { getLearnerXpSummary } from "@/lib/supabase/learnerXpReader";
 import {
   getLearnerHomeCommunications,
   type LearnerHomeCommunications,
@@ -23,6 +25,37 @@ export default async function HomeDashboard() {
     announcements: [],
   };
 
+  // Resolved server-side, before the page renders, so there is no
+  // client-side loading state and never a flash of a fake "0 XP" --
+  // the canonical Stage 1 reader is the sole source of this value.
+  // A failure here degrades gracefully: the hero simply omits the XP
+  // display rather than breaking the dashboard or surfacing the error.
+  let xpTotal: number | null = null;
+  if (profile) {
+    try {
+      const xpSummary = await getLearnerXpSummary(profile.userId);
+      xpTotal = xpSummary.totalXp;
+    } catch (error) {
+      logSupabaseError("Unable to load learner XP summary:", error);
+    }
+  }
+
+  // Authoritative Stage 3 ledger balance -- SUM(coin_transactions.amount)
+  // for this learner, server-side, via getLearnerCoinBalance. A genuinely
+  // empty ledger resolves to the real number 0 (renders "0 AC", per the
+  // locked "zero balances must display" rule) and is NOT the same thing
+  // as a failed load (e.g. the coin_transactions table/migration not yet
+  // live in this environment) -- a failure here logs and leaves acBalance
+  // null, which the hero simply omits rather than guessing a balance.
+  let acBalance: number | null = null;
+  if (profile) {
+    try {
+      acBalance = await getLearnerCoinBalance(profile.userId);
+    } catch (error) {
+      logSupabaseError("Unable to load learner Coin balance:", error);
+    }
+  }
+
   if (profile) {
     try {
       communications = await getLearnerHomeCommunications(profile);
@@ -37,7 +70,7 @@ export default async function HomeDashboard() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] px-6 py-6 pb-28 lg:px-8">
       <div className="mx-auto max-w-md lg:max-w-6xl">
-        <HeroBanner learnerName={learnerName} />
+        <HeroBanner learnerName={learnerName} xpTotal={xpTotal} acBalance={acBalance} />
 
         <MotivationalCard />
 

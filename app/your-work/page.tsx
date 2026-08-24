@@ -2,52 +2,24 @@ import Link from "next/link";
 import {
   ArrowLeft,
   CheckCircle2,
-  Clock,
+  ChevronRight,
   FileText,
   Sparkles,
 } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
-import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import {
-  getCurrentLearnerIdentity,
+  AwaitingCard,
+  ReturnedCard,
+  getSubjectTheme,
+} from "@/components/learners/WorkSubmissionCards";
+import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
+import { getCurrentLearnerContext } from "@/lib/supabase/currentLearnerContext";
+import {
   getLearnerWorkOverview,
   type LearnerWorkSummary,
 } from "@/lib/supabase/learnerWorkReader";
 
 export const dynamic = "force-dynamic";
-
-const fallbackSubjectTheme = {
-  primary: "#F97316",
-  softBackground: "#FFF3E6",
-  border: "#FFEDD5",
-} as const;
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-ZA", {
-    dateStyle: "medium",
-    timeZone: "Africa/Johannesburg",
-  });
-}
-
-function percentage(mark: number | null, total: number | null) {
-  if (mark === null || total === null || total <= 0) return null;
-  return Math.round((mark / total) * 1000) / 10;
-}
-
-function getSubjectTheme(subjectId: string) {
-  return (
-    getSubjectConfigurationByDatabaseId(subjectId)?.colourTheme ??
-    fallbackSubjectTheme
-  );
-}
-
-function scheduleLabel(submission: LearnerWorkSummary) {
-  const { termNumber, weekNumber } = submission.lesson;
-  if (termNumber === null && weekNumber === null) return "Schedule not set";
-  if (termNumber === null) return `Week ${weekNumber}`;
-  if (weekNumber === null) return `Term ${termNumber}`;
-  return `Term ${termNumber} \u00B7 Week ${weekNumber}`;
-}
 
 type WorkGroup = {
   subjectId: string;
@@ -99,147 +71,46 @@ function groupWork(submissions: LearnerWorkSummary[]): WorkGroup[] {
     .sort((a, b) => a.subjectName.localeCompare(b.subjectName));
 }
 
-function AwaitingCard({ submission }: { submission: LearnerWorkSummary }) {
-  const subjectTheme = getSubjectTheme(submission.subject.id);
-  const preliminaryPercentage =
-    submission.preliminaryPercentage ??
-    percentage(submission.preliminaryMark, submission.preliminaryTotal);
-  const hasPreliminaryMark =
-    submission.preliminaryMark !== null &&
-    submission.preliminaryTotal !== null;
+function SubjectSelector({
+  approvedSubjects,
+}: {
+  approvedSubjects: { id: string }[];
+}) {
+  const subjects = approvedSubjects
+    .map((subject) => getSubjectConfigurationByDatabaseId(subject.id))
+    .filter((subject): subject is NonNullable<typeof subject> => Boolean(subject))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  if (subjects.length === 0) return null;
 
   return (
-    <article
-      className="min-w-0 rounded-2xl border p-4"
-      style={{
-        borderColor: subjectTheme.border,
-        backgroundColor: `${subjectTheme.softBackground}99`,
-      }}
-    >
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="break-words font-bold text-[#102A43]">
-            {submission.activity.title}
-          </h4>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            {submission.subject.name} {"\u00B7"} {scheduleLabel(submission)}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">
-          Awaiting Review
-        </span>
-      </div>
-
-      <p className="mt-3 flex items-center gap-1.5 text-xs text-slate-500">
-        <Clock size={14} /> Submitted {formatDate(submission.submittedAt)}
+    <section className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:max-w-3xl lg:p-6">
+      <h2 className="mb-1 text-lg font-bold text-[#102A43]">
+        View a subject
+      </h2>
+      <p className="mb-4 text-sm text-slate-500">
+        See completed work, outstanding work and your catch-up plan for one
+        subject at a time.
       </p>
-
-      <div className="mt-3 rounded-2xl bg-white p-3 text-sm text-slate-700">
-        {submission.status === "marking_failed" ? (
-          <p className="font-semibold">Preliminary marking unavailable</p>
-        ) : hasPreliminaryMark ? (
-          <p>
-            <span
-              className="font-bold"
-              style={{ color: subjectTheme.primary }}
-            >
-              {submission.preliminaryMark}/{submission.preliminaryTotal}
+      <div className="divide-y divide-blue-50 overflow-hidden rounded-2xl border border-blue-50">
+        {subjects.map((subject) => (
+          <Link
+            key={subject.key}
+            href={`/your-work/subject?subject=${encodeURIComponent(subject.databaseId)}`}
+            className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50"
+          >
+            <div
+              className="h-3 w-3 shrink-0 rounded-full"
+              style={{ backgroundColor: subject.colourTheme.primary }}
+            />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#102A43]">
+              {subject.displayName}
             </span>
-            {preliminaryPercentage !== null && (
-              <span className="ml-2 text-xs font-semibold text-slate-500">
-                {preliminaryPercentage}% preliminary
-              </span>
-            )}
-          </p>
-        ) : (
-          <p className="font-semibold">Marking in progress</p>
-        )}
+            <ChevronRight size={18} className="shrink-0 text-slate-400" />
+          </Link>
+        ))}
       </div>
-
-      <Link
-        href={`/your-work/${submission.id}`}
-        className="mt-4 flex w-full items-center justify-center rounded-2xl bg-[#102A43] px-4 py-3 text-sm font-bold text-white"
-      >
-        View Submission
-      </Link>
-    </article>
-  );
-}
-
-function ReturnedCard({ submission }: { submission: LearnerWorkSummary }) {
-  const subjectTheme = getSubjectTheme(submission.subject.id);
-  const finalPercentage = percentage(
-    submission.finalMark,
-    submission.activity.totalMarks,
-  );
-
-  return (
-    <article
-      className="min-w-0 rounded-2xl border bg-[#FFFDF9] p-4 shadow-sm"
-      style={{ borderColor: subjectTheme.border }}
-    >
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="break-words font-bold text-[#102A43]">
-            {submission.activity.title}
-          </h4>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
-            {submission.subject.name} {"\u00B7"} {scheduleLabel(submission)}
-          </p>
-        </div>
-        <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-700">
-          Returned
-        </span>
-      </div>
-
-      <div
-        className="mt-4 rounded-2xl p-4"
-        style={{ backgroundColor: subjectTheme.softBackground }}
-      >
-        <p
-          className="text-xs font-bold uppercase tracking-wide"
-          style={{ color: subjectTheme.primary }}
-        >
-          Activity Mark
-        </p>
-        <p className="mt-1 text-3xl font-bold text-[#102A43]">
-          {submission.finalMark ?? "\u2014"}/{submission.activity.totalMarks}
-        </p>
-        <p
-          className="mt-1 text-sm font-bold"
-          style={{ color: subjectTheme.primary }}
-        >
-          {finalPercentage === null
-            ? "Percentage unavailable"
-            : `Percentage: ${finalPercentage}%`}
-        </p>
-        <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">
-          Included in the Activity Performance component of your Overall Mark
-        </p>
-      </div>
-
-      <div className="mt-3 space-y-1 text-xs text-slate-500">
-        <p>Submitted {formatDate(submission.submittedAt)}</p>
-        <p>
-          Returned {submission.reviewedAt ? formatDate(submission.reviewedAt) : "date unavailable"}
-        </p>
-        {submission.preliminaryMark !== null &&
-          submission.preliminaryTotal !== null && (
-            <p>
-              Preliminary Kingdom mark: {submission.preliminaryMark}/
-              {submission.preliminaryTotal}
-            </p>
-          )}
-      </div>
-
-      <Link
-        href={`/your-work/${submission.id}`}
-        className="mt-4 flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-bold text-white"
-        style={{ backgroundColor: subjectTheme.primary }}
-      >
-        View Work
-      </Link>
-    </article>
+    </section>
   );
 }
 
@@ -316,13 +187,13 @@ function WorkSection({
 }
 
 export default async function YourWorkPage() {
-  let identity;
+  let context;
 
   try {
-    identity = await getCurrentLearnerIdentity();
+    context = await getCurrentLearnerContext();
   } catch (error) {
-    console.error("Unable to resolve learner identity for Your Work:", error);
-    identity = {
+    console.error("Unable to resolve learner context for Your Work:", error);
+    context = {
       status: "error" as const,
       message: "Unable to load your work.",
       code: "IDENTITY_ERROR",
@@ -332,9 +203,9 @@ export default async function YourWorkPage() {
   let submissions: LearnerWorkSummary[] = [];
   let loadError = "";
 
-  if (identity.status === "success") {
+  if (context.status === "success") {
     try {
-      submissions = await getLearnerWorkOverview(identity.learnerId);
+      submissions = await getLearnerWorkOverview(context.identity.learnerId);
     } catch (error) {
       console.error("Unable to load learner work overview:", error);
       loadError = "Unable to load your work.";
@@ -348,8 +219,8 @@ export default async function YourWorkPage() {
     (submission) => submission.status === "returned",
   );
   const learnerFirstName =
-    identity.status === "success"
-      ? identity.fullName?.trim().split(/\s+/)[0] ?? ""
+    context.status === "success"
+      ? context.identity.fullName?.trim().split(/\s+/)[0] ?? ""
       : "";
   const heading = learnerFirstName
     ? `Here's your work, ${learnerFirstName}`
@@ -381,40 +252,47 @@ export default async function YourWorkPage() {
           </div>
         </section>
 
-        {identity.status === "error" ? (
+        {context.status === "error" ? (
           <section className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 text-sm font-semibold text-slate-600 shadow-sm lg:max-w-3xl">
-            {identity.message}
-          </section>
-        ) : loadError ? (
-          <section className="mx-auto w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-600 shadow-sm lg:max-w-3xl">
-            {loadError}
-          </section>
-        ) : submissions.length === 0 ? (
-          <section className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 text-sm text-slate-500 shadow-sm lg:max-w-3xl">
-            No submitted work yet.
+            {context.message}
           </section>
         ) : (
           <>
-            {identity.isDevelopmentFallback && (
+            {context.identity.isDevelopmentFallback && (
               <p className="mx-auto w-full max-w-md rounded-2xl bg-amber-50 p-3 text-xs font-semibold text-amber-800 lg:max-w-4xl">
                 Development testing mode: showing work for the configured test
                 learner.
               </p>
             )}
-            <WorkSection
-              title={`Awaiting Teacher Review \u00B7 ${awaiting.length}`}
-              icon={<Sparkles size={22} />}
-              submissions={awaiting}
-              emptyMessage="No work is currently awaiting review."
-              returned={false}
-            />
-            <WorkSection
-              title={`Returned Work \u00B7 ${returned.length}`}
-              icon={<CheckCircle2 size={22} />}
-              submissions={returned}
-              emptyMessage="No work has been returned yet."
-              returned
-            />
+
+            <SubjectSelector approvedSubjects={context.profile.approvedSubjects} />
+
+            {loadError ? (
+              <section className="mx-auto w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-5 text-sm font-semibold text-red-600 shadow-sm lg:max-w-3xl">
+                {loadError}
+              </section>
+            ) : submissions.length === 0 ? (
+              <section className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 text-sm text-slate-500 shadow-sm lg:max-w-3xl">
+                No submitted work yet.
+              </section>
+            ) : (
+              <>
+                <WorkSection
+                  title={`Awaiting Teacher Review \u00B7 ${awaiting.length}`}
+                  icon={<Sparkles size={22} />}
+                  submissions={awaiting}
+                  emptyMessage="No work is currently awaiting review."
+                  returned={false}
+                />
+                <WorkSection
+                  title={`Returned Work \u00B7 ${returned.length}`}
+                  icon={<CheckCircle2 size={22} />}
+                  submissions={returned}
+                  emptyMessage="No work has been returned yet."
+                  returned
+                />
+              </>
+            )}
           </>
         )}
       </div>

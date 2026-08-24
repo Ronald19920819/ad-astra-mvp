@@ -94,7 +94,7 @@ function ReviewRows({
   if (activity.learners.length === 0) {
     return (
       <p className="border-t border-orange-100 p-4 text-sm text-slate-500">
-        No currently enrolled learners.
+        No learners to review for this activity.
       </p>
     );
   }
@@ -118,6 +118,11 @@ function ReviewRows({
             <div className="hidden grid-cols-[minmax(0,1.5fr)_0.9fr_1fr_1fr_auto] items-center gap-3 border-t border-orange-100 px-4 py-4 text-xs sm:grid">
               <p className="min-w-0 break-words font-semibold text-slate-900">
                 {learner.learnerName}
+                {learner.isPastEnrolment && (
+                  <span className="ml-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                    Transferred
+                  </span>
+                )}
               </p>
               <div className={`mx-auto inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-semibold ${indicator.badgeClassName}`}>
                 {indicator.icon}
@@ -157,6 +162,11 @@ function ReviewRows({
               <div className="flex items-start justify-between gap-3">
                 <p className="min-w-0 break-words font-semibold text-slate-900">
                   {learner.learnerName}
+                  {learner.isPastEnrolment && (
+                    <span className="ml-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                      Transferred
+                    </span>
+                  )}
                 </p>
                 <div className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${indicator.labelClassName}`}>
                   {indicator.icon}

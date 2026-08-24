@@ -182,6 +182,8 @@ export function SubjectActivityPage({
   const [draftNotice, setDraftNotice] = useState("");
   const [draftLearnerId, setDraftLearnerId] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [pasteBlockedNoticeVisible, setPasteBlockedNoticeVisible] = useState(false);
+  const pasteBlockedNoticeTimeoutRef = useRef<number | null>(null);
   const saveTimeoutRef = useRef<number | null>(null);
   const localDraftCacheKeyRef = useRef<string | null>(null);
   const latestAnswersRef = useRef<Record<string, string>>({});
@@ -786,6 +788,43 @@ export function SubjectActivityPage({
     };
   }, [reconcileLifecycleDraft, saveDraft]);
 
+  useEffect(() => {
+    return () => {
+      if (pasteBlockedNoticeTimeoutRef.current !== null) {
+        window.clearTimeout(pasteBlockedNoticeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Reward-integrity safeguard: learner activity answers must be typed, not
+  // pasted from an external source. This hooks the answer's own `paste`
+  // event -- the one event every paste trigger (Ctrl+V, Cmd+V,
+  // right-click/context-menu Paste, mobile long-press Paste) ultimately
+  // fires on the target element, so blocking it here is reliable without
+  // needing separate keyboard-shortcut interception. `onDrop` is blocked
+  // too, since dragging text in is another way to insert external content
+  // that bypasses `paste` entirely. This never touches `onChange`/React
+  // state updates, so a future first-party input method (e.g. speech
+  // transcription writing directly into `answers` state) is entirely
+  // unaffected -- only clipboard/drag-sourced insertion is blocked.
+  // Copy/cut of the learner's own typed text is deliberately left alone
+  // (untouched by these handlers); pasting it back is still blocked like
+  // any other paste, since reliably distinguishing "the learner's own
+  // recently-copied text" from external text would require fragile,
+  // privacy-invasive clipboard tracking that was explicitly out of scope.
+  function blockExternalAnswerInput(
+    event: React.ClipboardEvent<HTMLTextAreaElement> | React.DragEvent<HTMLTextAreaElement>,
+  ) {
+    event.preventDefault();
+    setPasteBlockedNoticeVisible(true);
+    if (pasteBlockedNoticeTimeoutRef.current !== null) {
+      window.clearTimeout(pasteBlockedNoticeTimeoutRef.current);
+    }
+    pasteBlockedNoticeTimeoutRef.current = window.setTimeout(() => {
+      setPasteBlockedNoticeVisible(false);
+    }, 4000);
+  }
+
   async function submitActivity() {
     if (!activityData || submission || isSubmitting) return;
 
@@ -1108,9 +1147,24 @@ export function SubjectActivityPage({
                   onBlur={() => {
                     void saveDraft("blur");
                   }}
+                  onPaste={blockExternalAnswerInput}
+                  onDrop={blockExternalAnswerInput}
                   placeholder="Type your answer here..."
                   className="mt-3 min-h-[160px] w-full max-w-full rounded-2xl border border-slate-200 bg-white p-3 font-sans text-sm text-slate-900 outline-none focus:border-[var(--subject-primary)] disabled:bg-slate-100 lg:min-h-[320px] lg:flex-1"
                 />
+                <p className="mt-1.5 text-xs text-slate-400">
+                  Answer in your own words. Pasting is disabled for activity
+                  responses.
+                </p>
+                {pasteBlockedNoticeVisible && (
+                  <p
+                    role="status"
+                    className="mt-1.5 text-xs font-semibold text-amber-700"
+                  >
+                    Please type your answer yourself. Pasting is disabled for
+                    activities.
+                  </p>
+                )}
                 {activeSavedAnswer?.kingdom_feedback && (
                   <div className="mt-3 rounded-2xl bg-orange-50 p-3 text-sm text-slate-700">
                     <p className="font-bold text-orange-600">
