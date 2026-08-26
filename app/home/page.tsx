@@ -5,9 +5,8 @@ import TutorSuggestion from "@/components/TutorSuggestion";
 import { Next24HoursCard } from "@/components/home/Next24HoursCard";
 import { TeacherAnnouncementsCard } from "@/components/home/TeacherAnnouncementsCard";
 import SchoolOverviewCard from "@/components/SchoolOverviewCard";
-import { getLearnerCoinBalance } from "@/lib/supabase/coinLedger";
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
-import { getLearnerXpSummary } from "@/lib/supabase/learnerXpReader";
+import { getLearnerRewardsSummary } from "@/lib/supabase/learnerRewardsSummary";
 import {
   getLearnerHomeCommunications,
   type LearnerHomeCommunications,
@@ -27,33 +26,22 @@ export default async function HomeDashboard() {
 
   // Resolved server-side, before the page renders, so there is no
   // client-side loading state and never a flash of a fake "0 XP" --
-  // the canonical Stage 1 reader is the sole source of this value.
-  // A failure here degrades gracefully: the hero simply omits the XP
-  // display rather than breaking the dashboard or surfacing the error.
+  // getLearnerRewardsSummary (the shared assembler Home, Profile, and
+  // /xp-coins all now use) is the sole source of these values, itself
+  // delegating to the same canonical Stage 1 XP reader and Stage 3 Coin
+  // ledger reader this page called directly before this refactor. XP and
+  // AC still fail independently (e.g. a migration live for one table but
+  // not another) and each degrades to null on its own -- a genuinely
+  // empty ledger still resolves to the real number 0 ("0 AC", per the
+  // locked "zero balances must display" rule), which is NOT the same as
+  // a failed load. The hero simply omits whichever value is null rather
+  // than guessing.
   let xpTotal: number | null = null;
-  if (profile) {
-    try {
-      const xpSummary = await getLearnerXpSummary(profile.userId);
-      xpTotal = xpSummary.totalXp;
-    } catch (error) {
-      logSupabaseError("Unable to load learner XP summary:", error);
-    }
-  }
-
-  // Authoritative Stage 3 ledger balance -- SUM(coin_transactions.amount)
-  // for this learner, server-side, via getLearnerCoinBalance. A genuinely
-  // empty ledger resolves to the real number 0 (renders "0 AC", per the
-  // locked "zero balances must display" rule) and is NOT the same thing
-  // as a failed load (e.g. the coin_transactions table/migration not yet
-  // live in this environment) -- a failure here logs and leaves acBalance
-  // null, which the hero simply omits rather than guessing a balance.
   let acBalance: number | null = null;
   if (profile) {
-    try {
-      acBalance = await getLearnerCoinBalance(profile.userId);
-    } catch (error) {
-      logSupabaseError("Unable to load learner Coin balance:", error);
-    }
+    const rewardsSummary = await getLearnerRewardsSummary(profile.userId);
+    xpTotal = rewardsSummary.xp?.totalXp ?? null;
+    acBalance = rewardsSummary.acBalance;
   }
 
   if (profile) {

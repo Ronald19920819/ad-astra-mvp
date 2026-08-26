@@ -52,80 +52,6 @@ export default function HeroBanner({
     >
       <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-transparent" />
 
-      {formattedXp && (
-        <>
-          {/* Positioned independently of the left identity column's
-              flex-col flow so it can sit in the hero's open centre space
-              on desktop without disturbing the existing layout. Mobile
-              falls back to the clear top-right corner (opposite the logo)
-              rather than the desktop centre position, which would
-              collide with the learner name/label stack at narrow widths.
-              Typography only -- no card/border/background, per spec. */}
-          <div
-            className="pointer-events-none absolute right-5 top-4 z-10 text-right lg:left-[57%] lg:right-auto lg:top-1/2 lg:-translate-y-1/2 lg:text-left"
-            aria-hidden="true"
-          >
-            <span
-              className={`${rajdhani.className} block text-3xl leading-none lg:text-5xl xl:text-6xl`}
-              style={{
-                fontWeight: 600,
-                color: "#EAF6FF",
-                textShadow: "0 0 14px rgba(148, 210, 255, 0.35)",
-              }}
-            >
-              {formattedXp}
-            </span>
-            <span
-              className={`${rajdhani.className} mt-0.5 block text-xs leading-none tracking-[0.14em] lg:text-base`}
-              style={{
-                fontWeight: 600,
-                color: "#BFE3FF",
-                textShadow: "0 0 10px rgba(148, 210, 255, 0.3)",
-              }}
-            >
-              XP
-            </span>
-
-            {formattedAc && (
-              <>
-                {/* AC directly beneath XP, inside the same positioned
-                    block so it inherits the identical desktop-centre /
-                    mobile-top-right placement automatically -- XP's own
-                    size/weight/colour/position above are untouched. Warm
-                    gold instead of icy blue keeps the two rewards visually
-                    distinct while sharing the same Rajdhani identity. */}
-                <span
-                  className={`${rajdhani.className} mt-2 block text-xl leading-none lg:mt-3 lg:text-3xl xl:text-4xl`}
-                  style={{
-                    fontWeight: 600,
-                    color: "#E8C989",
-                    textShadow: "0 0 12px rgba(212, 167, 89, 0.35)",
-                  }}
-                >
-                  {formattedAc}
-                </span>
-                <span
-                  className={`${rajdhani.className} mt-0.5 block text-[10px] leading-none tracking-[0.14em] lg:text-sm`}
-                  style={{
-                    fontWeight: 600,
-                    color: "#C9A868",
-                    textShadow: "0 0 8px rgba(212, 167, 89, 0.3)",
-                  }}
-                >
-                  AC
-                </span>
-              </>
-            )}
-          </div>
-          {/* Real accessible names for assistive tech; the visual
-              number/label pairs above are hidden from the a11y tree via
-              aria-hidden so nothing is announced twice. XP's own
-              accessible treatment is unchanged. */}
-          <span className="sr-only">{`${formattedXp} experience points`}</span>
-          {formattedAc && <span className="sr-only">{`${formattedAc} Ad Astra Coins`}</span>}
-        </>
-      )}
-
       <div className="relative z-10 flex h-full flex-col p-6 pt-3 lg:p-8 lg:pt-5">
         <div className="mb-4 -mt-4 flex items-center gap-4 lg:mb-6">
           <Image
@@ -168,6 +94,82 @@ export default function HeroBanner({
             opacity: 0.4,
           }}
         />
+
+        {formattedXp && (
+          <>
+            {/* Mobile: a compact horizontal stats row in normal document
+                flow, directly beneath the name/divider and above HOME
+                DASHBOARD -- keeps both values fully visible at narrow
+                widths and clear of the wordmark, which the old absolute
+                top-right corner placement could collide with. Desktop
+                (lg:) switches back to absolute positioning in the hero's
+                open centre space, reproducing the original vertically-
+                stacked look exactly -- source position no longer matters
+                there since lg:absolute removes it from flow either way.
+                Typography only -- no card/border/background, per spec. */}
+            <div
+              className="pointer-events-none z-10 mt-3 flex flex-row flex-wrap items-baseline gap-x-5 gap-y-1 lg:absolute lg:left-[57%] lg:top-1/2 lg:mt-0 lg:block lg:-translate-y-1/2 lg:gap-x-0 lg:text-left"
+              aria-hidden="true"
+            >
+              <div className="flex items-baseline gap-x-1.5 lg:block lg:gap-x-0">
+                <span
+                  className={`${rajdhani.className} block text-2xl leading-none lg:text-5xl xl:text-6xl`}
+                  style={{
+                    fontWeight: 600,
+                    color: "#EAF6FF",
+                    textShadow: "0 0 14px rgba(148, 210, 255, 0.35)",
+                  }}
+                >
+                  {formattedXp}
+                </span>
+                <span
+                  className={`${rajdhani.className} block text-[11px] leading-none tracking-[0.14em] lg:mt-0.5 lg:text-base`}
+                  style={{
+                    fontWeight: 600,
+                    color: "#BFE3FF",
+                    textShadow: "0 0 10px rgba(148, 210, 255, 0.3)",
+                  }}
+                >
+                  XP
+                </span>
+              </div>
+
+              {formattedAc && (
+                <div className="flex items-baseline gap-x-1.5 lg:mt-3 lg:block lg:gap-x-0">
+                  {/* AC group: warm gold instead of icy blue keeps the two
+                      rewards visually distinct while sharing the same
+                      Rajdhani identity. Desktop spacing from the XP group
+                      above (lg:mt-3) matches the original stacked layout. */}
+                  <span
+                    className={`${rajdhani.className} block text-xl leading-none lg:text-3xl xl:text-4xl`}
+                    style={{
+                      fontWeight: 600,
+                      color: "#E8C989",
+                      textShadow: "0 0 12px rgba(212, 167, 89, 0.35)",
+                    }}
+                  >
+                    {formattedAc}
+                  </span>
+                  <span
+                    className={`${rajdhani.className} block text-[10px] leading-none tracking-[0.14em] lg:mt-0.5 lg:text-sm`}
+                    style={{
+                      fontWeight: 600,
+                      color: "#C9A868",
+                      textShadow: "0 0 8px rgba(212, 167, 89, 0.3)",
+                    }}
+                  >
+                    AC
+                  </span>
+                </div>
+              )}
+            </div>
+            {/* Real accessible names for assistive tech; the visual
+                number/label pairs above are hidden from the a11y tree via
+                aria-hidden so nothing is announced twice. */}
+            <span className="sr-only">{`${formattedXp} experience points`}</span>
+            {formattedAc && <span className="sr-only">{`${formattedAc} Ad Astra Coins`}</span>}
+          </>
+        )}
 
         <p
           className={`${neueHaas.className} uppercase tracking-[0.15em]`}

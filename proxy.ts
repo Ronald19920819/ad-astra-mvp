@@ -27,6 +27,7 @@ const learnerRoutePrefixes = [
   "/schedule",
   "/tutor",
   "/your-work",
+  "/xp-coins",
 ] as const;
 const learnerSubjectRouteRequirements = [
   {
@@ -450,5 +451,6 @@ export const config = {
     "/schedule/:path*",
     "/tutor/:path*",
     "/your-work/:path*",
+    "/xp-coins/:path*",
   ],
 };

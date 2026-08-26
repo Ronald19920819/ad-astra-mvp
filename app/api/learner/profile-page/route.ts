@@ -1,5 +1,6 @@
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
 import { getLearnerJourney } from "@/lib/supabase/learnerJourney";
+import { getLearnerRewardsSummary } from "@/lib/supabase/learnerRewardsSummary";
 import { logSupabaseError } from "@/lib/supabase/errorDetails";
 
 export async function GET() {
@@ -23,7 +24,24 @@ export async function GET() {
       );
     }
 
-    return Response.json({ profile, journey });
+    // Same canonical assembler the XP & Coins dashboard uses -- Profile's
+    // summary card must never compute XP/AC/Coin Gate state independently.
+    // Only xp/acBalance are sent over the wire here: Profile is a status
+    // snapshot only and never renders the transaction list, so the full
+    // history isn't worth the payload.
+    type RewardsSummary = Awaited<ReturnType<typeof getLearnerRewardsSummary>>;
+    let rewards: Pick<RewardsSummary, "xp" | "acBalance"> | null = null;
+    try {
+      const fullSummary = await getLearnerRewardsSummary(profile.userId);
+      rewards = { xp: fullSummary.xp, acBalance: fullSummary.acBalance };
+    } catch (error) {
+      logSupabaseError(
+        "Unable to load authenticated learner rewards summary:",
+        error,
+      );
+    }
+
+    return Response.json({ profile, journey, rewards });
   } catch (error) {
     logSupabaseError("Unable to load authenticated learner profile page:", error);
     return Response.json(

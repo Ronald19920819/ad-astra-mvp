@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LearnerAvatar } from "@/components/learners/LearnerAvatar";
 import { useAuthenticatedLearnerProfile } from "@/lib/learners/useAuthenticatedLearnerProfile";
 import { PasswordResetButton } from "@/components/profiles/PasswordResetButton";
+import { describeCoinGateProgress } from "@/lib/rewards/learnerRewardsPresentation";
 import {
   User,
   FileText,
@@ -20,6 +21,7 @@ import {
   BookX,
   LogOut,
   Rocket,
+  Unlock,
 } from "lucide-react";
 
 const shadowsIntoLight = Shadows_Into_Light({
@@ -31,7 +33,7 @@ const shadowsIntoLight = Shadows_Into_Light({
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { profile, journey, isLoading } = useAuthenticatedLearnerProfile();
+  const { profile, journey, rewards, isLoading } = useAuthenticatedLearnerProfile();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
   const [settingsNotice, setSettingsNotice] = useState("");
@@ -268,24 +270,99 @@ export default function ProfilePage() {
 
             <div>
               <h2 className="text-lg font-bold text-[#102A43]">
-                AD Astra Coins
+                XP &amp; AD Astra Coins
               </h2>
               <p className="text-xs font-medium text-black/50">
-                Performance rewards
+                Your progression snapshot
               </p>
             </div>
           </div>
 
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-2xl font-bold text-[#D9A106]">Coming soon</p>
-              <p className="text-sm text-black/60">Coins are not active yet</p>
-            </div>
+          {rewards && (rewards.xp || rewards.acBalance !== null) ? (
+            <>
+              <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+                <div>
+                  {rewards.xp ? (
+                    <p className="text-2xl font-bold text-[#102A43]">
+                      {rewards.xp.totalXp.toLocaleString("en-US")} XP
+                    </p>
+                  ) : (
+                    <p className="text-sm font-semibold text-black/40">XP unavailable</p>
+                  )}
+                  <p className="text-xs font-medium text-black/50">Experience</p>
+                </div>
+                <div>
+                  {rewards.acBalance !== null ? (
+                    <p className="text-2xl font-bold text-[#D9A106]">
+                      {rewards.acBalance.toLocaleString("en-US")} AC
+                    </p>
+                  ) : (
+                    <p className="text-sm font-semibold text-black/40">AC unavailable</p>
+                  )}
+                  <p className="text-xs font-medium text-black/50">Ad Astra Coins</p>
+                </div>
+                {rewards.xp?.coinGateStatus === "unlocked" && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                    <Unlock size={14} /> COIN GATE UNLOCKED
+                  </span>
+                )}
+              </div>
 
-            <p className="max-w-[170px] text-right text-sm leading-relaxed text-black/70">
-              Earn coins through strong activity performance.
+              {rewards.xp?.coinGateStatus === "locked" &&
+                (() => {
+                  const xpSummary = rewards.xp!;
+                  const gateProgress = describeCoinGateProgress(
+                    xpSummary.totalXp,
+                    xpSummary.totalLessonsCompleted,
+                    xpSummary.totalActivitiesCompleted,
+                  );
+                  return (
+                    <div className="mt-4 rounded-2xl bg-[#F8FBFF] p-4">
+                      <p className="mb-2 text-xs font-bold uppercase tracking-[0.1em] text-black/50">
+                        Coin Gate
+                      </p>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/60">XP</span>
+                          <span className="font-semibold text-[#102A43]">
+                            {gateProgress.xp.current.toLocaleString("en-US")} /{" "}
+                            {gateProgress.xp.target.toLocaleString("en-US")}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/60">Lessons</span>
+                          <span className="font-semibold text-[#102A43]">
+                            {gateProgress.lessons.current} / {gateProgress.lessons.target}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-black/60">Activities</span>
+                          <span className="font-semibold text-[#102A43]">
+                            {gateProgress.activities.current} / {gateProgress.activities.target}
+                          </span>
+                        </div>
+                      </div>
+                      {gateProgress.message && (
+                        <p className="mt-3 text-sm font-medium text-[#508DB1]">
+                          {gateProgress.message}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+              <Link
+                href="/xp-coins"
+                className="mt-4 block w-full rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
+              >
+                View XP &amp; Coins
+              </Link>
+            </>
+          ) : (
+            <p className="text-sm text-black/60">
+              {isLoading ? "Loading your XP & Coins..." : "Unable to load your XP & Coins right now."}
             </p>
-          </div>
+          )}
         </section>
 
         <section className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
