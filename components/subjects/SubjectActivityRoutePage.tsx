@@ -5,6 +5,15 @@ import {
 } from "@/lib/supabase/learnerSubjectPageData";
 import { getSubjectTeacherNames } from "@/lib/supabase/subjectTeacherNames";
 import { getSubjectConfiguration, type SubjectKey } from "@/lib/subjects/subjectConfig";
+import {
+  getCurrentLearnerAccessibilityStatus,
+  type LearnerAccessibilityCapabilities,
+} from "@/lib/supabase/learnerAccessibilityStatus";
+
+const NO_ACCESSIBILITY_CAPABILITIES: LearnerAccessibilityCapabilities = {
+  questionAudio: false,
+  recordAnswer: false,
+};
 
 export async function SubjectActivityRoutePage({
   activityId,
@@ -15,11 +24,16 @@ export async function SubjectActivityRoutePage({
 }) {
   const subject = getSubjectConfiguration(subjectKey);
 
-  const [activityResult, submissionResult, teacherNamesResult] =
+  const [activityResult, submissionResult, teacherNamesResult, accessibilityResult] =
     await Promise.allSettled([
       getLearnerActivityDataServer(activityId, subject.databaseId),
       getLearnerSavedActivitySubmissionServer(activityId, subject.databaseId),
       getSubjectTeacherNames(subject.databaseId),
+      // Stage C: UI-visibility convenience only -- every
+      // question-audio request is independently re-verified server-side
+      // regardless of this flag (see
+      // app/api/activities/[activityId]/question-audio/route.ts).
+      getCurrentLearnerAccessibilityStatus(),
     ]);
 
   const initialActivityData =
@@ -37,6 +51,10 @@ export async function SubjectActivityRoutePage({
     submissionResult.status === "fulfilled" ? submissionResult.value : null;
   const initialTeacherNames =
     teacherNamesResult.status === "fulfilled" ? teacherNamesResult.value : [];
+  const accessibilityCapabilities =
+    accessibilityResult.status === "fulfilled"
+      ? accessibilityResult.value.capabilities
+      : NO_ACCESSIBILITY_CAPABILITIES;
 
   if (activityResult.status === "rejected") {
     console.error(
@@ -59,6 +77,13 @@ export async function SubjectActivityRoutePage({
     );
   }
 
+  if (accessibilityResult.status === "rejected") {
+    console.error(
+      "Unable to load learner accessibility status:",
+      accessibilityResult.reason,
+    );
+  }
+
   return (
     <SubjectActivityPage
       subjectKey={subjectKey}
@@ -67,6 +92,7 @@ export async function SubjectActivityRoutePage({
       initialSubmission={initialSubmission}
       initialSubmissionLoaded={initialSubmissionLoaded}
       initialTeacherNames={initialTeacherNames}
+      accessibilityCapabilities={accessibilityCapabilities}
     />
   );
 }

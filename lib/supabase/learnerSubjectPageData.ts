@@ -229,16 +229,29 @@ export async function getLearnerPublishedActivitiesServer(
   });
 }
 
+// Widens LearnerLessonData (unchanged in lib/supabase/lessonReader.ts) with
+// the lesson's authoritative shared due date -- the SAME
+// lessons.expected_completion_date the activity due-date architecture
+// derives from, never a second, independently-calculated learner-facing
+// deadline.
+export type LearnerLessonDataWithDueDate = Omit<LearnerLessonData, "lesson"> & {
+  lesson: LearnerLessonData["lesson"] & {
+    expected_completion_date: string | null;
+  };
+};
+
 export async function getLearnerLessonDataServer(
   lessonId: string,
   subjectId: string,
-): Promise<LearnerLessonData | null> {
+): Promise<LearnerLessonDataWithDueDate | null> {
   const profile = await ensureLearnerSubjectAccess(subjectId);
   const supabase = await createSupabaseRequestClient();
 
   const { data: lesson, error: lessonError } = await supabase
     .from("lessons")
-    .select("id, subject_id, lesson_number, title, term_number, week_number")
+    .select(
+      "id, subject_id, lesson_number, title, term_number, week_number, expected_completion_date",
+    )
     .eq("id", lessonId)
     .eq("subject_id", subjectId)
     .eq("status", "published")
@@ -335,6 +348,7 @@ export async function getLearnerLessonDataServer(
       title: lesson.title,
       term_number: lesson.term_number,
       week_number: lesson.week_number,
+      expected_completion_date: lesson.expected_completion_date,
     },
     reading: readingMaterial
       ? {

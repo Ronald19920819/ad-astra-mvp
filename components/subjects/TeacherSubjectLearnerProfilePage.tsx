@@ -22,8 +22,10 @@ import {
   type TrackerContentState,
   type TrackerLessonStatus,
 } from "@/lib/supabase/learningTrackerReader";
+import { getLearnerAccessibilityEntitlement } from "@/lib/supabase/learnerAccessibility";
 import { authorizeTeacher } from "@/lib/supabase/teacherAuth";
 import { getLearnerSupportStatus } from "@/lib/teachers/learnerSupport";
+import { AccessibilitySupportCard } from "@/components/subjects/AccessibilitySupportCard";
 import {
   buildSubjectRoute,
   getSubjectConfiguration,
@@ -287,8 +289,14 @@ export async function TeacherSubjectLearnerProfilePage({
 
   if (!uuidPattern.test(learnerId)) notFound();
 
-  const identity = await getLearnerIdentity(subject.databaseId, learnerId);
+  const [identity, authorization, accessibility] = await Promise.all([
+    getLearnerIdentity(subject.databaseId, learnerId),
+    authorizeTeacher(subject.databaseId),
+    getLearnerAccessibilityEntitlement({ learnerProfileId: learnerId }),
+  ]);
   if (!identity) notFound();
+  const isAdministrator =
+    authorization.success && authorization.teacher.isAdministrator;
 
   const [lessons, activityReviews] = await Promise.all([
     getSubjectLearningTracker(subject.databaseId),
@@ -443,6 +451,12 @@ export async function TeacherSubjectLearnerProfilePage({
             </div>
           </div>
         </section>
+
+        <AccessibilitySupportCard
+          learnerId={learnerId}
+          initialEnabled={accessibility.accessibilityEnabled}
+          canEdit={isAdministrator}
+        />
 
         <section
           className="mb-5 rounded-[2rem] border bg-white p-5 shadow-sm"

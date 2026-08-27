@@ -76,7 +76,6 @@ export async function PUT(
     const instructions = payload.instructions;
     const lessonId = payload.lessonId;
     const totalMarks = payload.totalMarks;
-    const dueDate = payload.dueDate;
     const questions = payload.questions;
     const confirmedSubmissionImpact = payload.confirmedSubmissionImpact;
 
@@ -99,21 +98,6 @@ export async function PUT(
     ) {
       return Response.json(
         { error: "Invalid activity details.", code: "INVALID_REQUEST" },
-        { status: 400 },
-      );
-    }
-
-    // Locked reward-integrity policy: a linked lesson/activity pair must
-    // not be publishable without a valid due date -- see
-    // lib/activities/dueDateValidation.ts. Editing an activity can never
-    // clear or blank its due date.
-    const dueDateValidation = validateRequiredDueDate(dueDate);
-    if (!dueDateValidation.valid) {
-      return Response.json(
-        {
-          error: "A valid due date is required to save this activity.",
-          code: "INVALID_DUE_DATE",
-        },
         { status: 400 },
       );
     }
@@ -174,7 +158,7 @@ export async function PUT(
 
     const { data: lesson, error: lessonError } = await admin
       .from("lessons")
-      .select("id")
+      .select("id, expected_completion_date")
       .eq("id", lessonId)
       .eq("subject_id", subjectId)
       .eq("status", "published")
@@ -184,6 +168,23 @@ export async function PUT(
       return Response.json(
         { error: `Select a published ${subject.displayName} lesson.`, code: "NOT_FOUND" },
         { status: 404 },
+      );
+    }
+
+    // Locked shared-due-date architecture (matches the create route):
+    // the linked lesson owns the one authoritative due date. Never
+    // trusted from the client payload -- always derived here, including
+    // when the teacher changes which lesson an activity links to.
+    const dueDateValidation = validateRequiredDueDate(
+      lesson.expected_completion_date,
+    );
+    if (!dueDateValidation.valid) {
+      return Response.json(
+        {
+          error: `Set a due date on this ${subject.displayName} lesson before saving a linked activity.`,
+          code: "MISSING_LESSON_DUE_DATE",
+        },
+        { status: 422 },
       );
     }
 
@@ -322,15 +323,6 @@ export async function PUT(
         .eq("id", activityId);
       if (dueDateError) throw dueDateError;
     }
-
-    // Keep the linked lesson's due date in lockstep, the same as the
-    // create path -- whichever branch above ran, the activity's due date
-    // is now dueDateValidation.dueDate, so the lesson must match it too.
-    const { error: lessonDueDateError } = await admin
-      .from("lessons")
-      .update({ expected_completion_date: dueDateValidation.dueDate })
-      .eq("id", lessonId);
-    if (lessonDueDateError) throw lessonDueDateError;
 
     return Response.json({
       success: true,

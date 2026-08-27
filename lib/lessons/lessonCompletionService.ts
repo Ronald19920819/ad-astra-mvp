@@ -71,8 +71,19 @@ export async function evaluateAndPersistLessonCompletion({
   };
 
   const passedAttempt = attemptResult.data;
+  // Locked product decision (already applied display-only in
+  // lib/supabase/learningTrackerReader.ts's teacher Classroom tracker): for
+  // a lesson with both a reading and a quiz, a passed quiz is accepted
+  // evidence the learner engaged with the reading, so canonical completion
+  // never disagrees with what the tracker already showed. A lesson with a
+  // reading but NO quiz is completely unaffected -- it still requires the
+  // explicit reading_completed_at signal from the Mark Reading Complete
+  // action, the only mechanism such a lesson has.
+  const isReadingComplete =
+    Boolean(progressResult.data?.reading_completed_at) ||
+    (availability.hasQuiz && Boolean(passedAttempt));
   const signals = {
-    isReadingComplete: Boolean(progressResult.data?.reading_completed_at),
+    isReadingComplete,
     isVideoComplete: isVideoProgressComplete(
       Number(progressResult.data?.video_progress_percent ?? 0),
     ),

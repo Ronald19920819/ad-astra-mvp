@@ -24,6 +24,7 @@ import {
   getLessonTopics,
   type LessonTopic,
 } from "@/lib/supabase/lessonTopicReader";
+import { AccessibilityAudioCard } from "@/components/subjects/AccessibilityAudioCard";
 import {
   editorTextToStructuredReading,
   readingContentToEditorText,
@@ -137,6 +138,7 @@ export function TeacherSubjectClassroomPage({
     string | null
   >(null);
   const [readingIsSaved, setReadingIsSaved] = useState(false);
+  const [readingMaterialId, setReadingMaterialId] = useState<string | null>(null);
   const [quizQuestions, setQuizQuestions] =
   useState<LessonQuizQuestion[]>([]);
   const [currentLessonId, setCurrentLessonId] =
@@ -365,6 +367,7 @@ const handleDeleteDraftLesson = async (
       setReadingPdfFile(null);
       setReadingPdfError("");
       setReadingIsSaved(false);
+      setReadingMaterialId(null);
       setGeneratedDraftBaseline(null);
       setGenerationInstruction("");
       setLearnerLevel("");
@@ -484,6 +487,7 @@ const handleOpenLesson = async (lessonId: string) => {
     );
     setReadingKingdomError("");
     setReadingIsSaved(Boolean(editorData.reading));
+    setReadingMaterialId(editorData.reading?.id ?? null);
     setGeneratedDraftBaseline(null);
 
     setVideoTitle(loadedVideoTitle);
@@ -626,13 +630,14 @@ const groupedLessons = sortedLessons.reduce<
         if (!response.ok) {
           throw new Error(result.error || "The PDF reading could not be saved.");
         }
+        setReadingMaterialId(result.data?.id ?? readingMaterialId);
       } else {
       const readingDocument = editorTextToStructuredReading(readingText);
       if (!readingDocument) {
         alert("The reading needs valid content before it can be saved.");
         return;
       }
-      await publishLessonMaterial({
+      const material = await publishLessonMaterial({
         subjectId,
         lessonId: currentLessonId,
         materialType: "reading",
@@ -642,6 +647,7 @@ const groupedLessons = sortedLessons.reduce<
         contentText: serializeStructuredReading(readingDocument.blocks),
         displayOrder: 1,
       });
+      setReadingMaterialId(material.id);
       }
     }
 
@@ -716,6 +722,7 @@ const groupedLessons = sortedLessons.reduce<
     setReadingPdfFile(null);
     setReadingPdfError("");
     setReadingIsSaved(false);
+    setReadingMaterialId(null);
     setGeneratedDraftBaseline(null);
     setGenerationInstruction("");
     setLearnerLevel("");
@@ -751,7 +758,7 @@ const saveReadingDraft = async () => {
 
   try {
     const lessonId = await ensureDraftLesson();
-    await publishLessonMaterial({
+    const material = await publishLessonMaterial({
       subjectId,
       lessonId,
       materialType: "reading",
@@ -765,6 +772,7 @@ const saveReadingDraft = async () => {
     setReadingSourceType("pasted_text");
     setReadingPdfPath("");
     setReadingIsSaved(true);
+    setReadingMaterialId(material.id);
     setActiveContentPanel(null);
     alert("Reading saved.");
   } catch (error) {
@@ -851,6 +859,7 @@ const uploadPdfReading = async () => {
     setReadingPdfPath(prepared.path);
     setReadingPdfFile(null);
     setReadingIsSaved(true);
+    setReadingMaterialId(finalized.data?.id ?? readingMaterialId);
     setEditingContentBaseline((current) =>
       current
         ? {
@@ -1275,6 +1284,15 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
             {editingLessonId ? <Pencil size={18} /> : <Rocket size={18} />}
             {editingLessonId ? "Save Changes" : "Publish Lesson"}
           </button>
+
+          {readingIsSaved && readingMaterialId && currentLessonId && (
+            <div className="mt-4">
+              <AccessibilityAudioCard
+                subjectId={subjectId}
+                lessonId={currentLessonId}
+              />
+            </div>
+          )}
           {activeContentPanel && (
   <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 px-4 py-6 sm:items-center">
     <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-2xl">

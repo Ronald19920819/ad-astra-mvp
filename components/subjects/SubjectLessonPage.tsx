@@ -12,13 +12,13 @@ import {
   Sparkles,
 } from "lucide-react";
 import { neueHaas } from "@/app/fonts";
-import {
-  getLearnerLessonData,
-  type LearnerLessonData,
-} from "@/lib/supabase/lessonReader";
+import { getLearnerLessonData } from "@/lib/supabase/lessonReader";
+import type { LearnerLessonDataWithDueDate } from "@/lib/supabase/learnerSubjectPageData";
 import { TrackedYouTubePlayer } from "@/components/lessons/TrackedYouTubePlayer";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
+import { LessonAccessibilityAudioPlayer } from "@/components/learners/LessonAccessibilityAudioPlayer";
+import { ListenToQuestionButton } from "@/components/learners/ListenToQuestionButton";
 import { LESSON_QUIZ_PASS_PERCENT } from "@/lib/lessons/lessonAssessment";
 import type { LessonRequiredMaterialType } from "@/lib/lessons/adaptiveLessonCompletion";
 import {
@@ -31,6 +31,7 @@ import {
   type SubjectKey,
 } from "@/lib/subjects/subjectConfig";
 import { formatSubjectTeacherLabel } from "@/lib/subjects/subjectTeacherPresentation";
+import type { LearnerAccessibilityCapabilities } from "@/lib/supabase/learnerAccessibilityStatus";
 
 type QuizResult = {
   questionId: string;
@@ -111,11 +112,13 @@ export function SubjectLessonPage({
   initialLessonData,
   initialLoadError,
   initialTeacherNames,
+  accessibilityCapabilities = { questionAudio: false, recordAnswer: false },
 }: {
   subjectKey?: SubjectKey;
-  initialLessonData?: LearnerLessonData | null;
+  initialLessonData?: LearnerLessonDataWithDueDate | null;
   initialLoadError?: string;
   initialTeacherNames?: string[];
+  accessibilityCapabilities?: LearnerAccessibilityCapabilities;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const themeStyle = {
@@ -127,7 +130,7 @@ export function SubjectLessonPage({
   const router = useRouter();
   const hasInitialState =
     initialLessonData !== undefined || initialLoadError !== undefined;
-  const [lessonData, setLessonData] = useState<LearnerLessonData | null>(
+  const [lessonData, setLessonData] = useState<LearnerLessonDataWithDueDate | null>(
     initialLessonData ?? null,
   );
   const [isLoading, setIsLoading] = useState(!hasInitialState);
@@ -144,7 +147,6 @@ export function SubjectLessonPage({
   const [satisfiedMaterialTypes, setSatisfiedMaterialTypes] = useState<
     LessonRequiredMaterialType[]
   >([]);
-  const [isReadingComplete, setIsReadingComplete] = useState(false);
   const [isMarkingReadingComplete, setIsMarkingReadingComplete] = useState(false);
   const [completionMessage, setCompletionMessage] = useState("");
   const [isCelebrating, setIsCelebrating] = useState(false);
@@ -200,10 +202,19 @@ export function SubjectLessonPage({
         const data = await getLearnerLessonData(lessonId, subject.databaseId);
 
         if (isActive) {
-          setLessonData(data);
+          // The client-only fallback path (lessonReader.ts, used when SSR
+          // data was not provided) does not fetch the lesson's due date --
+          // rather than guessing, this is explicitly null here, never a
+          // fabricated date. The normal SSR path
+          // (learnerSubjectPageData.ts::getLearnerLessonDataServer) always
+          // includes the real value.
+          setLessonData(
+            data
+              ? { ...data, lesson: { ...data.lesson, expected_completion_date: null } }
+              : null,
+          );
           setIsCompleted(Boolean(data?.completion));
           setCompletedAt(data?.completion?.completed_at ?? null);
-          setIsReadingComplete(Boolean(data?.readingCompletedAt));
         }
       } catch (error) {
         console.error("Unable to load learner lesson:", error);
@@ -319,7 +330,7 @@ export function SubjectLessonPage({
   async function markReadingComplete() {
     if (
       !lessonData?.reading ||
-      isReadingComplete ||
+      isReadingSatisfied ||
       isMarkingReadingComplete
     ) {
       return;
@@ -348,7 +359,6 @@ export function SubjectLessonPage({
         throw new Error(result.error || "The reading could not be marked complete.");
       }
 
-      setIsReadingComplete(true);
       applyLessonCompletion(result.lessonCompletion, { celebrate: true });
     } catch (error) {
       setCompletionMessage(
@@ -427,7 +437,16 @@ export function SubjectLessonPage({
           ...(video ? (["video"] as const) : []),
           ...(quiz ? (["quiz"] as const) : []),
         ];
-  const isReadingSatisfied = isReadingComplete;
+  // Canonical, server-reconciled signal (refreshed on every page load by
+  // the lesson_view effect below) -- NOT the separately-tracked
+  // isReadingComplete state, which only ever updates from a client-only
+  // fallback fetch (skipped whenever SSR already provided lessonData) or
+  // an explicit button click. Using satisfiedMaterialTypes here is what
+  // keeps this in agreement with the Classroom tracker and with the
+  // overall lesson-complete state after every reload, including lessons
+  // where a passed quiz alone satisfies reading (see
+  // lib/lessons/lessonCompletionService.ts).
+  const isReadingSatisfied = satisfiedMaterialTypes.includes("reading");
   const isQuizSatisfied = quizHasBeenPassed;
   const isVideoSatisfied = satisfiedMaterialTypes.includes("video");
 
@@ -441,6 +460,14 @@ export function SubjectLessonPage({
           <h1 className="break-words text-3xl font-bold text-slate-900">Lesson {lesson.lesson_number}</h1>
           <p className="mt-1 break-words text-lg font-semibold text-slate-700">{lesson.title}</p>
           <p className="mt-2 text-sm font-semibold text-slate-600">Week {lesson.week_number} &middot; Term {lesson.term_number}</p>
+          {lesson.expected_completion_date && (
+            <p className="mt-2 text-sm font-bold text-[var(--subject-primary)]">
+              Due{" "}
+              {new Date(lesson.expected_completion_date).toLocaleDateString("en-ZA", {
+                timeZone: "UTC",
+              })}
+            </p>
+          )}
           <p className="mt-2 break-words text-sm text-slate-500">{subject.displayName} Lesson Workspace &middot; {teacherLabel}</p>
         </section>
 
@@ -499,20 +526,26 @@ export function SubjectLessonPage({
                     <ProtectedReading content={reading.content_text} scrollable />
                   )}
                 </div>
-                <div className={hasPdfReading ? "mt-4 shrink-0" : "mt-4"}>
-                  <button
-                    type="button"
-                    disabled={isReadingComplete || isMarkingReadingComplete}
-                    onClick={markReadingComplete}
-                    className="w-full rounded-2xl bg-[var(--subject-primary)] py-3 font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-green-600 disabled:opacity-100"
-                  >
-                    {isReadingComplete
-                      ? "Reading Complete ✓"
-                      : isMarkingReadingComplete
-                        ? "Saving..."
-                        : "Mark Reading Complete"}
-                  </button>
-                </div>
+                {!quiz && (
+                  <div className={hasPdfReading ? "mt-4 shrink-0" : "mt-4"}>
+                    <button
+                      type="button"
+                      disabled={isReadingSatisfied || isMarkingReadingComplete}
+                      onClick={markReadingComplete}
+                      className="w-full rounded-2xl bg-[var(--subject-primary)] py-3 font-bold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-green-600 disabled:opacity-100"
+                    >
+                      {isReadingSatisfied
+                        ? "Reading Complete ✓"
+                        : isMarkingReadingComplete
+                          ? "Saving..."
+                          : "Mark Reading Complete"}
+                    </button>
+                  </div>
+                )}
+                <LessonAccessibilityAudioPlayer
+                  lessonId={lesson.id}
+                  materialId={reading.id}
+                />
               </section>
             )}
 
@@ -580,6 +613,11 @@ export function SubjectLessonPage({
                                   </span>
                                 </div>
                                 <p className="mt-2 break-words font-sans text-sm font-medium leading-6 text-slate-700">{question.question_text}</p>
+                                {accessibilityCapabilities.questionAudio && (
+                                  <ListenToQuestionButton
+                                    endpoint={`/api/lessons/${lesson.id}/quiz-question-audio?questionId=${question.id}`}
+                                  />
+                                )}
                                 <div className="mt-3 space-y-3">
                                   {(Object.entries(options) as Array<[LessonQuizOptionLetter, string]>).map(([optionLetter, optionText]) => {
                                     const isSelected = selectedAnswer === optionLetter;
@@ -649,6 +687,11 @@ export function SubjectLessonPage({
                                   <span className="shrink-0 text-xs font-semibold text-[var(--subject-primary)]">{question.marks} {question.marks === 1 ? "mark" : "marks"}</span>
                                 </div>
                                 <p className="mt-2 break-words font-sans text-sm font-medium leading-6 text-slate-700">{question.question_text}</p>
+                                {accessibilityCapabilities.questionAudio && (
+                                  <ListenToQuestionButton
+                                    endpoint={`/api/lessons/${lesson.id}/quiz-question-audio?questionId=${question.id}`}
+                                  />
+                                )}
                                 <div className="mt-3 space-y-3">
                                   {(Object.entries(options) as Array<[LessonQuizOptionLetter, string]>).map(([optionLetter, optionText]) => {
                                     const isSelected = selectedAnswer === optionLetter;

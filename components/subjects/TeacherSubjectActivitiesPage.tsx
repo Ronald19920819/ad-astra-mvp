@@ -230,7 +230,13 @@ const openActivityEditor = async (
     setActivityTitle(editorData.activity.title);
     setActivityInstructions(editorData.activity.instructions);
     setLinkedLesson(editorData.activity.lessonId);
-    setDueDate(editorData.activity.due_date?.slice(0, 10) ?? "");
+    // Derived from the linked lesson's own due date, not the activity's
+    // own due_date column, so editing an out-of-sync legacy activity shows
+    // the current authoritative (lesson-owned) date, not a stale one.
+    const linkedLessonForEdit = publishedLessons.find(
+      (lesson) => lesson.id === editorData.activity.lessonId,
+    );
+    setDueDate(linkedLessonForEdit?.expected_completion_date?.slice(0, 10) ?? "");
     setActivityQuestions(editorQuestions);
     document.getElementById("activity-editor")?.scrollIntoView({
       behavior: "smooth",
@@ -261,6 +267,13 @@ const handleEditActivity = (activity: TeacherPublishedActivity) => {
 
   if (!linkedLesson) {
     alert("Select a linked lesson.");
+    return;
+  }
+
+  if (!dueDate) {
+    alert(
+      "This lesson has no due date yet. Set one on the lesson before publishing this activity.",
+    );
     return;
   }
 
@@ -518,7 +531,18 @@ const askKingdom = async () => {
 
             <select
   value={linkedLesson}
-  onChange={(e) => setLinkedLesson(e.target.value)}
+  onChange={(e) => {
+    const newLessonId = e.target.value;
+    setLinkedLesson(newLessonId);
+    // Locked shared-due-date architecture: the activity's due date is
+    // always the linked lesson's own due date -- never independently
+    // entered here, so selecting a lesson is the only thing that changes
+    // it.
+    const selectedLesson = publishedLessons.find(
+      (lesson) => lesson.id === newLessonId,
+    );
+    setDueDate(selectedLesson?.expected_completion_date?.slice(0, 10) ?? "");
+  }}
   disabled={isLoadingLessons}
   className="w-full rounded-2xl border border-slate-200 bg-white p-3 outline-none"
 >
@@ -553,13 +577,24 @@ const askKingdom = async () => {
   </span>
 </div>
 
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              placeholder="Due Date"
-              className="w-full rounded-2xl border border-slate-200 p-3 outline-none"
-            />
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+              <span className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Due Date (inherited from linked lesson)
+              </span>
+              {dueDate ? (
+                <span className="mt-1 block font-semibold text-slate-900">
+                  {new Date(`${dueDate}T00:00:00Z`).toLocaleDateString("en-ZA", {
+                    timeZone: "UTC",
+                  })}
+                </span>
+              ) : (
+                <span className="mt-1 block font-semibold text-red-600">
+                  {linkedLesson
+                    ? "This lesson has no due date yet. Set one on the lesson before publishing this activity."
+                    : "Select a linked lesson to see its due date."}
+                </span>
+              )}
+            </div>
           </div>
 
   

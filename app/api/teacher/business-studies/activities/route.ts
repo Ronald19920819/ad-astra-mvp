@@ -140,7 +140,6 @@ export async function POST(request: Request) {
     const instructions = payload.instructions;
     const lessonId = payload.lessonId;
     const totalMarks = payload.totalMarks;
-    const dueDate = payload.dueDate;
     const questions = payload.questions;
 
     if (
@@ -166,22 +165,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Locked reward-integrity policy: a linked lesson/activity pair must
-    // not be publishable without a valid due date -- a blank string is
-    // NOT accepted (typeof === "string" alone is not enough). This due
-    // date becomes authoritative for BOTH the activity and its linked
-    // lesson (see the lessons.expected_completion_date write below), so
-    // the teacher never has to enter it twice or risk it diverging.
-    const dueDateValidation = validateRequiredDueDate(dueDate);
-    if (!dueDateValidation.valid) {
-      return Response.json(
-        {
-          error: "A valid due date is required to publish this activity.",
-          code: "INVALID_DUE_DATE",
-        },
-        { status: 400 },
-      );
-    }
     const subject = getSubjectConfigurationByDatabaseId(subjectId)!;
     const authorization = await authorizeTeacher(subjectId);
     if (!authorization.success) {
@@ -191,7 +174,7 @@ export async function POST(request: Request) {
     const { admin } = authorization.teacher;
     const { data: lesson, error: lessonError } = await admin
       .from("lessons")
-      .select("id")
+      .select("id, expected_completion_date")
       .eq("id", lessonId)
       .eq("subject_id", subjectId)
       .eq("status", "published")
@@ -202,6 +185,26 @@ export async function POST(request: Request) {
       return Response.json(
         { error: `Select a published ${subject.displayName} lesson.`, code: "NOT_FOUND" },
         { status: 404 },
+      );
+    }
+
+    // Locked shared-due-date architecture: a linked lesson/activity pair
+    // has ONE authoritative due date, owned by the lesson
+    // (lessons.expected_completion_date). The teacher never enters a
+    // second, independent due date on the activity -- it is always
+    // derived from the linked lesson here, never trusted from the client
+    // payload. A lesson without its own due date yet cannot have a
+    // Coin-eligible activity published against it.
+    const dueDateValidation = validateRequiredDueDate(
+      lesson.expected_completion_date,
+    );
+    if (!dueDateValidation.valid) {
+      return Response.json(
+        {
+          error: `Set a due date on this ${subject.displayName} lesson before publishing a linked activity.`,
+          code: "MISSING_LESSON_DUE_DATE",
+        },
+        { status: 422 },
       );
     }
 
@@ -238,18 +241,6 @@ export async function POST(request: Request) {
       .single();
 
     if (activityError) throw activityError;
-
-    // Write the SAME authoritative due date to the linked lesson so the
-    // pair can never diverge -- lessons.expected_completion_date and
-    // activities.due_date remain two columns (many existing readers
-    // depend on both), but this activity flow is the one place a
-    // Coin-eligible pair's date is actually set, so it stays the single
-    // source of truth applied to both.
-    const { error: lessonDueDateError } = await admin
-      .from("lessons")
-      .update({ expected_completion_date: dueDateValidation.dueDate })
-      .eq("id", lessonId);
-    if (lessonDueDateError) throw lessonDueDateError;
 
     const questionRows = questions.map((question, index) => ({
       activity_id: activity.id,

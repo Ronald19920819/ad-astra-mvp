@@ -19,6 +19,11 @@ import {
 import type { LearnerSavedActivitySubmission } from "@/lib/supabase/learnerSubjectPageData";
 import { ProtectedReading } from "@/components/learners/ProtectedReading";
 import { ProtectedPdfReading } from "@/components/learners/ProtectedPdfReading";
+import { LessonAccessibilityAudioPlayer } from "@/components/learners/LessonAccessibilityAudioPlayer";
+import { ListenToQuestionButton } from "@/components/learners/ListenToQuestionButton";
+import { RecordAnswerButton } from "@/components/learners/RecordAnswerButton";
+import { mergeTranscriptIntoAnswer } from "@/lib/accessibility/transcriptMerge";
+import type { LearnerAccessibilityCapabilities } from "@/lib/supabase/learnerAccessibilityStatus";
 import {
   buildSubjectRoute,
   getSubjectConfiguration,
@@ -136,6 +141,7 @@ export function SubjectActivityPage({
   initialSubmission,
   initialSubmissionLoaded = false,
   initialTeacherNames,
+  accessibilityCapabilities = { questionAudio: false, recordAnswer: false },
 }: {
   subjectKey?: SubjectKey;
   initialActivityData?: LearnerActivityWorkspaceData | null;
@@ -143,6 +149,7 @@ export function SubjectActivityPage({
   initialSubmission?: SavedActivitySubmission | null;
   initialSubmissionLoaded?: boolean;
   initialTeacherNames?: string[];
+  accessibilityCapabilities?: LearnerAccessibilityCapabilities;
 }) {
   const subject = getSubjectConfiguration(subjectKey);
   const themeStyle = {
@@ -825,6 +832,32 @@ export function SubjectActivityPage({
     }, 4000);
   }
 
+  // THE canonical answer-state update path -- both keyboard typing and
+  // Stage D's Record Answer transcription go through this SAME function,
+  // never a second answer store. Deliberately identical to what used to
+  // be inlined in the textarea's onChange: merge into
+  // latestAnswersRef.current, mirror into React state, write the local
+  // draft cache, and schedule the debounced server autosave. This is a
+  // first-party, authorised input path (a direct state update), never a
+  // synthetic paste/drop event -- it does not touch, weaken, or bypass
+  // blockExternalAnswerInput above.
+  function updateAnswer(questionId: string, newText: string) {
+    const nextAnswers = {
+      ...latestAnswersRef.current,
+      [questionId]: newText,
+    };
+    latestAnswersRef.current = nextAnswers;
+    setAnswers(nextAnswers);
+    writeLocalDraftCache({
+      answers: nextAnswers,
+      dirty: true,
+    });
+    setDraftSaveState(navigator.onLine ? "saving" : "offline");
+    setSubmissionMessage("");
+    setDraftNotice(navigator.onLine ? "" : "Offline — saved on this device only");
+    scheduleDraftSave();
+  }
+
   async function submitActivity() {
     if (!activityData || submission || isSubmitting) return;
 
@@ -952,7 +985,15 @@ export function SubjectActivityPage({
         ...reading,
         id: submissionSnapshot.reading.id,
         title: submissionSnapshot.reading.title,
-        source_type: "pasted_text" as const,
+        // Was previously hardcoded to "pasted_text" here regardless of the
+        // snapshot's real source -- meaning a PDF-backed submission's
+        // frozen reading was silently reported as pasted_text, the
+        // pdf-only rendering branch below could never be reached, and the
+        // learner fell through to <ProtectedReading content=""> (the
+        // frozen PDF's contentText is always "" by design) producing "No
+        // reading content is available." even when a real frozen PDF
+        // existed and was fully resolvable.
+        source_type: submissionSnapshot.reading.sourceType,
         content_text: submissionSnapshot.reading.contentText,
       }
     : reading;
@@ -1068,10 +1109,28 @@ export function SubjectActivityPage({
                 </p>
               </div>
             </div>
-            {displayedReading.source_type === "pdf" && !submissionSnapshot ? (
-              <ProtectedPdfReading lessonId={displayedLesson.id} materialId={displayedReading.id} />
+            {displayedReading.source_type === "pdf" ? (
+              submissionSnapshot && submission ? (
+                // Post-submission review must show the reading that
+                // belonged to the FROZEN snapshot, not the live material --
+                // the snapshot's own PDF copy, served through its own
+                // ownership-checked route
+                // (app/api/activity-submissions/[submissionId]/reading-pdf),
+                // never the live lesson-reading route.
+                <ProtectedPdfReading
+                  sourceUrl={`/api/activity-submissions/${submission.id}/reading-pdf`}
+                />
+              ) : (
+                <ProtectedPdfReading lessonId={displayedLesson.id} materialId={displayedReading.id} />
+              )
             ) : (
               <ProtectedReading content={displayedReading.content_text} scrollable />
+            )}
+            {!submissionSnapshot && (
+              <LessonAccessibilityAudioPlayer
+                lessonId={displayedLesson.id}
+                materialId={displayedReading.id}
+              />
             )}
           </section>
 
@@ -1116,6 +1175,11 @@ export function SubjectActivityPage({
                 <p className="mt-2 break-words font-sans text-sm font-medium leading-6 text-slate-700">
                   {activeQuestion.question_text}
                 </p>
+                {accessibilityCapabilities.questionAudio && (
+                  <ListenToQuestionButton
+                    endpoint={`/api/activities/${activityId}/question-audio?questionId=${activeQuestion.id}`}
+                  />
+                )}
                 {activeQuestion.assessment_objective && (
                   <p className="mt-2 text-xs font-bold uppercase tracking-wide text-[var(--subject-primary)]">
                     {activeQuestion.assessment_objective}
@@ -1125,24 +1189,7 @@ export function SubjectActivityPage({
                   disabled={Boolean(submission) || isSubmitting}
                   value={answers[activeQuestion.id] ?? ""}
                   onChange={(event) => {
-                    const nextAnswers = {
-                      ...latestAnswersRef.current,
-                      [activeQuestion.id]: event.target.value,
-                    };
-                    latestAnswersRef.current = nextAnswers;
-                    setAnswers(nextAnswers);
-                    writeLocalDraftCache({
-                      answers: nextAnswers,
-                      dirty: true,
-                    });
-                    setDraftSaveState(
-                      navigator.onLine ? "saving" : "offline",
-                    );
-                    setSubmissionMessage("");
-                    setDraftNotice(
-                      navigator.onLine ? "" : "Offline \u2014 saved on this device only",
-                    );
-                    scheduleDraftSave();
+                    updateAnswer(activeQuestion.id, event.target.value);
                   }}
                   onBlur={() => {
                     void saveDraft("blur");
@@ -1156,6 +1203,22 @@ export function SubjectActivityPage({
                   Answer in your own words. Pasting is disabled for activity
                   responses.
                 </p>
+                {accessibilityCapabilities.recordAnswer && !submission && (
+                  <RecordAnswerButton
+                    activityId={activityId}
+                    questionId={activeQuestion.id}
+                    disabled={isSubmitting}
+                    onTranscript={(transcript) => {
+                      updateAnswer(
+                        activeQuestion.id,
+                        mergeTranscriptIntoAnswer(
+                          latestAnswersRef.current[activeQuestion.id] ?? "",
+                          transcript,
+                        ),
+                      );
+                    }}
+                  />
+                )}
                 {pasteBlockedNoticeVisible && (
                   <p
                     role="status"

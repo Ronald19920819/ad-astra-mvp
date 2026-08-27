@@ -459,9 +459,11 @@ export async function getSubjectLearningTracker(
       // product decision: for a lesson with both a reading and a quiz, a
       // passed quiz is accepted evidence the learner engaged with the
       // reading, so the tracker never shows a contradictory "quiz passed /
-      // reading incomplete" state. Display-only: this never writes
-      // reading_completed_at and never feeds lesson completion evaluation
-      // (lib/lessons/adaptiveLessonCompletion.ts, unchanged).
+      // reading incomplete" state. This mirrors the SAME rule now applied
+      // canonically in lib/lessons/lessonCompletionService.ts's own signal
+      // derivation (evaluateAdaptiveLessonCompletion itself stays generic
+      // and unchanged) -- this tracker never writes reading_completed_at
+      // itself, but the two are no longer independent judgments.
       const reading: TrackerContentState = !hasReading
         ? "unavailable"
         : progress?.reading_completed_at || quizSuccessful

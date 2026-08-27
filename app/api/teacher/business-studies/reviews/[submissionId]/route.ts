@@ -6,6 +6,7 @@ import {
 import { calculateTeacherReviewScore } from "@/lib/activities/teacherReviewScoring";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import { isActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
+import { evaluateAndRecordPairReward } from "@/lib/supabase/coinRewardTrigger";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -101,7 +102,7 @@ export async function POST(
 
     const { data: submission, error: submissionError } = await supabase
       .from("activity_submissions")
-      .select("id, activity_id, status, activity_snapshot, original_total_marks")
+      .select("id, learner_id, activity_id, status, activity_snapshot, original_total_marks")
       .eq("id", submissionId)
       .maybeSingle();
 
@@ -314,10 +315,35 @@ export async function POST(
       throw submissionUpdateError;
     }
 
+    // The teacher-final mark is now authoritative -- this is the one
+    // moment a linked pair can become Coin-eligible (see
+    // lib/supabase/coinRewardTrigger.ts's header comment for why nothing
+    // was ever wired to this before). A reward-evaluation failure must
+    // never fail the review itself, which has already succeeded and been
+    // persisted -- log and continue.
+    let rewardOutcome: { awarded: boolean; amount?: number; reason?: string } = {
+      awarded: false,
+    };
+    try {
+      const result = await evaluateAndRecordPairReward(
+        submission.learner_id,
+        submissionId,
+      );
+      rewardOutcome = result.awarded
+        ? { awarded: true, amount: result.amount }
+        : { awarded: false, reason: result.reason };
+    } catch (rewardError) {
+      console.error("Coin reward evaluation failed after teacher review:", {
+        submissionId,
+        message: rewardError instanceof Error ? rewardError.message : "Unknown error",
+      });
+    }
+
     return NextResponse.json({
       success: true,
       finalMark: scoreSummary.earnedMarks,
       finalPercentage: scoreSummary.percentage,
+      rewardOutcome,
     });
   } catch (error) {
     if (error instanceof RangeError) {
