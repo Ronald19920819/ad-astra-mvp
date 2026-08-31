@@ -1,9 +1,9 @@
 import Link from "next/link";
 import HeroBanner from "@/components/HeroBanner";
-import MotivationalCard from "@/components/MotivationalCard";
 import TutorSuggestion from "@/components/TutorSuggestion";
 import { Next24HoursCard } from "@/components/home/Next24HoursCard";
 import { TeacherAnnouncementsCard } from "@/components/home/TeacherAnnouncementsCard";
+import { TeacherFeedbackCard } from "@/components/home/TeacherFeedbackCard";
 import SchoolOverviewCard from "@/components/SchoolOverviewCard";
 import { getAuthenticatedLearnerProfile } from "@/lib/supabase/learnerProfile";
 import { getLearnerRewardsSummary } from "@/lib/supabase/learnerRewardsSummary";
@@ -11,6 +11,10 @@ import {
   getLearnerHomeCommunications,
   type LearnerHomeCommunications,
 } from "@/lib/supabase/subjectCommunications";
+import {
+  getLearnerReturnedFeedback,
+  type LearnerReturnedFeedbackItem,
+} from "@/lib/supabase/learnerReturnedFeedback";
 import { logSupabaseError } from "@/lib/supabase/errorDetails";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +22,13 @@ export const dynamic = "force-dynamic";
 export default async function HomeDashboard() {
   const profile = await getAuthenticatedLearnerProfile();
   const learnerName = profile?.displayName ?? "Learner";
+  const learnerFirstName = profile?.firstName ?? "Learner";
   let loadError = "";
   let communications: LearnerHomeCommunications = {
     next24Hours: [],
     announcements: [],
   };
+  let returnedFeedback: LearnerReturnedFeedbackItem[] = [];
 
   // Resolved server-side, before the page renders, so there is no
   // client-side loading state and never a flash of a fake "0 XP" --
@@ -55,12 +61,24 @@ export default async function HomeDashboard() {
     loadError = "Unable to load your learner dashboard.";
   }
 
+  if (profile) {
+    try {
+      returnedFeedback = await getLearnerReturnedFeedback(profile.userId);
+    } catch (error) {
+      logSupabaseError("Unable to load learner returned feedback:", error);
+      returnedFeedback = [];
+    }
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] px-6 py-6 pb-28 lg:px-8">
       <div className="mx-auto max-w-md lg:max-w-6xl">
         <HeroBanner learnerName={learnerName} xpTotal={xpTotal} acBalance={acBalance} />
 
-        <MotivationalCard />
+        <TeacherFeedbackCard
+          feedback={returnedFeedback}
+          learnerFirstName={learnerFirstName}
+        />
 
         {profile ? (
           <>

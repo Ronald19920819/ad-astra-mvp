@@ -7,6 +7,7 @@ import { calculateTeacherReviewScore } from "@/lib/activities/teacherReviewScori
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import { isActivitySubmissionSnapshot } from "@/lib/activities/activitySnapshot";
 import { evaluateAndRecordPairReward } from "@/lib/supabase/coinRewardTrigger";
+import { sendReviewReturnedEmailIfDue } from "@/lib/email/reviewReturnEmail";
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -113,6 +114,13 @@ export async function POST(
         { status: 404 },
       );
     }
+
+    // Captured BEFORE the update below -- the sole signal for whether this
+    // is a genuine first-time transition into "returned" (email-eligible)
+    // versus editing an already-returned review (never email-eligible,
+    // even if the mark/comment/reviewed_at change). Never derived from
+    // reviewed_at, which this same route overwrites on every save.
+    const isFirstReturn = submission.status !== "returned";
 
     const snapshot = isActivitySubmissionSnapshot(
       submission.activity_snapshot,
@@ -337,6 +345,23 @@ export async function POST(
         submissionId,
         message: rewardError instanceof Error ? rewardError.message : "Unknown error",
       });
+    }
+
+    // Only a genuine first-time return is email-eligible -- editing an
+    // already-returned review (isFirstReturn === false) must never
+    // re-notify the learner, no matter what changed. An email-provider
+    // failure must never undo or fail the review itself, which has
+    // already succeeded and been persisted -- log and continue, exactly
+    // like the Coin reward side effect above.
+    if (isFirstReturn) {
+      try {
+        await sendReviewReturnedEmailIfDue(submission.learner_id, submissionId);
+      } catch (emailError) {
+        console.error("Review-return email failed after teacher review:", {
+          submissionId,
+          message: emailError instanceof Error ? emailError.message : "Unknown error",
+        });
+      }
     }
 
     return NextResponse.json({
