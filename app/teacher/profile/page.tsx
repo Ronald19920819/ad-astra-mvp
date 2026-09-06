@@ -20,6 +20,7 @@ import {
   CreditCard,
   LogOut,
   UserCheck,
+  ShieldCheck,
 } from "lucide-react";
 
 const shadowsIntoLight = Shadows_Into_Light({
@@ -219,6 +220,23 @@ export default function TeacherProfilePage() {
             <p className="pt-2 text-xs font-bold uppercase tracking-[0.12em] text-black/50">
               Teaching and Administration
             </p>
+            {/* AD ASTRA ADMINISTRATOR HUB -- STAGE 1: only ever rendered
+                for an account the server has already confirmed is an
+                administrator (profile.isAdministrator, resolved from
+                teacher_profiles.is_administrator by
+                getAuthenticatedTeacherProfile). Hiding this link is a UX
+                convenience only -- /teacher/admin itself independently
+                re-checks authorizeAdministrator() server-side regardless
+                of whether a teacher ever sees this entry. */}
+            {profile?.isAdministrator ? (
+              <Link
+                href="/teacher/admin"
+                className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 font-semibold"
+              >
+                <ShieldCheck size={18} aria-hidden="true" />
+                Administrator
+              </Link>
+            ) : null}
             <Link
               href="/teacher/profile/learner-approvals"
               className="flex w-full items-center gap-3 rounded-xl bg-[#F8FBFF] p-3 font-semibold"

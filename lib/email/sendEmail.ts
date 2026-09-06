@@ -11,6 +11,7 @@ import { Resend } from "resend";
 
 export type SendEmailInput = {
   to: string;
+  cc?: string[];
   subject: string;
   html: string;
   from?: string;
@@ -38,6 +39,7 @@ function getResendClient(): Resend {
 // branch on `success` and are only guaranteed an `id` when it is `true`.
 export async function sendEmail({
   to,
+  cc,
   subject,
   html,
   from,
@@ -52,7 +54,13 @@ export async function sendEmail({
 
   try {
     const client = getResendClient();
-    const result = await client.emails.send({ from: sender, to, subject, html });
+    const result = await client.emails.send({
+      from: sender,
+      to,
+      subject,
+      html,
+      ...(cc && cc.length > 0 ? { cc } : {}),
+    });
 
     if (result.error) {
       return { success: false, error: result.error.message };

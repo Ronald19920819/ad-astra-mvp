@@ -83,9 +83,13 @@ export async function getAuthenticatedLearnerSubjectCards() {
       approvedSubjectIds.map(async (subjectId) => {
         try {
           const overview = await getSubjectLearnerOverview(profile.userId, subjectId);
+          // AD ASTRA ACADEMIC AVERAGE MODEL CORRECTION -- the per-subject
+          // card now shows the equal-weight due-activity average, matching
+          // SubjectDashboard.tsx's own switch away from the old
+          // marks-weighted, returned-only progress.overallMark.
           return {
             subjectId,
-            overallMark: overview.progress.overallMark,
+            overallMark: overview.dueActivityAcademic.average,
           };
         } catch (error) {
           console.error("Unable to load learner subject-card overall mark:", {

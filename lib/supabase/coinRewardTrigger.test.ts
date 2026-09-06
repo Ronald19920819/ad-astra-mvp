@@ -13,8 +13,12 @@ import { calculatePairCoins } from "@/lib/rewards/coinRules";
 //   2. assert structural properties of the real source and its call site.
 
 const TRIGGER_SOURCE = readFileSync("lib/supabase/coinRewardTrigger.ts", "utf8");
+// AD ASTRA -- REVIEW-RETURN EMAIL RELIABILITY REPAIR: the real
+// implementation moved to the canonical, subject-agnostic shared route --
+// app/api/teacher/business-studies/reviews/[submissionId]/route.ts is now
+// only a thin re-export of it (see that file's own test).
 const REVIEW_ROUTE_SOURCE = readFileSync(
-  "app/api/teacher/business-studies/reviews/[submissionId]/route.ts",
+  "app/api/teacher/reviews/[submissionId]/route.ts",
   "utf8",
 );
 

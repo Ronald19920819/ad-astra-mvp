@@ -133,11 +133,16 @@ export async function SubjectDashboard({
     identity.status === "success"
       ? identity.fullName ?? "Learner"
       : "Learner";
+  // AD ASTRA ACADEMIC AVERAGE MODEL CORRECTION -- the aggregate displayed
+  // here is now the equal-weight average over every currently-due graded
+  // activity (dueActivityAcademic), not the old marks-weighted,
+  // returned-only average (progress.overallMark, which continues to feed
+  // the separate Journey/Achievement gamification system unchanged).
   const overallMarkPercentage =
-    overview?.progress.overallMark === null ||
-    overview?.progress.overallMark === undefined
+    overview?.dueActivityAcademic.average === null ||
+    overview?.dueActivityAcademic.average === undefined
       ? null
-      : Math.round(overview.progress.overallMark);
+      : Math.round(overview.dueActivityAcademic.average);
   const overallMarkDisplay =
     overallMarkPercentage === null ? "N/A" : `${overallMarkPercentage}%`;
 

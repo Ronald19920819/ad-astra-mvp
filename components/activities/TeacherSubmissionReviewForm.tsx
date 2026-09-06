@@ -5,11 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Sparkles } from "lucide-react";
 import type { TeacherSubmissionReview } from "@/lib/supabase/activityReviewReader";
 import { calculateTeacherReviewScore } from "@/lib/activities/teacherReviewScoring";
-import {
-  buildSubjectRoute,
-  getSubjectConfiguration,
-  type SubjectKey,
-} from "@/lib/subjects/subjectConfig";
+import { getSubjectConfiguration, type SubjectKey } from "@/lib/subjects/subjectConfig";
 
 function buildInitialMarks(review: TeacherSubmissionReview) {
   return Object.fromEntries(
@@ -52,6 +48,14 @@ export default function TeacherSubmissionReviewForm({
   const [submitError, setSubmitError] = useState("");
   const [isReturning, setIsReturning] = useState(false);
   const [isEditingReturnedReview, setIsEditingReturnedReview] = useState(false);
+  // AD ASTRA -- REVIEW-RETURN EMAIL RELIABILITY REPAIR: transient,
+  // this-save-only feedback distinguishing "notification sent" from
+  // "notification could not be sent" -- never implying the review itself
+  // failed (it always succeeds independently of email), and never shown
+  // for a legitimate re-edit of an already-returned review (which is
+  // never email-eligible in the first place, so there is nothing
+  // misleading to report there).
+  const [notificationMessage, setNotificationMessage] = useState<string | null>(null);
 
   const isEditable = !isReturned || isEditingReturnedReview;
   const originalMaximumTotal = review.questions.reduce(
@@ -100,6 +104,7 @@ export default function TeacherSubmissionReviewForm({
     setTeacherComment(review.teacherComment ?? "");
     setFieldErrors({});
     setSubmitError("");
+    setNotificationMessage(null);
   }
 
   async function returnToLearner() {
@@ -133,7 +138,7 @@ export default function TeacherSubmissionReviewForm({
     try {
       setIsReturning(true);
       const response = await fetch(
-        `/api/teacher/business-studies/reviews/${review.id}`,
+        `/api/teacher/reviews/${review.id}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -147,6 +152,7 @@ export default function TeacherSubmissionReviewForm({
       const result = (await response.json()) as {
         success?: boolean;
         error?: string;
+        notification?: "sent" | "failed" | "not_applicable";
       };
 
       if (!response.ok || !result.success) {
@@ -155,8 +161,19 @@ export default function TeacherSubmissionReviewForm({
         );
       }
 
+      // Non-alarming, and never implying the review itself failed -- email
+      // is always a side effect of an already-successful review. A
+      // legitimate re-edit of an already-returned review is never
+      // email-eligible ("not_applicable"), so it gets no email mention at
+      // all rather than a misleading failure notice.
+      setNotificationMessage(
+        result.notification === "sent"
+          ? "Activity returned to learner. Email notification sent."
+          : result.notification === "failed"
+            ? "Activity returned to learner. Email notification could not be sent."
+            : "Activity returned to learner.",
+      );
       setIsEditingReturnedReview(false);
-      router.push(buildSubjectRoute(subject, "teacherReview"));
       router.refresh();
     } catch (error) {
       setSubmitError(
@@ -317,7 +334,7 @@ export default function TeacherSubmissionReviewForm({
 
         {isReturned && !isEditingReturnedReview ? (
           <p className="mt-4 rounded-2xl bg-green-50 p-3 text-center text-sm font-bold text-green-700">
-            Status: Returned
+            {notificationMessage ?? "Status: Returned"}
           </p>
         ) : (
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">

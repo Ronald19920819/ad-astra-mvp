@@ -10,13 +10,13 @@ import { getLearnerProfileByAuthUserId } from "@/lib/supabase/learnerProfile";
 import { getAbsoluteAppUrl } from "@/lib/email/appUrl";
 import { sendEmail } from "@/lib/email/sendEmail";
 import { buildReviewReturnedEmail } from "@/lib/email/templates/reviewReturned";
+import { recordActivityReviewEmailDelivery } from "@/lib/email/activityReviewEmailDeliveryRepository";
 
 // AD ASTRA OPERATIONAL EMAIL STAGE 3: the one reusable, subject-agnostic
-// trigger for the "teacher review returned" learner email. Any subject's
-// review-finalisation route calls this -- today only
-// app/api/teacher/business-studies/reviews/[submissionId]/route.ts exists,
-// but English/History/Afrikaans routes will call this exact same function
-// once they exist, never duplicate this logic.
+// trigger for the "teacher review returned" learner email. The single
+// shared finalisation route (app/api/teacher/reviews/[submissionId]/route.ts,
+// used by all four subjects) calls this -- never duplicate this logic in
+// a subject-specific route.
 //
 // CALLER CONTRACT: this function must ONLY be invoked when the caller has
 // already determined this is a genuine first-time transition into
@@ -29,6 +29,20 @@ import { buildReviewReturnedEmail } from "@/lib/email/templates/reviewReturned";
 // never have it called retroactively. There is deliberately no backfill,
 // reconciliation job, or startup scan anywhere that calls this based on
 // existing data.
+//
+// RELIABILITY REPAIR: every genuine attempt outcome (sent/failed/skipped)
+// is now persisted via recordActivityReviewEmailDelivery
+// (activity_review_email_deliveries) -- the exact gap identified during
+// investigation, where a released claim left no trace of WHY a past
+// attempt didn't succeed. The one deliberate exception is
+// "already_claimed_or_sent": a lost-race/idempotent re-entry is not a
+// genuine attempt, so recording it would misrepresent a no-op as a real
+// outcome (see that branch below). This also makes a future EXPLICIT,
+// single-submission retry possible: a submission whose most recent
+// delivery row (or activity_submissions.review_returned_email_sent_at)
+// shows no successful send, and which has no active claim, can safely
+// have this function called again for its exact id -- never a blanket
+// scan of every historical null.
 export type ReviewReturnedEmailOutcome =
   | { sent: true }
   | { sent: false; reason: string };
@@ -64,9 +78,13 @@ async function resolveSubjectAndActivity(
   supabase: SupabaseAdminClient,
   activityId: string,
   snapshot: ActivitySubmissionSnapshot | null,
-): Promise<{ subjectName: string; activityTitle: string } | null> {
+): Promise<{ subjectId: string; subjectName: string; activityTitle: string } | null> {
   if (snapshot) {
-    return { subjectName: snapshot.subject.name, activityTitle: snapshot.activity.title };
+    return {
+      subjectId: snapshot.subject.id,
+      subjectName: snapshot.subject.name,
+      activityTitle: snapshot.activity.title,
+    };
   }
 
   const { data: activity, error: activityError } = await supabase
@@ -92,6 +110,7 @@ async function resolveSubjectAndActivity(
 
   const subject = getSubjectConfigurationByDatabaseId(lesson.subject_id);
   return {
+    subjectId: lesson.subject_id,
     subjectName: subject?.displayName ?? "Subject",
     activityTitle: activity.title,
   };
@@ -148,16 +167,31 @@ export async function sendReviewReturnedEmailIfDue(
     if (error) throw error;
     claimedRow = data as ClaimedSubmissionRow | null;
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Unable to claim review-return email:", {
       submissionId,
-      message: error instanceof Error ? error.message : "Unknown error",
+      message,
+    });
+    await recordActivityReviewEmailDelivery({
+      submissionId,
+      learnerId,
+      activityId: null,
+      subjectId: null,
+      recipientEmail: null,
+      status: "failed",
+      reason: `claim_failed: ${message}`,
     });
     return { sent: false, reason: "claim_failed" };
   }
 
   if (!claimedRow) {
     // Lost the race, already sent, or (for a historical row) never
-    // eligible in the first place -- skip silently either way.
+    // eligible in the first place -- skip silently either way. This is
+    // an idempotency signal, not a genuine notification attempt, so it
+    // is deliberately NOT persisted to the delivery-history table --
+    // recording it would misrepresent a no-op as a real, distinct
+    // outcome and fill the audit trail with noise (see the migration's
+    // own comment on this decision).
     return { sent: false, reason: "already_claimed_or_sent" };
   }
 
@@ -166,6 +200,15 @@ export async function sendReviewReturnedEmailIfDue(
     const learnerEmail = learnerProfile?.email;
     if (!learnerProfile || !learnerEmail) {
       await releaseClaim(supabase, submissionId);
+      await recordActivityReviewEmailDelivery({
+        submissionId,
+        learnerId,
+        activityId: claimedRow.activity_id,
+        subjectId: null,
+        recipientEmail: null,
+        status: "skipped",
+        reason: "no_learner_email",
+      });
       return { sent: false, reason: "no_learner_email" };
     }
 
@@ -179,6 +222,15 @@ export async function sendReviewReturnedEmailIfDue(
     );
     if (!subjectAndActivity) {
       await releaseClaim(supabase, submissionId);
+      await recordActivityReviewEmailDelivery({
+        submissionId,
+        learnerId,
+        activityId: claimedRow.activity_id,
+        subjectId: null,
+        recipientEmail: learnerEmail,
+        status: "skipped",
+        reason: "activity_resolution_failed",
+      });
       return { sent: false, reason: "activity_resolution_failed" };
     }
 
@@ -204,6 +256,15 @@ export async function sendReviewReturnedEmailIfDue(
         message: result.error,
       });
       await releaseClaim(supabase, submissionId);
+      await recordActivityReviewEmailDelivery({
+        submissionId,
+        learnerId,
+        activityId: claimedRow.activity_id,
+        subjectId: subjectAndActivity.subjectId,
+        recipientEmail: learnerEmail,
+        status: "failed",
+        reason: result.error,
+      });
       return { sent: false, reason: "send_failed" };
     }
 
@@ -222,6 +283,16 @@ export async function sendReviewReturnedEmailIfDue(
       });
     }
 
+    await recordActivityReviewEmailDelivery({
+      submissionId,
+      learnerId,
+      activityId: claimedRow.activity_id,
+      subjectId: subjectAndActivity.subjectId,
+      recipientEmail: learnerEmail,
+      status: "sent",
+      providerMessageId: result.id,
+    });
+
     return { sent: true };
   } catch (error) {
     console.error("Unexpected error while sending review-return email:", {
@@ -229,6 +300,15 @@ export async function sendReviewReturnedEmailIfDue(
       message: error instanceof Error ? error.message : "Unknown error",
     });
     await releaseClaim(supabase, submissionId);
+    await recordActivityReviewEmailDelivery({
+      submissionId,
+      learnerId,
+      activityId: claimedRow.activity_id,
+      subjectId: null,
+      recipientEmail: null,
+      status: "failed",
+      reason: `unexpected_error: ${error instanceof Error ? error.message : "Unknown error"}`,
+    });
     return { sent: false, reason: "unexpected_error" };
   }
 }

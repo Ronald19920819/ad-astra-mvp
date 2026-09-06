@@ -13,7 +13,7 @@ import { recordLessonActivityPairReward } from "@/lib/supabase/coinLedger";
 // calculation+write for a newly-qualifying pair.
 //
 // Call this once, right after a submission's teacher-final mark is
-// recorded (app/api/teacher/business-studies/reviews/[submissionId]/route.ts)
+// recorded (app/api/teacher/reviews/[submissionId]/route.ts)
 // -- the exact moment "spendable Coins" become possible for that pair,
 // matching the locked "teacher-final mark required" policy. Never call it
 // for a still-AI-preliminary mark.

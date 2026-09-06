@@ -22,8 +22,12 @@ test("this is the only file that imports the Resend SDK, by declaring itself as 
   assert.match(SOURCE, /import \{ Resend \} from "resend";/);
 });
 
-test("sendEmail() accepts to/subject/html and an optional from, matching the requested small typed API", () => {
-  assert.match(SOURCE, /export type SendEmailInput = \{\s*to: string;\s*subject: string;\s*html: string;\s*from\?: string;\s*\};/);
+test("sendEmail() accepts to/subject/html, an optional from, and (AD ASTRA MONTHLY REPORT STAGE 4C) an optional cc list, matching the requested small typed API", () => {
+  assert.match(SOURCE, /export type SendEmailInput = \{\s*to: string;\s*cc\?: string\[\];\s*subject: string;\s*html: string;\s*from\?: string;\s*\};/);
+});
+
+test("cc is only ever passed through to Resend when it is a non-empty array -- an empty/absent cc never sends a stray empty field", () => {
+  assert.match(SOURCE, /\.\.\.\(cc && cc\.length > 0 \? \{ cc \} : \{\}\)/);
 });
 
 test("the result type is a discriminated union that cannot report success without an id, or failure without an error message", () => {

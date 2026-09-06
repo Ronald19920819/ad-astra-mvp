@@ -154,3 +154,84 @@ test("a row that already has sent_at set can never be re-claimed, even if claime
   const attempt = tryClaim(alreadySent, "2026-08-31T10:00:00.000Z");
   assert.equal(attempt.claimed, false);
 });
+
+// --- AD ASTRA REVIEW-RETURN EMAIL RELIABILITY REPAIR ------------------
+// Persisted delivery-history assertions. Every genuine attempt outcome
+// (sent/failed/skipped) must be recorded via recordActivityReviewEmailDelivery
+// -- except the lost-race/idempotent "already_claimed_or_sent" no-op,
+// which is deliberately excluded (see that branch's own comment) so the
+// audit table stays meaningful rather than filling with noise.
+
+test("a claim-step database error is persisted as a failed delivery, with no activity/subject/recipient known yet", () => {
+  const block = SOURCE.match(/\} catch \(error\) \{\s*const message[\s\S]*?return \{ sent: false, reason: "claim_failed" \};\s*\n  \}/)?.[0];
+  assert.ok(block, "claim-failure block not found");
+  assert.match(block!, /status: "failed",/);
+  assert.match(block!, /reason: `claim_failed: \$\{message\}`,/);
+  assert.match(block!, /activityId: null,/);
+  assert.match(block!, /subjectId: null,/);
+  assert.match(block!, /recipientEmail: null,/);
+});
+
+test("the lost-race/idempotent re-entry ('already_claimed_or_sent') is NEVER persisted to the delivery-history table -- only logged structurally by the caller, to keep the audit trail meaningful rather than noisy", () => {
+  const skipBlock = SOURCE.match(/if \(!claimedRow\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(skipBlock);
+  assert.doesNotMatch(skipBlock!, /recordActivityReviewEmailDelivery/);
+});
+
+test("a missing learner email is persisted as a SKIPPED delivery (not failed) -- this is a legitimate reason a notification should not proceed, not a system failure", () => {
+  const block = SOURCE.match(/if \(!learnerProfile \|\| !learnerEmail\) \{[\s\S]*?\n    \}/)?.[0];
+  assert.ok(block);
+  assert.match(block!, /recordActivityReviewEmailDelivery\(\{/);
+  assert.match(block!, /status: "skipped",/);
+  assert.match(block!, /reason: "no_learner_email",/);
+  assert.match(block!, /recipientEmail: null,/);
+});
+
+test("an activity-resolution failure is persisted as a SKIPPED delivery, with the resolved recipient email included even though the subject could not be resolved", () => {
+  const block = SOURCE.match(/if \(!subjectAndActivity\) \{[\s\S]*?\n    \}/)?.[0];
+  assert.ok(block);
+  assert.match(block!, /recordActivityReviewEmailDelivery\(\{/);
+  assert.match(block!, /status: "skipped",/);
+  assert.match(block!, /reason: "activity_resolution_failed",/);
+  assert.match(block!, /recipientEmail: learnerEmail,/);
+  assert.match(block!, /subjectId: null,/);
+});
+
+test("a provider send failure is persisted as a FAILED delivery with the sanitized provider error as the reason, and the claim is released", () => {
+  const block = SOURCE.match(/if \(!result\.success\) \{[\s\S]*?\n    \}/)?.[0];
+  assert.ok(block);
+  assert.match(block!, /await releaseClaim\(supabase, submissionId\);/);
+  assert.match(block!, /recordActivityReviewEmailDelivery\(\{/);
+  assert.match(block!, /status: "failed",/);
+  assert.match(block!, /reason: result\.error,/);
+  assert.doesNotMatch(block!, /review_returned_email_sent_at/);
+});
+
+test("a successful send is persisted as a SENT delivery, including the provider message id, in the same call that marks sent_at", () => {
+  const successIndex = SOURCE.indexOf("return { sent: true };");
+  const priorSlice = SOURCE.slice(SOURCE.indexOf('if (markSentError) {'), successIndex);
+  assert.match(priorSlice, /recordActivityReviewEmailDelivery\(\{/);
+  assert.match(priorSlice, /status: "sent",/);
+  assert.match(priorSlice, /providerMessageId: result\.id,/);
+});
+
+test("an unexpected error anywhere after the claim is persisted as a FAILED delivery with a sanitized reason, in addition to releasing the claim", () => {
+  const catchBlock = SOURCE.match(/\} catch \(error\) \{\s*console\.error\("Unexpected error while sending review-return email:"[\s\S]*?\n  \}/)?.[0];
+  assert.ok(catchBlock, "outer catch block not found");
+  assert.match(catchBlock!, /recordActivityReviewEmailDelivery\(\{/);
+  assert.match(catchBlock!, /status: "failed",/);
+  assert.match(catchBlock!, /reason: `unexpected_error: /);
+});
+
+test("resolveSubjectAndActivity now also resolves subjectId (from the snapshot or the live lesson join) alongside subjectName/activityTitle -- required so a delivery row can be linked to its subject", () => {
+  assert.match(SOURCE, /subjectId: snapshot\.subject\.id,/);
+  assert.match(SOURCE, /subjectId: lesson\.subject_id,/);
+});
+
+test("delivery persistence is imported from the dedicated repository, never a direct inline insert into activity_review_email_deliveries", () => {
+  assert.match(
+    SOURCE,
+    /import \{ recordActivityReviewEmailDelivery \} from "@\/lib\/email\/activityReviewEmailDeliveryRepository";/,
+  );
+  assert.doesNotMatch(SOURCE, /\.from\("activity_review_email_deliveries"\)/);
+});

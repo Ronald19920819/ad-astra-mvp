@@ -1,12 +1,29 @@
 import "server-only";
 
-import { getLearnerActivityStatus } from "@/lib/activities/learnerActivityStatus";
+import {
+  getLearnerActivityStatus,
+  isLearnerActivitySubmittedStatus,
+} from "@/lib/activities/learnerActivityStatus";
 import { getLessonLifecycle } from "@/lib/lessons/lessonLifecycle";
 import {
   calculateSubjectProgress,
   getPerformanceLevel,
   type SubjectProgressCalculation,
 } from "@/lib/progress/subjectProgress";
+import {
+  calculateDueActivityAcademicAverage,
+  type DueActivityAcademicItem,
+  type DueActivityAcademicResult,
+} from "@/lib/progress/dueActivityAcademicAverage";
+import { resolveActivityTiming } from "@/lib/reports/monthlyReportLateness";
+import {
+  LEGACY_ACTIVITY_5_ID,
+  deriveLegacyActivity5Window,
+} from "@/lib/rewards/legacyActivity5Window";
+import {
+  LEGACY_ACTIVITY_2_ID,
+  deriveLegacyActivity2Window,
+} from "@/lib/rewards/legacyActivity2Window";
 import { createSupabaseAdminClient } from "@/lib/supabase/server";
 import { businessStudiesSubject } from "@/lib/subjects/subjectConfig";
 import {
@@ -70,6 +87,33 @@ function isMissingSnapshotColumnError(
   );
 }
 
+type SupabaseAdminClient = ReturnType<typeof createSupabaseAdminClient>;
+
+// Duplicated verbatim from lib/reports/monthlyReportEngine.ts's own
+// findLegacyWindowEnd -- both readers need the identical "first genuine
+// submission platform-wide" anchor for the two approved historical due-date
+// exceptions, but this file must not import a Stage 1 report-engine
+// internal (it is not exported, and report generation is a distinct
+// concern from the subject dashboard).
+async function findLegacyWindowEnd(
+  supabase: SupabaseAdminClient,
+  activityId: string,
+  deriveWindow: (firstGenuineSubmissionAt: string) => { windowEnd: string },
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("activity_submissions")
+    .select("status, submitted_at")
+    .eq("activity_id", activityId)
+    .order("submitted_at", { ascending: true });
+  if (error) throw error;
+
+  const firstGenuine = (data ?? []).find((row) =>
+    isLearnerActivitySubmittedStatus(row.status as SubmissionRow["status"]),
+  );
+  if (!firstGenuine) return null;
+  return deriveWindow(firstGenuine.submitted_at).windowEnd;
+}
+
 export type LearnerActivityPriority = {
   id: string;
   title: string;
@@ -80,6 +124,15 @@ export type LearnerActivityPriority = {
 
 export type BusinessStudiesLearnerOverview = {
   progress: SubjectProgressCalculation;
+  // AD ASTRA ACADEMIC AVERAGE MODEL CORRECTION -- the new equal-weight
+  // academic indicator, based on every currently-due graded activity in
+  // the subject (see lib/progress/dueActivityAcademicAverage.ts). This is
+  // a SEPARATE, additional field alongside `progress` -- it does not
+  // replace it. `progress.overallMark` remains the old marks-weighted,
+  // returned-only calculation and continues to feed the cross-subject
+  // Journey/Achievement gamification system (lib/supabase/learnerJourney.ts),
+  // which this correction deliberately does not touch.
+  dueActivityAcademic: DueActivityAcademicResult;
   activityCompletion: {
     completedActivityCount: number;
     totalPublishedActivityCount: number;
@@ -145,6 +198,7 @@ export async function getSubjectLearnerOverview(
     });
     return {
       progress,
+      dueActivityAcademic: calculateDueActivityAcademicAverage([]),
       activityCompletion: {
         completedActivityCount: 0,
         totalPublishedActivityCount: 0,
@@ -291,6 +345,71 @@ export async function getSubjectLearnerOverview(
   const submissionByActivityId = new Map(
     submissions.map((submission) => [submission.activity_id, submission]),
   );
+
+  // AD ASTRA ACADEMIC AVERAGE MODEL CORRECTION -- the new equal-weight
+  // academic indicator, scoped to EVERY published, non-quiz activity in
+  // the subject (not just submitted ones), reusing the exact due-date
+  // resolution (resolveActivityTiming) and legacy 24h-window exceptions
+  // already locked in by the Monthly Report engine, so a learner's
+  // dashboard and any report a teacher generates never disagree on what
+  // counts as "overdue."
+  const legacyActivity5WindowEnd = activities.some(
+    (activity) => activity.id === LEGACY_ACTIVITY_5_ID,
+  )
+    ? await findLegacyWindowEnd(
+        supabase,
+        LEGACY_ACTIVITY_5_ID,
+        deriveLegacyActivity5Window,
+      )
+    : null;
+  const legacyActivity2WindowEnd = activities.some(
+    (activity) => activity.id === LEGACY_ACTIVITY_2_ID,
+  )
+    ? await findLegacyWindowEnd(
+        supabase,
+        LEGACY_ACTIVITY_2_ID,
+        deriveLegacyActivity2Window,
+      )
+    : null;
+  const dueActivityAcademicItems: DueActivityAcademicItem[] = activities.map(
+    (activity) => {
+      const submission = submissionByActivityId.get(activity.id) ?? null;
+      const snapshot =
+        submission && isActivitySubmissionSnapshot(submission.activity_snapshot)
+          ? submission.activity_snapshot
+          : null;
+      const hasAuthoritativeMark =
+        submission !== null &&
+        submission.status === "returned" &&
+        submission.final_mark !== null;
+      const total = submission ? submittedTotal(submission) : 0;
+      const percentage =
+        hasAuthoritativeMark && total > 0
+          ? (submission!.final_mark! / total) * 100
+          : null;
+      const timing = resolveActivityTiming({
+        activityId: activity.id,
+        isSubmitted: submission !== null,
+        submittedAt: submission?.submitted_at ?? null,
+        liveDueDate: activity.due_date,
+        snapshotDueDate: snapshot?.activity.dueDate ?? null,
+        legacyActivity5WindowEnd,
+        legacyActivity2WindowEnd,
+        now,
+      });
+
+      return {
+        hasAuthoritativeMark,
+        percentage,
+        submissionStatus: submission ? submission.status : "not_submitted",
+        isOverdue: timing.isOverdue,
+      };
+    },
+  );
+  const dueActivityAcademic = calculateDueActivityAcademicAverage(
+    dueActivityAcademicItems,
+  );
+
   const incompleteActivities = activities
     .filter((activity) => !submissionByActivityId.has(activity.id))
     .map((activity) => {
@@ -357,6 +476,7 @@ export async function getSubjectLearnerOverview(
 
   return {
     progress,
+    dueActivityAcademic,
     activityCompletion: {
       completedActivityCount: submissionByActivityId.size,
       totalPublishedActivityCount: activities.length,
