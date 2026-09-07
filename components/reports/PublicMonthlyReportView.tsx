@@ -6,6 +6,7 @@ import { formatReportMonthLabel } from "@/lib/reports/monthlyReportMonth";
 import type { KingdomMonthlyReportComments } from "@/lib/reports/kingdomMonthlyReport";
 import type { MonthlyReportPayload } from "@/lib/reports/monthlyReportTypes";
 import { resolveMonthlyReportBadgeAsset } from "@/lib/reports/monthlyReportBadgeAsset";
+import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
 import {
   GlanceStat,
   academicBasisSummary,
@@ -60,6 +61,18 @@ export function PublicMonthlyReportView({
   // that must render a neutral fallback below, never crash.
   const badge = resolveMonthlyReportBadgeAsset(report.badge?.key);
 
+  // AD ASTRA MONTHLY REPORT -- PUBLIC ACCENT COLOUR FIX: the top accent
+  // line must be the same per-subject colour the teacher-side preview
+  // uses (MonthlyReportGenerator.tsx's MonthlyReportPreview receives it
+  // as `subjectColour`, sourced from the teacher's own subject list built
+  // off subjectConfigurations) -- never a hard-coded approximation. This
+  // view has no `subjects` prop to read that from, so it resolves the
+  // exact same value from the same static source of truth
+  // (lib/subjects/subjectConfig.ts) via the frozen snapshot's own
+  // meta.subjectId, with the identical "#FEC20C" fallback the teacher
+  // side uses when no colour is resolvable.
+  const subjectColour = getSubjectConfigurationByDatabaseId(report.meta.subjectId)?.colourTheme.primary ?? "#FEC20C";
+
   const evidenceWarnings: string[] = [];
   if (report.evidenceFlags.unreviewedSubmissionsPresent) {
     const count = report.engagement.activitiesAwaitingReview;
@@ -97,7 +110,7 @@ export function PublicMonthlyReportView({
         <div className="relative bg-[#102A43] px-6 py-5 text-white lg:px-10 lg:py-6">
           <div
             className="absolute inset-x-0 top-0 h-1"
-            style={{ backgroundColor: "#FEC20C" }}
+            style={{ backgroundColor: subjectColour }}
             aria-hidden="true"
           />
           <div className="flex flex-col items-center gap-4 text-center lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-6 lg:text-left">

@@ -62,3 +62,28 @@ test("an unresolved (null) badge never crashes this page -- the badge image and 
   assert.match(SOURCE, /\{badge \? \(/);
   assert.match(SOURCE, /value=\{badge\?\.label \?\? "Not Available"\}/);
 });
+
+// AD ASTRA MONTHLY REPORT -- PUBLIC ACCENT COLOUR FIX. The top accent
+// line previously hard-coded #FEC20C regardless of subject, diverging
+// from the teacher-side preview's per-subject `subjectColour`
+// (MonthlyReportGenerator.tsx), which made the public report's accent
+// colour visibly wrong for any subject whose colourTheme.primary isn't
+// #FEC20C. Fixed by resolving the exact same subjectConfig source of
+// truth from the frozen snapshot's own meta.subjectId, with the same
+// fallback the teacher side uses.
+test("the top accent line resolves the subject's own colour theme from the shared subjectConfig source of truth, never a hard-coded value", () => {
+  assert.match(
+    SOURCE,
+    /import \{ getSubjectConfigurationByDatabaseId \} from "@\/lib\/subjects\/subjectConfig";/,
+  );
+  assert.match(
+    SOURCE,
+    /const subjectColour = getSubjectConfigurationByDatabaseId\(report\.meta\.subjectId\)\?\.colourTheme\.primary \?\? "#FEC20C";/,
+  );
+  assert.match(SOURCE, /style=\{\{ backgroundColor: subjectColour \}\}/);
+  assert.doesNotMatch(SOURCE, /style=\{\{ backgroundColor: "#FEC20C" \}\}/);
+});
+
+test("the fixed brand-gold label text ('Monthly Progress Report') is left untouched -- only the per-subject accent line changed, not every gold colour in this file", () => {
+  assert.match(SOURCE, /text-\[#FEC20C\]/);
+});
