@@ -17,6 +17,7 @@ type SubmittedQuestion = {
   marks: number;
   ao: string;
   guidance: string;
+  answerText?: string | null;
 };
 
 function isQuestion(value: unknown): value is SubmittedQuestion {
@@ -36,7 +37,11 @@ function isQuestion(value: unknown): value is SubmittedQuestion {
     Number.isInteger(question.marks) &&
     question.marks > 0 &&
     typeof question.ao === "string" &&
-    typeof question.guidance === "string"
+    typeof question.guidance === "string" &&
+    (question.answerText === undefined ||
+      question.answerText === null ||
+      (typeof question.answerText === "string" &&
+        question.answerText.length <= 4000))
   );
 }
 
@@ -219,6 +224,7 @@ export async function PUT(
           marks,
           assessment_objective,
           guidance,
+          answer_text,
           display_order
         `)
         .eq("activity_id", activityId)
@@ -275,6 +281,7 @@ export async function PUT(
       marks: question.marks,
       assessment_objective: question.ao,
       guidance: question.guidance,
+      answer_text: question.answerText?.trim() || null,
       display_order: index + 1,
     }));
     const materialChanged =
@@ -296,6 +303,7 @@ export async function PUT(
           existingQuestion.assessment_objective !==
             question.assessment_objective ||
           (existingQuestion.guidance ?? "") !== question.guidance ||
+          (existingQuestion.answer_text ?? null) !== question.answer_text ||
           existingQuestion.display_order !== question.display_order
         );
       });

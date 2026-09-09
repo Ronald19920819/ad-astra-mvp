@@ -48,3 +48,15 @@ test("no longer auto-navigates away immediately after a successful save -- the t
 test("the returned-status banner shows the fresh notification message when one exists, falling back to the original static status text otherwise", () => {
   assert.match(SOURCE, /\{notificationMessage \?\? "Status: Returned"\}/);
 });
+
+// AD ASTRA BUSINESS STUDIES CALCULATION QUESTION TYPE -- TEACHER REVIEW
+// REGRESSION: this form is driven entirely by each question's
+// maximumMarks/preliminary mark/feedback, with no branching on
+// questionType, so a Calculation question's 4-mark submission flows
+// through this exact same review UI as every other Business Studies
+// question type -- no separate review system was built.
+
+test("regression: review rendering, mark totals and override validation are driven entirely by maximumMarks -- there is no questionType branch anywhere in this form", () => {
+  assert.doesNotMatch(SOURCE, /questionType|question_type/);
+  assert.match(SOURCE, /question\.maximumMarks/);
+});

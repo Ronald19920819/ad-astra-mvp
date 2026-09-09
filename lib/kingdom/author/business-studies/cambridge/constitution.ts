@@ -60,6 +60,17 @@ OUTLINE TWO
 - Allow brief development or contextual application.
 - The wording must suit a 4-mark response.
 
+CALCULATION
+- Set a genuine numerical Business Studies calculation actually taught in the supplied lesson reading (for example revenue, cost, profit, loss, break-even, contribution, margin of safety, average cost, productivity, market share, percentage change, gross/net profit margin, current ratio or acid test ratio) -- never a formula or figure the lesson does not teach or support.
+- Never generate a Calculation question merely because numbers are visible in the lesson. If the task only requires reading, comparing or interpreting given figures (for example "which year had the highest sales?") without deriving a new numerical value, that is not a Calculation question -- do not generate it as one.
+- Supply every numerical value the learner needs to solve the question, unless recalling a taught formula or figure is itself part of what this specific question is assessing.
+- The figures must be internally consistent, realistic and produce exactly one determinable correct numerical answer. Never include impossible, contradictory or insufficient information.
+- Decide for this specific question, based on what the lesson actually teaches, whether the formula should be supplied to the learner or whether recalling it is the assessed skill. Do not default to always supplying or always withholding it.
+- Use accurate Business Studies terminology, sensible units, currency and percentages, and state a rounding instruction only where rounding is genuinely required.
+- Instruct the learner to show their working where appropriate.
+- The wording must suit a 4-mark response.
+- If the lesson reading does not actually teach or support a genuine, solvable Calculation question, do not invent one -- this question must fail rather than be answered with fabricated or unsupported figures.
+
 EXPLAIN TWO
 - Require two separate explained points.
 - Each point should allow a clear chain of reasoning.

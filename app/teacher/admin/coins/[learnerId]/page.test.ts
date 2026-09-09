@@ -10,6 +10,12 @@ import test from "node:test";
 // ([learnerId]). Run this file explicitly, never via the standard glob
 // runner:
 //   node --import tsx "app/teacher/admin/coins/[learnerId]/page.test.ts"
+//
+// AD ASTRA ADMINISTRATOR COIN MANAGEMENT -- STAGE 2: this Server Component
+// now owns ONLY authorisation and the initial data fetch -- all
+// transaction-history rendering and the Adjust Coins interactivity moved
+// to the client AdminLearnerCoinAccountView (see that component's own
+// test file for those assertions).
 
 const SOURCE = readFileSync("app/teacher/admin/coins/[learnerId]/page.tsx", "utf8");
 
@@ -17,10 +23,9 @@ const SOURCE = readFileSync("app/teacher/admin/coins/[learnerId]/page.tsx", "utf
 // falsely terminate a naive [\s\S]*?\n\} regex at that type's own
 // closing brace -- see the established fix for this in this codebase's
 // other page tests -- so this slices to end-of-file (the component is
-// the last declaration before its own helper function).
+// the last declaration in the file).
 const pageComponent = SOURCE.slice(
   SOURCE.indexOf("export default async function TeacherAdminLearnerCoinHistoryPage("),
-  SOURCE.indexOf("function SummaryStat("),
 );
 
 test("a malformed learnerId (not a UUID) is rejected before any authorization or database work", () => {
@@ -40,25 +45,19 @@ test("an unauthorised caller and a non-existent learner both get the exact same 
   assert.match(pageComponent, /if \(!history\) \{\s*\n\s*notFound\(\);/);
 });
 
-test("readable transaction type labels are resolved via the canonical mapping, never re-implemented inline", () => {
+test("delegates all interactivity (Adjust Coins, transaction history, refresh) to the client AdminLearnerCoinAccountView -- this Server Component renders no table/form/button itself", () => {
   assert.match(
     SOURCE,
-    /import \{ resolveCoinTransactionTypeLabel \} from "@\/lib\/coins\/coinTransactionTypeLabels";/,
+    /import \{ AdminLearnerCoinAccountView \} from "@\/components\/admin\/AdminLearnerCoinAccountView";/,
   );
-  assert.match(SOURCE, /resolveCoinTransactionTypeLabel\(transaction\.transactionType\)/);
-});
-
-test("subject/lesson/activity attribution is shown where available, gracefully omitted when not", () => {
   assert.match(
-    SOURCE,
-    /\[transaction\.subjectName, transaction\.lessonLabel, transaction\.activityTitle\]\s*\n\s*\.filter\(Boolean\)/,
+    pageComponent,
+    /<AdminLearnerCoinAccountView learnerId=\{learnerId\} history=\{history\} \/>/,
   );
+  assert.doesNotMatch(SOURCE, /<table|resolveCoinTransactionTypeLabel/);
+  assert.doesNotMatch(pageComponent, /Adjust Coins/);
 });
 
-test("no raw metadata or internal identifiers are rendered -- only the fields the reader already scoped for display", () => {
-  assert.doesNotMatch(SOURCE, /transaction\.metadata|transaction\.id\}<|referenceTransactionId/);
-});
-
-test("this page contains no Coin write/adjustment action of any kind -- Stage 1 is read-only", () => {
-  assert.doesNotMatch(SOURCE, /\.insert\(|\.update\(|\.delete\(|Add Coins|Subtract Coins/i);
+test("this page performs no Coin write of any kind -- it only authorises and reads", () => {
+  assert.doesNotMatch(SOURCE, /\.insert\(|\.update\(|\.delete\(/);
 });

@@ -89,6 +89,7 @@ export type TeacherActivityEditorData = {
     marks: number;
     assessment_objective: string | null;
     guidance: string | null;
+    answer_text: string | null;
   }[];
 };
 
@@ -150,7 +151,7 @@ export async function getTeacherActivityEditorData(
   const { data: questions, error: questionsError } = await supabase
     .from("activity_questions")
     .select(
-      "id, paper, question_type, question_text, marks, assessment_objective, guidance, display_order, question_number",
+      "id, paper, question_type, question_text, marks, assessment_objective, guidance, answer_text, display_order, question_number",
     )
     .eq("activity_id", activityId)
     .order("display_order", { ascending: true, nullsFirst: false })

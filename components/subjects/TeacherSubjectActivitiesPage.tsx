@@ -221,6 +221,7 @@ const openActivityEditor = async (
         guidance: question.guidance ?? "",
         isGenerating: false,
         hasGeneratedQuestion: true,
+        answerText: question.answer_text ?? undefined,
       }),
     );
 
@@ -388,13 +389,17 @@ const askKingdom = async () => {
     setActivityQuestions((currentQuestions) =>
       currentQuestions.map((currentQuestion) => {
         const generatedQuestion = data.questions.find(
-          (question: { id: number; questionText: string }) =>
-            question.id === currentQuestion.id,
+          (question: {
+            id: number;
+            questionText: string;
+            answerText?: string | null;
+          }) => question.id === currentQuestion.id,
         );
         return generatedQuestion
           ? {
               ...currentQuestion,
               questionText: generatedQuestion.questionText,
+              answerText: generatedQuestion.answerText ?? undefined,
             }
           : currentQuestion;
       }),

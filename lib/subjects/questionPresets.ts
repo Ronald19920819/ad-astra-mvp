@@ -60,6 +60,14 @@ const businessStudiesPreset: SubjectQuestionPreset = {
       opening: "Outline two ",
       guidance: "Develop two points briefly in the supplied context.",
     },
+    calculation: {
+      label: "Calculation - 4 marks",
+      paper: "paper-1",
+      marks: 4,
+      assessmentLabel: "AO2",
+      opening: "Calculate ",
+      guidance: "Show your formula, working and final answer clearly.",
+    },
     "explain-two": {
       label: "Explain two - 6 marks",
       paper: "paper-1",

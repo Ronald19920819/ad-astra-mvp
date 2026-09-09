@@ -81,6 +81,7 @@ Return valid JSON only in this exact structure:
     {
       "id": 1,
       "questionText": "Generated question here",
+      "answerText": "Confidential marking key -- calculation questions only",
       "integrityCheck": {
         "supported": true,
         "evidenceKinds": ["history-source"],
@@ -94,7 +95,18 @@ Return valid JSON only in this exact structure:
 The returned id must match the id supplied in each question plan.
 Do not include markdown.
 Do not include explanations.
-Do not include answers.
+Do not include answers, model responses or marking guidance inside questionText.
+
+For a question whose plan questionType is "calculation" only, additionally
+include an "answerText" field: confidential marking guidance for the
+Examiner, never shown to the learner and never repeated inside
+questionText. It must state the required formula/method, the correct
+substitution using the figures given in the question, the expected
+numerical result, any accepted equivalent forms of that result, the
+correct unit where applicable, a reasonable rounding tolerance where
+rounding applies, and the exact intended mark allocation across the 4
+marks for this specific question. Omit the "answerText" field entirely
+for every question whose questionType is not "calculation".
 `,
   });
 }

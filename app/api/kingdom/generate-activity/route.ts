@@ -43,8 +43,43 @@ type ActivityQuestionPlan = {
 type GeneratedActivityQuestion = {
   id: number;
   questionText: string;
+  answerText?: string;
   integrityCheck?: GeneratedQuestionIntegrityCheck;
 };
+
+const MAX_ANSWER_TEXT_LENGTH = 4000;
+
+// Calculation questions require a genuine, solvable numerical marking key
+// before they can be accepted (Business Studies Calculation question type
+// spec, Part E) -- a missing/blank key, or a question with no numeral in
+// it at all, means Kingdom did not produce a real calculation and this
+// question must fail validation rather than publish. The teacher can
+// retry generation from the builder, matching the existing evidence
+// -integrity failure pattern below.
+function findCalculationValidationIssue(
+  plannedQuestionType: string,
+  generatedQuestion: GeneratedActivityQuestion,
+): string | null {
+  if (plannedQuestionType !== "calculation") return null;
+
+  const questionText = generatedQuestion.questionText ?? "";
+  const answerText = generatedQuestion.answerText ?? "";
+
+  if (!/\d/.test(questionText)) {
+    return "a Calculation question must supply the numerical figures needed to solve it";
+  }
+  if (!answerText.trim()) {
+    return "Kingdom did not return a marking key (formula, substitution and expected result) for this Calculation question";
+  }
+  if (answerText.length > MAX_ANSWER_TEXT_LENGTH) {
+    return "the returned marking key was unexpectedly long";
+  }
+  if (!/\d/.test(answerText)) {
+    return "the returned marking key does not contain a determinable numerical result";
+  }
+
+  return null;
+}
 
 type ActivityResponseInput = NonNullable<
   Parameters<typeof openai.responses.create>[0]["input"]
@@ -262,6 +297,17 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const calculationIssue = findCalculationValidationIssue(
+        plannedQuestion.questionType,
+        generatedQuestion,
+      );
+      if (calculationIssue) {
+        integrityIssues.push(
+          `Question ${generatedQuestion.id} could not be generated because ${calculationIssue}.`,
+        );
+        continue;
+      }
+
       selfReportedSupportedIds.add(generatedQuestion.id);
     }
 
@@ -337,6 +383,7 @@ export async function POST(request: Request) {
       questions: generatedActivity.questions.map((question) => ({
         id: question.id,
         questionText: question.questionText,
+        answerText: question.answerText?.trim() || null,
       })),
     });
   } catch (error) {

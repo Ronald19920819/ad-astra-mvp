@@ -130,3 +130,58 @@ test("activity generation preserves question plans, output IDs and the integrity
   assert.match(prompt, /"integrityCheck"/);
   assert.match(prompt, /UNIVERSAL EVIDENCE INTEGRITY/);
 });
+
+// AD ASTRA BUSINESS STUDIES CALCULATION QUESTION TYPE -- AUTHOR
+
+test("the response schema offers an answerText field and restricts it to calculation-type questions, never exposed to the learner", () => {
+  const prompt = buildBusinessStudiesKingdomPrompt({
+    subjectContext: authorContext,
+    lessonTitle: "Costs and Revenue",
+    lessonReading: "Revenue is price multiplied by quantity sold.",
+    readingSourceType: "pasted_text",
+    questions: [
+      {
+        id: 1,
+        paper: "paper-1",
+        questionType: "calculation",
+        marks: "4",
+        ao: "AO2",
+        guidance: "Show your formula, working and final answer clearly.",
+      },
+    ],
+    universalEvidenceIntegrityPrompt: "UNIVERSAL EVIDENCE INTEGRITY",
+  });
+
+  assert.match(prompt, /"answerText"/);
+  assert.match(prompt, /only, additionally\s*\n\s*include an "answerText" field/);
+  assert.match(prompt, /Omit the "answerText" field entirely\s*\n?\s*for every question whose questionType is not "calculation"\./);
+  assert.match(prompt, /never shown to the learner/);
+  assert.match(prompt, /the expected\s*\n?\s*numerical result/);
+  assert.match(prompt, /mark allocation across the 4\s*\n?\s*marks/);
+});
+
+test("the Cambridge constitution defines Calculation as a genuine, lesson-supported numerical question type distinct from reading numbers off given data", () => {
+  const prompt = buildBusinessStudiesKingdomPrompt({
+    subjectContext: authorContext,
+    lessonTitle: "Costs and Revenue",
+    lessonReading: "Revenue is price multiplied by quantity sold.",
+    readingSourceType: "pasted_text",
+    questions: [
+      {
+        id: 1,
+        paper: "paper-1",
+        questionType: "define",
+        marks: "2",
+        ao: "AO1",
+        guidance: "Give a precise meaning.",
+      },
+    ],
+    universalEvidenceIntegrityPrompt: "UNIVERSAL EVIDENCE INTEGRITY",
+  });
+
+  assert.match(prompt, /CALCULATION\n/);
+  assert.match(prompt, /never a formula or figure the lesson does not teach or support/);
+  assert.match(prompt, /that is not a Calculation question -- do not generate it as one/);
+  assert.match(prompt, /produce exactly one determinable correct numerical answer/);
+  assert.match(prompt, /The wording must suit a 4-mark response/);
+});

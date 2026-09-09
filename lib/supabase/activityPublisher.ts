@@ -46,6 +46,7 @@ export async function publishActivityToSupabase({
           marks: Number(question.marks),
           ao: question.ao,
           guidance: question.guidance,
+          answerText: question.answerText ?? null,
         })),
       }),
     },

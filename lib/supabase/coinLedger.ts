@@ -144,77 +144,109 @@ export async function recordLessonActivityPairReward(
   return { inserted: true, transactionId: data.id };
 }
 
-export type RecordCorrectionParams = {
+// AD ASTRA ADMINISTRATOR COIN MANAGEMENT -- STAGE 2. The five transaction
+// types an administrator may ever manually create -- deliberately
+// excludes lesson_activity_reward, store_redemption, and
+// ad_astra_contribution, which belong to their own separate system
+// workflows and must never be creatable by hand.
+export type AdminAdjustableCoinTransactionType =
+  | "admin_adjustment"
+  | "correction"
+  | "competition_award"
+  | "promotional_award"
+  | "special_achievement";
+
+export type RecordAdminCoinAdjustmentParams = {
   learnerAuthUserId: string;
-  referenceTransactionId: string;
-  // Signed -- e.g. -100 to reduce an original +800 award down to 700.
+  // Signed -- the caller (the admin API route) has already converted
+  // "Add 500"/"Subtract 300" into +500/-300; this function never accepts
+  // an adjustment "direction" separately from the amount.
   amount: number;
+  transactionType: AdminAdjustableCoinTransactionType;
   reason: string;
-  actorType: "admin" | "system";
-  actorId?: string | null;
+  // Required by coin_transactions' own CHECK constraint whenever
+  // transactionType === "correction" (a correction must always reference
+  // what it corrects) -- optional for every other type, never mandatory
+  // for them.
+  referenceTransactionId?: string | null;
+  // Optional internal administrative context -- stored under
+  // metadata.adminNote (the ledger's existing general-purpose column for
+  // exactly this kind of extra structured detail), never in `reason`
+  // (which stays the short, learner-relevant explanation) and never as a
+  // new dedicated column.
+  adminNote?: string | null;
 };
 
-// Architecture for later stages (locked requirement: corrections must
-// never delete or overwrite the original transaction). Not called by any
-// route or script in Stage 3 -- this is the write primitive a future
-// authorised correction flow will call.
-export async function recordCorrection(
-  params: RecordCorrectionParams,
-): Promise<{ transactionId: string }> {
-  if (params.amount === 0) {
-    throw new Error("recordCorrection requires a non-zero signed amount.");
-  }
+export type RecordAdminCoinAdjustmentFailureCode =
+  | "ADMINISTRATOR_REQUIRED"
+  | "ZERO_AMOUNT"
+  | "UNSUPPORTED_TRANSACTION_TYPE"
+  | "REASON_REQUIRED"
+  | "INSUFFICIENT_BALANCE"
+  | "UNKNOWN_ERROR";
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("coin_transactions")
-    .insert({
-      learner_id: params.learnerAuthUserId,
-      amount: params.amount,
-      transaction_type: "correction",
-      reference_transaction_id: params.referenceTransactionId,
-      actor_type: params.actorType,
-      actor_id: params.actorId ?? null,
-      reason: params.reason,
-    })
-    .select("id")
-    .single();
+export type RecordAdminCoinAdjustmentResult =
+  | { success: true; transactionId: string; newBalance: number }
+  | { success: false; code: RecordAdminCoinAdjustmentFailureCode; error: string };
 
-  if (error) throw error;
-  return { transactionId: data.id };
-}
-
-export type RecordAdminAdjustmentParams = {
-  learnerAuthUserId: string;
-  amount: number; // signed
-  reason: string;
-  actorId: string; // the admin's auth user id -- never optional
+const RPC_FAILURE_MESSAGES: Record<string, RecordAdminCoinAdjustmentFailureCode> = {
+  ADMINISTRATOR_REQUIRED: "ADMINISTRATOR_REQUIRED",
+  ZERO_AMOUNT: "ZERO_AMOUNT",
+  UNSUPPORTED_TRANSACTION_TYPE: "UNSUPPORTED_TRANSACTION_TYPE",
+  REASON_REQUIRED: "REASON_REQUIRED",
+  INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE",
 };
 
-// Architecture-only for Stage 3 (locked requirement: "DO NOT build the
-// full Admin UI ... establishing the ledger architecture first"). No admin
-// route calls this yet.
-export async function recordAdminAdjustment(
-  params: RecordAdminAdjustmentParams,
-): Promise<{ transactionId: string }> {
-  if (params.amount === 0) {
-    throw new Error("recordAdminAdjustment requires a non-zero signed amount.");
+// AD ASTRA ADMINISTRATOR COIN MANAGEMENT -- STAGE 2. THE write path for
+// every manual Coin adjustment/correction -- always exactly one new,
+// immutable, signed ledger row; never an update or delete of any existing
+// row. Delegates the actual balance check and insert to the
+// admin_adjust_learner_coins() database function
+// (202609080002_admin_adjust_learner_coins_rpc.sql) rather than doing a
+// "read balance, then insert" in application code: two concurrent
+// deduction requests for the same learner could otherwise both read the
+// same pre-deduction balance and both pass a client-side/application-side
+// check, causing an overdraft neither request could detect alone. The RPC
+// serialises concurrent calls for the SAME learner via a transaction-
+// scoped Postgres advisory lock, so the balance it reads is always
+// current relative to any other adjustment already committed for that
+// learner. It also independently re-verifies administrator authorization
+// and derives actor identity from the caller's own session (auth.uid())
+// -- never a client-supplied actor id -- since it is SECURITY DEFINER and
+// therefore reachable by anything holding EXECUTE, not only this
+// function.
+export async function recordAdminCoinAdjustment(
+  params: RecordAdminCoinAdjustmentParams,
+): Promise<RecordAdminCoinAdjustmentResult> {
+  const supabase = createSupabaseAdminClient();
+
+  const metadata: Record<string, unknown> = {};
+  if (params.adminNote?.trim()) {
+    metadata.adminNote = params.adminNote.trim();
   }
 
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("coin_transactions")
-    .insert({
-      learner_id: params.learnerAuthUserId,
-      amount: params.amount,
-      transaction_type: "admin_adjustment",
-      actor_type: "admin",
-      actor_id: params.actorId,
-      reason: params.reason,
-    })
-    .select("id")
-    .single();
+  const { data, error } = await supabase.rpc("admin_adjust_learner_coins", {
+    p_learner_id: params.learnerAuthUserId,
+    p_amount: params.amount,
+    p_transaction_type: params.transactionType,
+    p_reason: params.reason,
+    p_reference_transaction_id: params.referenceTransactionId ?? null,
+    p_metadata: metadata,
+  });
 
-  if (error) throw error;
-  return { transactionId: data.id };
+  if (error) {
+    const code = RPC_FAILURE_MESSAGES[error.message] ?? "UNKNOWN_ERROR";
+    return { success: false, code, error: error.message };
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) {
+    return { success: false, code: "UNKNOWN_ERROR", error: "The adjustment did not return a result." };
+  }
+
+  return {
+    success: true,
+    transactionId: row.transaction_id,
+    newBalance: row.new_balance,
+  };
 }
