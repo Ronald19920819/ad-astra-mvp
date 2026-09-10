@@ -39,12 +39,68 @@ function blockToText(block: StructuredReadingBlock): string {
   return "";
 }
 
+// AD Astra readings often open with short structural/navigation labels --
+// "Lesson 3.1", "Topic: Market Segmentation", "Subtopic", "Introduction",
+// "What You Need to Know" -- that a teacher typed as their own paragraph
+// rather than a true heading/subheading block (or that arrived as a
+// paragraph because the reading was never run through "Structure with
+// Kingdom" at all). The narration rules
+// (lib/accessibility/narrationTranscriptPrompt.ts) explicitly license the
+// narrator to "transform into natural speech, or omit" exactly this kind
+// of technical/navigation label, so a faithful transcript may legitimately
+// never say these words verbatim. True heading/subheading BLOCK TYPES are
+// already excluded above via SUBSTANTIVE_BLOCK_TYPES; this closes the
+// remaining gap for label text that was authored (or classified) as a
+// plain paragraph instead.
+//
+// Only a LEADING run is stripped, and only up to
+// MAX_LEADING_LABEL_BLOCKS -- the moment a block doesn't look label-shaped
+// (or isn't a paragraph at all, e.g. a list/table/definition), stripping
+// stops permanently. This mirrors the same short/unpunctuated heuristic
+// already trusted for extractObviousHeadings() in
+// lib/readings/structuredReading.ts, applied narrowly so a genuinely
+// truncated or wrong-lesson transcript still has real content to fail
+// against -- see narrationIntegrity.test.ts for the boundary cases.
+const MAX_LEADING_LABEL_BLOCKS = 6;
+const LABEL_MAX_WORDS = 12;
+
+function looksLikeStructuralLabel(text: string): boolean {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (!trimmed) return false;
+  // Real sentences end with terminal punctuation; a navigation label
+  // never does ("Lesson 3.1", "Topic: Market Segmentation").
+  if (/[.!?;:]$/.test(trimmed)) return false;
+
+  const wordCount = trimmed.split(" ").length;
+  return wordCount > 0 && wordCount <= LABEL_MAX_WORDS;
+}
+
+function stripLeadingStructuralLabels(
+  blocks: StructuredReadingBlock[],
+): StructuredReadingBlock[] {
+  let skipCount = 0;
+
+  while (
+    skipCount < blocks.length &&
+    skipCount < MAX_LEADING_LABEL_BLOCKS &&
+    blocks[skipCount].type === "paragraph" &&
+    looksLikeStructuralLabel((blocks[skipCount] as { text: string }).text)
+  ) {
+    skipCount += 1;
+  }
+
+  return blocks.slice(skipCount);
+}
+
 export function buildNarrationValidationSourceText(
   sourceContentText: string | null,
 ): string {
   const blocks = readingContentToBlocks(sourceContentText);
-  return blocks
-    .filter((block) => SUBSTANTIVE_BLOCK_TYPES.has(block.type))
+  const substantiveBlocks = blocks.filter((block) =>
+    SUBSTANTIVE_BLOCK_TYPES.has(block.type),
+  );
+
+  return stripLeadingStructuralLabels(substantiveBlocks)
     .map(blockToText)
     .join("\n\n");
 }
