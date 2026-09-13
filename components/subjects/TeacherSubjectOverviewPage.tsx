@@ -186,37 +186,38 @@ export async function TeacherSubjectOverviewPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">{summary.learnerCount}</p>
-              <p className="text-xs font-medium text-black/60">Enrolled Learners</p>
-            </div>
-
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
-              <p className="text-2xl font-bold text-[#F97316]">{summary.pendingReviewCount}</p>
-              <p className="text-xs font-medium text-black/60">
-                Pending Reviews
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">{summary.publishedLessonCount}</p>
-              <p className="text-xs font-medium text-black/60">
-                Lessons Published
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#FFFDF9] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">{summary.publishedActivityCount}</p>
-              <p className="text-xs font-medium text-black/60">
-                Activities Published
-              </p>
-            </div>
-          </div>
-          {summaryError && (
-            <p className="mt-3 text-sm font-semibold text-red-600">
+          {summaryError ? (
+            <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
               {summaryError}
             </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-[#FFFDF9] p-4">
+                <p className="text-2xl font-bold text-[#102A43]">{summary.learnerCount}</p>
+                <p className="text-xs font-medium text-black/60">Enrolled Learners</p>
+              </div>
+
+              <div className="rounded-2xl bg-[#FFFDF9] p-4">
+                <p className="text-2xl font-bold text-[#F97316]">{summary.pendingReviewCount}</p>
+                <p className="text-xs font-medium text-black/60">
+                  Pending Reviews
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#FFFDF9] p-4">
+                <p className="text-2xl font-bold text-[#102A43]">{summary.publishedLessonCount}</p>
+                <p className="text-xs font-medium text-black/60">
+                  Lessons Published
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#FFFDF9] p-4">
+                <p className="text-2xl font-bold text-[#102A43]">{summary.publishedActivityCount}</p>
+                <p className="text-xs font-medium text-black/60">
+                  Activities Published
+                </p>
+              </div>
+            </div>
           )}
         </section>
 

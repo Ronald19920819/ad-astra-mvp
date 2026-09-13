@@ -12,6 +12,7 @@ import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 
 function isMissingColumnError(error: { code?: string } | null) {
   return error?.code === "42703" || error?.code === "PGRST204";
@@ -134,8 +135,23 @@ async function loadTeacherProfileForUser(
     profile = fallback.data as typeof profile;
     profileError = fallback.error;
   }
-  if (profileError) throw profileError;
-  if (!profile) return null;
+  if (profileError) {
+    await logAuthDiagnostic(
+      "Teacher auth resolution failed:",
+      "teacher-page.profile",
+      "profile_lookup_failed",
+      profileError,
+    );
+    throw profileError;
+  }
+  if (!profile) {
+    await logAuthDiagnostic(
+      "Teacher auth resolution failed:",
+      "teacher-page.profile",
+      "profile_not_found",
+    );
+    return null;
+  }
 
   let { data: teacherProfile, error: teacherProfileError } = await admin
     .from("teacher_profiles")
@@ -152,8 +168,23 @@ async function loadTeacherProfileForUser(
     teacherProfile = fallback.data as typeof teacherProfile;
     teacherProfileError = fallback.error;
   }
-  if (teacherProfileError) throw teacherProfileError;
-  if (!teacherProfile || teacherProfile.status !== "active") return null;
+  if (teacherProfileError) {
+    await logAuthDiagnostic(
+      "Teacher auth resolution failed:",
+      "teacher-page.teacher-profile",
+      "teacher_profile_lookup_failed",
+      teacherProfileError,
+    );
+    throw teacherProfileError;
+  }
+  if (!teacherProfile || teacherProfile.status !== "active") {
+    await logAuthDiagnostic(
+      "Teacher auth resolution failed:",
+      "teacher-page.teacher-profile",
+      !teacherProfile ? "teacher_profile_not_found" : "teacher_profile_inactive",
+    );
+    return null;
+  }
 
   let { data: assignments, error: assignmentError } = await admin
     .from("teacher_subjects")
@@ -171,7 +202,15 @@ async function loadTeacherProfileForUser(
     })) as typeof assignments;
     assignmentError = fallback.error;
   }
-  if (assignmentError) throw assignmentError;
+  if (assignmentError) {
+    await logAuthDiagnostic(
+      "Teacher auth resolution failed:",
+      "teacher-page.subject-assignment",
+      "subject_assignment_lookup_failed",
+      assignmentError,
+    );
+    throw assignmentError;
+  }
 
   const assignedSubjects = (assignments ?? []).flatMap((assignment) => {
     const subject = Array.isArray(assignment.subject)
@@ -245,6 +284,22 @@ export async function getAuthenticatedTeacherProfile() {
     data: { user },
     error,
   } = await requestClient.auth.getUser();
+
+  // A missing user with no error is the ordinary "not signed in" case and
+  // is not logged. An actual error here (as opposed to simply no
+  // session) is what previously surfaced to teachers as an unexplained
+  // "Unable to load the current subject summary." -- logging its safe
+  // fields (never the token/cookie itself) with a requestId + stage lets
+  // a future occurrence be correlated against the same request's
+  // proxy-stage log line and distinguished from a genuine query failure.
+  if (error) {
+    await logAuthDiagnostic(
+      "Teacher auth resolution failed:",
+      "teacher-page.auth",
+      "auth_get_user_failed",
+      error,
+    );
+  }
   if (error || !user) return null;
 
   return loadTeacherProfileForUser(user);

@@ -5,6 +5,7 @@ import {
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
 import { businessStudiesSubject } from "@/lib/subjects/subjectConfig";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 
 export const businessStudiesSubjectId =
   businessStudiesSubject.databaseId;
@@ -47,6 +48,18 @@ export async function authorizeTeacher(
     error: userError,
   } = await requestClient.auth.getUser();
 
+  // As in getAuthenticatedTeacherProfile: a bare missing user is the
+  // routine "not signed in" case, but an actual error is worth
+  // distinguishing in logs from a plain 401 so a genuine session-refresh
+  // failure doesn't look identical to an ordinary unauthenticated request.
+  if (userError) {
+    await logAuthDiagnostic(
+      "Teacher authorization failed:",
+      "teacher-page.auth",
+      "auth_get_user_failed",
+      userError,
+    );
+  }
   if (userError || !user) {
     return failure(401, "UNAUTHORIZED", "Teacher sign-in is required.");
   }
@@ -59,8 +72,21 @@ export async function authorizeTeacher(
     .eq("role", "teacher")
     .maybeSingle();
 
-  if (profileError) throw profileError;
+  if (profileError) {
+    await logAuthDiagnostic(
+      "Teacher authorization failed:",
+      "teacher-page.profile",
+      "profile_lookup_failed",
+      profileError,
+    );
+    throw profileError;
+  }
   if (!profile) {
+    await logAuthDiagnostic(
+      "Teacher authorization failed:",
+      "teacher-page.profile",
+      "profile_not_found",
+    );
     return failure(403, "FORBIDDEN", "Teacher access is required.");
   }
 
@@ -71,8 +97,21 @@ export async function authorizeTeacher(
     .eq("status", "active")
     .maybeSingle();
 
-  if (teacherProfileError) throw teacherProfileError;
+  if (teacherProfileError) {
+    await logAuthDiagnostic(
+      "Teacher authorization failed:",
+      "teacher-page.teacher-profile",
+      "teacher_profile_lookup_failed",
+      teacherProfileError,
+    );
+    throw teacherProfileError;
+  }
   if (!teacherProfile) {
+    await logAuthDiagnostic(
+      "Teacher authorization failed:",
+      "teacher-page.teacher-profile",
+      "active_teacher_profile_not_found",
+    );
     return failure(403, "FORBIDDEN", "Active teacher access is required.");
   }
 
@@ -96,8 +135,21 @@ export async function authorizeTeacher(
       assignmentError = fallback.error;
     }
 
-    if (assignmentError) throw assignmentError;
+    if (assignmentError) {
+      await logAuthDiagnostic(
+        "Teacher authorization failed:",
+        "teacher-page.subject-assignment",
+        "subject_assignment_lookup_failed",
+        assignmentError,
+      );
+      throw assignmentError;
+    }
     if (!assignment) {
+      await logAuthDiagnostic(
+        "Teacher authorization failed:",
+        "teacher-page.subject-assignment",
+        "subject_not_assigned",
+      );
       return failure(
         403,
         "FORBIDDEN",

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSubjectConfigurationByDatabaseId } from "@/lib/subjects/subjectConfig";
+import { REQUEST_ID_HEADER } from "@/lib/observability/requestId";
 
 const teacherRoutePrefixes = ["/teacher"] as const;
 const administratorRoutePrefixes = ["/administrator"] as const;
@@ -79,20 +80,58 @@ function copyResponseCookies(source: NextResponse, target: NextResponse) {
   return target;
 }
 
-type TeacherAuthDiagnostics = {
+// stage identifies exactly which step of proxy's own auth/profile/role
+// chain produced this outcome (see the ordered list of stage values used
+// throughout proxy() below: proxy.auth, proxy.config, proxy.profile,
+// proxy.teacher-profile, proxy.teacher-access,
+// proxy.administrator-profile, proxy.administrator-access,
+// proxy.learner-profile, proxy.learner-access). requestId correlates
+// this line with the same request's downstream page-level auth log (if
+// any) in teacherAuth.ts/teacherProfile.ts/learnerProfile.ts. Neither
+// value is ever used for an authorization decision -- both are
+// diagnostics only.
+type ProxyAuthDiagnostics = {
+  stage: string;
+  reason: string;
   hasSessionUser: boolean;
   profileFound: boolean;
-  teacherProfileFound: boolean;
-  reason: string;
+  roleProfileFound: boolean;
 };
 
-function logTeacherAuth(
+// "access_allowed" and "no_authenticated_session" are the routine,
+// high-volume outcomes of every normal request (a successful visit, or a
+// plain logged-out visitor) -- logging those unconditionally would be
+// exactly the noisy production logging this must avoid. Every other
+// reason represents a genuine failure (a DB lookup error, a role
+// mismatch, a missing profile for an authenticated session, a missing
+// subject enrolment) that was previously only ever logged in
+// development (or, for learner routes, never logged at all), meaning
+// production could not distinguish *why* a request was rejected. Those
+// are now always logged, with safe fields only -- requestId, pathname,
+// stage/reason, and boolean found-flags, never a token, cookie, email,
+// name, or user ID.
+const ROUTINE_PROXY_AUTH_REASONS = new Set([
+  "no_authenticated_session",
+  "access_allowed",
+]);
+
+function logProxyAuthEvent(
+  requestId: string,
   pathname: string,
-  diagnostics: TeacherAuthDiagnostics,
+  diagnostics: ProxyAuthDiagnostics,
 ) {
-  if (process.env.NODE_ENV === "development") {
-    console.info("[teacher-auth]", { pathname, ...diagnostics });
+  if (ROUTINE_PROXY_AUTH_REASONS.has(diagnostics.reason)) {
+    if (process.env.NODE_ENV === "development") {
+      console.info("[proxy-auth]", { requestId, pathname, ...diagnostics });
+    }
+    return;
   }
+
+  console.error("[proxy-auth] Authorization check failed:", {
+    requestId,
+    pathname,
+    ...diagnostics,
+  });
 }
 
 function isGenuinelyUnauthenticated(
@@ -128,6 +167,18 @@ export async function proxy(request: NextRequest) {
       ),
   );
   const selectedLearnerSubjectId = request.nextUrl.searchParams.get("subject");
+
+  // DIAGNOSTICS ONLY -- never used for any authentication/authorization
+  // decision. A short per-request correlation ID lets a production log
+  // line from this proxy be matched against the same request's
+  // downstream page-level auth log line (teacherAuth.ts/
+  // teacherProfile.ts/learnerProfile.ts), without logging any
+  // session/cookie/token/user-identifying data. Any client-supplied
+  // value of this header is always overwritten here -- it is never
+  // trusted from the incoming request.
+  const requestId = crypto.randomUUID().slice(0, 8);
+  request.headers.set(REQUEST_ID_HEADER, requestId);
+
   let response = NextResponse.next({ request });
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -153,6 +204,20 @@ export async function proxy(request: NextRequest) {
     error: userError,
   } = await supabase.auth.getUser();
 
+  // API routes (Route Handlers) always return JSON and already perform
+  // their own authorization via authorizeTeacher()/authorizeAdministrator()
+  // or the equivalent learner checks, each backed by RLS -- none of that
+  // changes here. This proxy's only job for API traffic is to ensure the
+  // session cookie is refreshed and persisted BEFORE the route handler
+  // reads it, which the auth.getUser() call above already did. The
+  // role/profile redirect gating below is written for HTML page
+  // navigation (it redirects to /login, /home, /subjects, etc.) and must
+  // never run for an API call -- a fetch() expecting JSON must not
+  // receive a 3xx redirect or an HTML login page in its place.
+  if (pathname.startsWith("/api/")) {
+    return response;
+  }
+
   if (pathname === "/teacher/login") {
     return copyResponseCookies(
       response,
@@ -160,26 +225,27 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  const redirectToLogin = async (
-    reason: string,
-    signOut: boolean,
-    profileFound = false,
-    teacherProfileFound = false,
-  ) => {
-    if (isTeacherRoute || isAdministratorRoute) {
-      logTeacherAuth(pathname, {
-        hasSessionUser: Boolean(user),
-        profileFound,
-        teacherProfileFound,
-        reason,
-      });
-    }
+  const redirectToLogin = async (options: {
+    reason: string;
+    stage: string;
+    signOut: boolean;
+    profileFound?: boolean;
+    roleProfileFound?: boolean;
+  }) => {
+    logProxyAuthEvent(requestId, pathname, {
+      stage: options.stage,
+      reason: options.reason,
+      hasSessionUser: Boolean(user),
+      profileFound: options.profileFound ?? false,
+      roleProfileFound: options.roleProfileFound ?? false,
+    });
 
-    if (signOut) {
+    if (options.signOut) {
       const { error } = await supabase.auth.signOut();
       if (error && process.env.NODE_ENV === "development") {
-        console.error("[teacher-auth] Unable to clear rejected session.", {
-          reason,
+        console.error("[proxy-auth] Unable to clear rejected session.", {
+          requestId,
+          reason: options.reason,
           message: error.message,
         });
       }
@@ -191,19 +257,19 @@ export async function proxy(request: NextRequest) {
     );
   };
 
-  const verificationUnavailable = (
-    reason: string,
-    profileFound = false,
-    teacherProfileFound = false,
-  ) => {
-    if (isTeacherRoute || isAdministratorRoute) {
-      logTeacherAuth(pathname, {
-        hasSessionUser: Boolean(user),
-        profileFound,
-        teacherProfileFound,
-        reason,
-      });
-    }
+  const verificationUnavailable = (options: {
+    reason: string;
+    stage: string;
+    profileFound?: boolean;
+    roleProfileFound?: boolean;
+  }) => {
+    logProxyAuthEvent(requestId, pathname, {
+      stage: options.stage,
+      reason: options.reason,
+      hasSessionUser: Boolean(user),
+      profileFound: options.profileFound ?? false,
+      roleProfileFound: options.roleProfileFound ?? false,
+    });
 
     return copyResponseCookies(
       response,
@@ -220,6 +286,7 @@ export async function proxy(request: NextRequest) {
   ) => {
     if (process.env.NODE_ENV === "development") {
       console.info("[auth-route-mismatch]", {
+        requestId,
         pathname,
         authenticatedRole,
         destination,
@@ -239,14 +306,24 @@ export async function proxy(request: NextRequest) {
 
   if (!user) {
     if (isGenuinelyUnauthenticated(userError)) {
-      return redirectToLogin("no_authenticated_session", false);
+      return redirectToLogin({
+        reason: "no_authenticated_session",
+        stage: "proxy.auth",
+        signOut: false,
+      });
     }
 
-    return verificationUnavailable("session_verification_failed");
+    return verificationUnavailable({
+      reason: "session_verification_failed",
+      stage: "proxy.auth",
+    });
   }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return verificationUnavailable("server_authorization_not_configured");
+    return verificationUnavailable({
+      reason: "server_authorization_not_configured",
+      stage: "proxy.config",
+    });
   }
 
   const admin = createClient(
@@ -261,11 +338,19 @@ export async function proxy(request: NextRequest) {
     .maybeSingle();
 
   if (profileError) {
-    return verificationUnavailable("profile_lookup_failed");
+    return verificationUnavailable({
+      reason: "profile_lookup_failed",
+      stage: "proxy.profile",
+    });
   }
 
   if (!profile) {
-    return redirectToLogin("profile_not_found", true);
+    return redirectToLogin({
+      reason: "profile_not_found",
+      stage: "proxy.profile",
+      signOut: true,
+      profileFound: false,
+    });
   }
 
   if (isAdministratorRoute) {
@@ -274,7 +359,12 @@ export async function proxy(request: NextRequest) {
     }
 
     if (profile.role !== "teacher") {
-      return redirectToLogin("invalid_profile_role", true, true);
+      return redirectToLogin({
+        reason: "invalid_profile_role",
+        stage: "proxy.administrator-access",
+        signOut: true,
+        profileFound: true,
+      });
     }
 
     const { data: administratorProfile, error: administratorProfileError } =
@@ -286,18 +376,21 @@ export async function proxy(request: NextRequest) {
         .maybeSingle();
 
     if (administratorProfileError) {
-      return verificationUnavailable(
-        "administrator_profile_lookup_failed",
-        true,
-      );
+      return verificationUnavailable({
+        reason: "administrator_profile_lookup_failed",
+        stage: "proxy.administrator-profile",
+        profileFound: true,
+      });
     }
 
     if (!administratorProfile) {
-      return redirectToLogin(
-        "active_teacher_profile_not_found",
-        true,
-        true,
-      );
+      return redirectToLogin({
+        reason: "active_teacher_profile_not_found",
+        stage: "proxy.administrator-profile",
+        signOut: true,
+        profileFound: true,
+        roleProfileFound: false,
+      });
     }
 
     if (administratorProfile.is_administrator !== true) {
@@ -313,7 +406,12 @@ export async function proxy(request: NextRequest) {
     }
 
     if (profile.role !== "teacher") {
-      return redirectToLogin("invalid_profile_role", true, true);
+      return redirectToLogin({
+        reason: "invalid_profile_role",
+        stage: "proxy.teacher-access",
+        signOut: true,
+        profileFound: true,
+      });
     }
 
     const { data: teacherProfile, error: teacherProfileError } = await admin
@@ -324,22 +422,29 @@ export async function proxy(request: NextRequest) {
       .maybeSingle();
 
     if (teacherProfileError) {
-      return verificationUnavailable("teacher_profile_lookup_failed", true);
+      return verificationUnavailable({
+        reason: "teacher_profile_lookup_failed",
+        stage: "proxy.teacher-profile",
+        profileFound: true,
+      });
     }
 
     if (!teacherProfile) {
-      return redirectToLogin(
-        "active_teacher_profile_not_found",
-        true,
-        true,
-      );
+      return redirectToLogin({
+        reason: "active_teacher_profile_not_found",
+        stage: "proxy.teacher-profile",
+        signOut: true,
+        profileFound: true,
+        roleProfileFound: false,
+      });
     }
 
-    logTeacherAuth(pathname, {
+    logProxyAuthEvent(requestId, pathname, {
+      stage: "proxy.teacher-access",
+      reason: "access_allowed",
       hasSessionUser: true,
       profileFound: true,
-      teacherProfileFound: true,
-      reason: "access_allowed",
+      roleProfileFound: true,
     });
     return response;
   }
@@ -350,7 +455,12 @@ export async function proxy(request: NextRequest) {
     }
 
     if (profile.role !== "learner") {
-      return redirectToLogin("invalid_profile_role", true);
+      return redirectToLogin({
+        reason: "invalid_profile_role",
+        stage: "proxy.learner-access",
+        signOut: true,
+        profileFound: true,
+      });
     }
 
     const { data: learnerProfile, error: learnerProfileError } = await admin
@@ -360,7 +470,11 @@ export async function proxy(request: NextRequest) {
       .maybeSingle();
 
     if (learnerProfileError) {
-      return verificationUnavailable("learner_profile_lookup_failed", true);
+      return verificationUnavailable({
+        reason: "learner_profile_lookup_failed",
+        stage: "proxy.learner-profile",
+        profileFound: true,
+      });
     }
 
     if (!learnerProfile) {
@@ -369,7 +483,13 @@ export async function proxy(request: NextRequest) {
     }
 
     if (learnerProfile.status !== "active") {
-      return redirectToLogin("active_learner_profile_not_found", true);
+      return redirectToLogin({
+        reason: "active_learner_profile_not_found",
+        stage: "proxy.learner-profile",
+        signOut: true,
+        profileFound: true,
+        roleProfileFound: false,
+      });
     }
 
     if (
@@ -401,20 +521,27 @@ export async function proxy(request: NextRequest) {
         .maybeSingle();
 
       if (enrolmentError) {
-        return verificationUnavailable(
-          "learner_subject_access_lookup_failed",
-          true,
-        );
+        return verificationUnavailable({
+          reason: "learner_subject_access_lookup_failed",
+          stage: "proxy.learner-access",
+          profileFound: true,
+          roleProfileFound: true,
+        });
       }
 
       if (!enrolment) {
-        if (process.env.NODE_ENV === "development") {
-          console.info("[learner-subject-route-denied]", {
-            pathname,
-            subjectId: requiredSubjectId,
-            selectedSubjectId: selectedLearnerSubjectId,
-          });
-        }
+        // Deliberately no subject/learner ID logged here (diagnostics
+        // should prefer not to log IDs at all) -- stage + reason alone
+        // are enough to know a learner hit a subject they are not
+        // enrolled in, without identifying which learner or which
+        // subject in the log itself.
+        logProxyAuthEvent(requestId, pathname, {
+          stage: "proxy.learner-access",
+          reason: "learner_subject_not_enrolled",
+          hasSessionUser: true,
+          profileFound: true,
+          roleProfileFound: true,
+        });
         return redirectAuthenticatedLearner("/subjects");
       }
     }
@@ -428,6 +555,15 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Every API route needs its session refreshed before the Route
+    // Handler reads it (see the pathname.startsWith("/api/") early-return
+    // above) -- without this, API-driven teacher/learner features got no
+    // benefit from this proxy at all and relied solely on each request's
+    // own in-request refresh, which cannot always persist the refreshed
+    // cookie back to the browser. This is intentionally broad (all of
+    // /api) rather than an enumerated subset, so a newly added
+    // authenticated route can never be silently left uncovered.
+    "/api/:path*",
     "/administrator/:path*",
     "/onboarding/:path*",
     "/teacher/:path*",

@@ -12,6 +12,7 @@ import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
 } from "@/lib/supabase/server";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 
 function metadataString(user: User, keys: string[]) {
   for (const key of keys) {
@@ -48,8 +49,23 @@ async function loadLearnerProfileForUser(
     profileError = fallback.error;
   }
 
-  if (profileError) throw profileError;
-  if (!profile) return null;
+  if (profileError) {
+    await logAuthDiagnostic(
+      "Learner auth resolution failed:",
+      "learner-page.profile",
+      "profile_lookup_failed",
+      profileError,
+    );
+    throw profileError;
+  }
+  if (!profile) {
+    await logAuthDiagnostic(
+      "Learner auth resolution failed:",
+      "learner-page.profile",
+      "profile_not_found",
+    );
+    return null;
+  }
 
   let { data: learnerProfile, error: learnerProfileError } = await admin
     .from("learner_profiles")
@@ -67,8 +83,23 @@ async function loadLearnerProfileForUser(
     learnerProfileError = fallback.error;
   }
 
-  if (learnerProfileError) throw learnerProfileError;
-  if (!learnerProfile || learnerProfile.status !== "active") return null;
+  if (learnerProfileError) {
+    await logAuthDiagnostic(
+      "Learner auth resolution failed:",
+      "learner-page.learner-profile",
+      "learner_profile_lookup_failed",
+      learnerProfileError,
+    );
+    throw learnerProfileError;
+  }
+  if (!learnerProfile || learnerProfile.status !== "active") {
+    await logAuthDiagnostic(
+      "Learner auth resolution failed:",
+      "learner-page.learner-profile",
+      !learnerProfile ? "learner_profile_not_found" : "learner_profile_inactive",
+    );
+    return null;
+  }
 
   let { data: enrolments, error: enrolmentError } = await admin
     .from("learner_subjects")
@@ -89,7 +120,15 @@ async function loadLearnerProfileForUser(
     enrolmentError = fallback.error;
   }
 
-  if (enrolmentError) throw enrolmentError;
+  if (enrolmentError) {
+    await logAuthDiagnostic(
+      "Learner auth resolution failed:",
+      "learner-page.subject-enrolment",
+      "subject_enrolment_lookup_failed",
+      enrolmentError,
+    );
+    throw enrolmentError;
+  }
 
   const normalisedEnrolments = (enrolments ?? []).flatMap((enrolment) => {
     const subject = Array.isArray(enrolment.subject)
@@ -190,6 +229,19 @@ const getAuthenticatedLearnerProfileCached = cache(async () => {
     error,
   } = await requestClient.auth.getUser();
 
+  // As in getAuthenticatedTeacherProfile: a bare missing user is the
+  // routine "not signed in" case, but an actual error is worth logging
+  // (with a requestId + stage, so it correlates with the same request's
+  // proxy-stage log line) so a genuine session-refresh failure can be
+  // distinguished from an ordinary unauthenticated request.
+  if (error) {
+    await logAuthDiagnostic(
+      "Learner auth resolution failed:",
+      "learner-page.auth",
+      "auth_get_user_failed",
+      error,
+    );
+  }
   if (error || !user) return null;
   return loadLearnerProfileForUser(user);
 });

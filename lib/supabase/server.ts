@@ -30,6 +30,15 @@ export async function createSupabaseRequestClient() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
+          // proxy.ts (lib/supabase/proxySession.ts) already refreshes and
+          // persists the session cookie on every matched request before a
+          // Server Component or Route Handler ever runs, so by the time
+          // this reads cookieStore the session should normally already be
+          // current -- this setAll should rarely need to do real work.
+          // It is kept as a defensive fallback because Server Components
+          // (unlike Route Handlers) still cannot write response cookies
+          // at all, so a write attempted from one continues to throw here
+          // and must be swallowed rather than crashing the render.
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),
