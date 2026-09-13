@@ -48,3 +48,26 @@ test("this hub contains no Coin write/adjustment action of any kind -- Stage 1 i
 test("is not nested under any subject-specific navigation -- a platform-level route, not a per-subject one", () => {
   assert.doesNotMatch(SOURCE, /subjectKey|getSubjectConfiguration\(/);
 });
+
+// AD ASTRA ADMINISTRATOR NAVIGATION: deterministic back-navigation to the
+// canonical Teacher Profile route, above the existing eyebrow/title area.
+// A plain Link, never router.back()/history.back(), so the destination is
+// always known regardless of how the teacher arrived at this page.
+
+test("a 'Back to Teacher Profile' link points directly to the canonical /teacher/profile route, with prefetch disabled per the request-amplification-reduction policy", () => {
+  assert.match(
+    SOURCE,
+    /<Link\s*\n\s*href="\/teacher\/profile"\s*\n\s*prefetch=\{false\}\s*\n\s*className="mb-2 inline-block text-sm font-semibold text-\[#508DB1\]"\s*\n\s*>\s*\n\s*← Back to Teacher Profile/,
+  );
+});
+
+test("the back link is never router.back()/history.back() -- it is a deterministic destination", () => {
+  assert.doesNotMatch(SOURCE, /router\.back\(\)|history\.back\(\)|window\.history\.back\(\)/);
+});
+
+test("the back link is rendered above the existing 'Administrator' eyebrow, not replacing or relocating it", () => {
+  const backLinkIndex = SOURCE.indexOf('href="/teacher/profile"');
+  const eyebrowIndex = SOURCE.indexOf('text-xs font-bold uppercase tracking-[0.3em] text-[#508DB1]');
+  assert.ok(backLinkIndex > -1 && eyebrowIndex > -1 && backLinkIndex < eyebrowIndex);
+  assert.match(SOURCE, /Administrator\s*\n\s*<\/p>/);
+});

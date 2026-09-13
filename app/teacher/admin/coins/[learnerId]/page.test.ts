@@ -61,3 +61,24 @@ test("delegates all interactivity (Adjust Coins, transaction history, refresh) t
 test("this page performs no Coin write of any kind -- it only authorises and reads", () => {
   assert.doesNotMatch(SOURCE, /\.insert\(|\.update\(|\.delete\(/);
 });
+
+// AD ASTRA ADMINISTRATOR NAVIGATION: deterministic back-navigation to the
+// canonical Coin Management route, above the existing title area. A
+// plain Link, never router.back()/history.back().
+
+test("the 'Back to Coin Management' link points directly to the canonical /teacher/admin/coins route, with prefetch disabled per the request-amplification-reduction policy", () => {
+  assert.match(
+    SOURCE,
+    /<Link\s*\n\s*href="\/teacher\/admin\/coins"\s*\n\s*prefetch=\{false\}\s*\n\s*className="text-sm font-semibold text-\[#508DB1\]"\s*\n\s*>\s*\n\s*← Back to Coin Management/,
+  );
+});
+
+test("the back link is never router.back()/history.back() -- it is a deterministic destination", () => {
+  assert.doesNotMatch(SOURCE, /router\.back\(\)|history\.back\(\)|window\.history\.back\(\)/);
+});
+
+test("the back link is rendered above the learner's name title, not replacing it", () => {
+  const backLinkIndex = SOURCE.indexOf('href="/teacher/admin/coins"');
+  const titleIndex = SOURCE.indexOf("{history.learnerName}");
+  assert.ok(backLinkIndex > -1 && titleIndex > -1 && backLinkIndex < titleIndex);
+});

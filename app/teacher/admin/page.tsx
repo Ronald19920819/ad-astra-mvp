@@ -32,6 +32,13 @@ export default async function TeacherAdminHubPage() {
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-16">
       <div className="mx-auto max-w-4xl space-y-6">
         <div>
+          <Link
+            href="/teacher/profile"
+            prefetch={false}
+            className="mb-2 inline-block text-sm font-semibold text-[#508DB1]"
+          >
+            ← Back to Teacher Profile
+          </Link>
           <p className="text-xs font-bold uppercase tracking-[0.3em] text-[#508DB1]">
             Administrator
           </p>

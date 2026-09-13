@@ -51,7 +51,11 @@ export default async function TeacherAdminLearnerCoinHistoryPage({
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-16">
       <div className="mx-auto max-w-4xl space-y-6">
         <div>
-          <Link href="/teacher/admin/coins" className="text-sm font-semibold text-[#508DB1]">
+          <Link
+            href="/teacher/admin/coins"
+            prefetch={false}
+            className="text-sm font-semibold text-[#508DB1]"
+          >
             ← Back to Coin Management
           </Link>
           <h1 className={`${neueHaas.className} mt-2 text-2xl font-bold text-[#102A43]`}>

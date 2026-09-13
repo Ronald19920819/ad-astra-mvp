@@ -54,3 +54,24 @@ test("the learner table is delegated to its own dedicated component -- no inline
 test("this page contains no Coin write/adjustment action of any kind -- Stage 1 is read-only", () => {
   assert.doesNotMatch(SOURCE, /\.insert\(|\.update\(|\.delete\(|Add Coins|Subtract Coins/i);
 });
+
+// AD ASTRA ADMINISTRATOR NAVIGATION: deterministic back-navigation to the
+// canonical Administrator Hub route, above the existing title area. A
+// plain Link, never router.back()/history.back().
+
+test("the 'Back to Administrator Hub' link points directly to the canonical /teacher/admin route, with prefetch disabled per the request-amplification-reduction policy", () => {
+  assert.match(
+    SOURCE,
+    /<Link\s*\n\s*href="\/teacher\/admin"\s*\n\s*prefetch=\{false\}\s*\n\s*className="text-sm font-semibold text-\[#508DB1\]"\s*\n\s*>\s*\n\s*← Back to Administrator Hub/,
+  );
+});
+
+test("the back link is never router.back()/history.back() -- it is a deterministic destination", () => {
+  assert.doesNotMatch(SOURCE, /router\.back\(\)|history\.back\(\)|window\.history\.back\(\)/);
+});
+
+test("the back link is rendered above the 'Coin Management' title, not replacing it", () => {
+  const backLinkIndex = SOURCE.indexOf('href="/teacher/admin"');
+  const titleIndex = SOURCE.indexOf("Coin Management");
+  assert.ok(backLinkIndex > -1 && titleIndex > -1 && backLinkIndex < titleIndex);
+});
