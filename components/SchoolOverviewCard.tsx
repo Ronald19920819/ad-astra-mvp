@@ -17,6 +17,7 @@ export default function SchoolOverviewCard({
   return (
     <PendingNavigationLink
       href={href}
+      prefetch={false}
       className="mb-5 block"
       pendingChildren={
         <div className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">

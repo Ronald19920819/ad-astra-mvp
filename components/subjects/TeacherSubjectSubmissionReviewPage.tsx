@@ -55,6 +55,7 @@ export async function TeacherSubjectSubmissionReviewPage({
         <div className="mx-auto max-w-2xl rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
           <Link
             href={buildSubjectRoute(subject, "teacherReview")}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
           >
             <ArrowLeft size={16} /> Back to Activity Review
@@ -108,6 +109,7 @@ export async function TeacherSubjectSubmissionReviewPage({
         <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
           <Link
             href={buildSubjectRoute(subject, "teacherReview")}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
           >
             <ArrowLeft size={16} /> Back to Activity Review

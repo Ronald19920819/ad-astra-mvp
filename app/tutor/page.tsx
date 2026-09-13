@@ -86,7 +86,7 @@ export default function TutorLandingPage() {
           </div>
         </div>
 
-        <Link href="/tutor/chat">
+        <Link href="/tutor/chat" prefetch={false}>
           <div className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
             <div className="flex items-center gap-4">
               <div className="flex h-14 w-14 items-center justify-center rounded-[1.2rem] bg-[#EEF7FF]">
@@ -111,7 +111,7 @@ export default function TutorLandingPage() {
 
         <div className="space-y-4">
           {projects.map((project) => (
-            <Link key={project.title} href="/tutor/chat" className="block">
+            <Link key={project.title} href="/tutor/chat" prefetch={false} className="block">
               <div className="rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-[#EEF7FF]">
@@ -143,11 +143,11 @@ export default function TutorLandingPage() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm text-black">
-          <Link href="/home"><div className="py-4">Home</div></Link>
-          <Link href="/subjects"><div className="py-4">Subjects</div></Link>
-          <Link href="/chat"><div className="py-4">Chat</div></Link>
-          <Link href="/schedule"><div className="py-4">Schedule</div></Link>
-          <Link href="/profile"><div className="py-4">Profile</div></Link>
+          <Link href="/home" prefetch={false}><div className="py-4">Home</div></Link>
+          <Link href="/subjects" prefetch={false}><div className="py-4">Subjects</div></Link>
+          <Link href="/chat" prefetch={false}><div className="py-4">Chat</div></Link>
+          <Link href="/schedule" prefetch={false}><div className="py-4">Schedule</div></Link>
+          <Link href="/profile" prefetch={false}><div className="py-4">Profile</div></Link>
         </div>
       </nav>
     </main>

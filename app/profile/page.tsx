@@ -231,6 +231,7 @@ export default function ProfilePage() {
 
           <Link
             href="/your-work"
+            prefetch={false}
             className="mt-4 block w-full rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
           >
             View My Work
@@ -353,6 +354,7 @@ export default function ProfilePage() {
 
               <Link
                 href="/xp-coins"
+                prefetch={false}
                 className="mt-4 block w-full rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
               >
                 View XP &amp; Coins
@@ -386,6 +388,7 @@ export default function ProfilePage() {
 
             <Link
               href="/onboarding/subjects"
+              prefetch={false}
               className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black"
             >
               <BookOpen size={18} className="text-[#508DB1]" />
@@ -394,6 +397,7 @@ export default function ProfilePage() {
 
             <Link
               href="/onboarding/subjects"
+              prefetch={false}
               className="flex w-full items-center gap-3 rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3 text-left text-sm font-semibold text-black"
             >
               <BookX size={18} className="text-[#508DB1]" />
@@ -441,23 +445,23 @@ export default function ProfilePage() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
-          <Link href="/home">
+          <Link href="/home" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
 
-          <Link href="/subjects">
+          <Link href="/subjects" prefetch={false}>
             <div className="py-4">Subjects</div>
           </Link>
 
-          <Link href="/chat">
+          <Link href="/chat" prefetch={false}>
             <div className="py-4">Chat</div>
           </Link>
 
-          <Link href="/schedule">
+          <Link href="/schedule" prefetch={false}>
             <div className="py-4">Schedule</div>
           </Link>
 
-          <Link href="/profile">
+          <Link href="/profile" prefetch={false}>
             <div className="py-4 text-[#508DB1]">Profile</div>
           </Link>
         </div>

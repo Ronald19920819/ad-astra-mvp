@@ -23,7 +23,7 @@ export default function TutorSuggestion() {
   Kingdom can help you think through your activities and answer subject related questions.
 </p>
 
-        <Link href="/tutor">
+        <Link href="/tutor" prefetch={false}>
           <div className="mt-4 rounded-[1rem] shadow-sm bg-[#F5F0E5] py-3 text-center text-sm font-bold text-black">
             Open Tutor
           </div>

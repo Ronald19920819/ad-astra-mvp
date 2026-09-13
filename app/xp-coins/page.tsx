@@ -61,7 +61,7 @@ export default async function XpCoinsPage() {
       <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`}>
         <div className="mx-auto max-w-md rounded-[2rem] border border-blue-100 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-semibold text-slate-600">{context.message}</p>
-          <Link href="/home" className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
+          <Link href="/home" prefetch={false} className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
             Back to Home
           </Link>
         </div>
@@ -88,7 +88,7 @@ export default async function XpCoinsPage() {
           <p className="text-sm font-semibold text-slate-600">
             Unable to load your XP & Coins right now. Please try again shortly.
           </p>
-          <Link href="/home" className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
+          <Link href="/home" prefetch={false} className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
             Back to Home
           </Link>
         </div>
@@ -398,11 +398,11 @@ export default async function XpCoinsPage() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black lg:max-w-6xl">
-          <Link href="/home"><div className="py-4">Home</div></Link>
-          <Link href="/subjects"><div className="py-4">Subjects</div></Link>
-          <Link href="/chat"><div className="py-4">Chat</div></Link>
-          <Link href="/schedule"><div className="py-4">Schedule</div></Link>
-          <Link href="/profile"><div className="py-4 text-[#508DB1]">Profile</div></Link>
+          <Link href="/home" prefetch={false}><div className="py-4">Home</div></Link>
+          <Link href="/subjects" prefetch={false}><div className="py-4">Subjects</div></Link>
+          <Link href="/chat" prefetch={false}><div className="py-4">Chat</div></Link>
+          <Link href="/schedule" prefetch={false}><div className="py-4">Schedule</div></Link>
+          <Link href="/profile" prefetch={false}><div className="py-4 text-[#508DB1]">Profile</div></Link>
         </div>
       </nav>
     </main>

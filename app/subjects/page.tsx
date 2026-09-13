@@ -63,6 +63,7 @@ export default async function SubjectsPage() {
           <div className="relative z-10 flex h-full flex-col justify-center p-5 lg:p-7">
             <Link
               href="/home"
+              prefetch={false}
               className={`${neueHaas.className} mb-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-white`}
             >
               <ArrowLeft size={16} />
@@ -122,6 +123,7 @@ export default async function SubjectsPage() {
                 <PendingNavigationLink
                   key={subject.key}
                   href={buildSubjectRoute(subject, "learnerDashboard")}
+                  prefetch={false}
                   className="block h-full"
                   pendingChildren={
                     <div
@@ -241,19 +243,19 @@ export default async function SubjectsPage() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm font-semibold text-black lg:max-w-6xl">
-          <Link href="/home">
+          <Link href="/home" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
-          <Link href="/subjects">
+          <Link href="/subjects" prefetch={false}>
             <div className="py-4">Subjects</div>
           </Link>
-          <Link href="/chat">
+          <Link href="/chat" prefetch={false}>
             <div className="py-4">Chat</div>
           </Link>
-          <Link href="/schedule">
+          <Link href="/schedule" prefetch={false}>
             <div className="py-4">Schedule</div>
           </Link>
-          <Link href="/profile">
+          <Link href="/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

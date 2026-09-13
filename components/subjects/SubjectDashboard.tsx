@@ -171,6 +171,7 @@ export async function SubjectDashboard({
           <div className="relative z-10 flex h-full flex-col justify-center p-5 lg:p-8">
             <Link
               href="/subjects"
+              prefetch={false}
               className="mb-4 inline-flex items-center gap-2 self-start text-sm font-semibold text-white"
             >
               <ArrowLeft size={16} />
@@ -325,6 +326,7 @@ export async function SubjectDashboard({
 
               <PendingNavigationLink
                 href={buildSubjectRoute(subject, "learnerLiveClassroom")}
+                prefetch={false}
                 pendingChildren={
                   <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -387,6 +389,7 @@ export async function SubjectDashboard({
 
               <PendingNavigationLink
                 href={buildSubjectRoute(subject, "learnerClassroom")}
+                prefetch={false}
                 pendingChildren={
                   <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -447,6 +450,7 @@ export async function SubjectDashboard({
 
               <PendingNavigationLink
                 href={buildSubjectRoute(subject, "learnerActivities")}
+                prefetch={false}
                 pendingChildren={
                   <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -474,7 +478,7 @@ export async function SubjectDashboard({
             </section>
           </div>
 
-          <Link href="/your-work" className="block">
+          <Link href="/your-work" prefetch={false} className="block">
             <section className="mt-5 rounded-[1.5rem] border border-blue-100 bg-white/90 p-4 shadow-sm lg:mt-0">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
@@ -503,23 +507,23 @@ export async function SubjectDashboard({
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black lg:max-w-6xl">
-          <Link href="/home">
+          <Link href="/home" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
 
-          <Link href="/subjects">
+          <Link href="/subjects" prefetch={false}>
             <div className="py-4 text-[#508DB1]">Subjects</div>
           </Link>
 
-          <Link href="/chat">
+          <Link href="/chat" prefetch={false}>
             <div className="py-4">Chat</div>
           </Link>
 
-          <Link href="/schedule">
+          <Link href="/schedule" prefetch={false}>
             <div className="py-4">Schedule</div>
           </Link>
 
-          <Link href="/profile">
+          <Link href="/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

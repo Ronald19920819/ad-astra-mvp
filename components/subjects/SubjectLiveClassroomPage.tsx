@@ -70,6 +70,7 @@ export async function SubjectLiveClassroomPage({
         <div className="mx-auto w-full max-w-md rounded-[2rem] border border-red-100 bg-white p-5 shadow-sm md:max-w-4xl">
           <Link
             href="/subjects"
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-slate-700"
           >
             <ArrowLeft size={16} /> Back to Subjects
@@ -91,6 +92,7 @@ export async function SubjectLiveClassroomPage({
         <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:mb-8">
           <Link
             href={buildSubjectRoute(subject, "learnerDashboard")}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
           >
             <ArrowLeft size={16} /> Back to Subject

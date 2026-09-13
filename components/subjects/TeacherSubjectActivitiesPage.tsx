@@ -467,6 +467,7 @@ const askKingdom = async () => {
             <div className="mt-auto">
               <Link
                 href={buildSubjectRoute(subject, "teacherOverview")}
+                prefetch={false}
                 className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-semibold text-white backdrop-blur"
               >
                 <ArrowLeft size={16} />
@@ -739,23 +740,23 @@ disabled={isAskingKingdom}
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black">
-          <Link href="/teacher">
+          <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
 
-          <Link href="/teacher/subjects">
+          <Link href="/teacher/subjects" prefetch={false}>
             <div className="py-4 text-[#508DB1]">Subjects</div>
           </Link>
 
-          <Link href="/teacher/messages">
+          <Link href="/teacher/messages" prefetch={false}>
             <div className="py-4">Messages</div>
           </Link>
 
-          <Link href="/teacher/reports">
+          <Link href="/teacher/reports" prefetch={false}>
             <div className="py-4">Reports</div>
           </Link>
 
-          <Link href="/teacher/profile">
+          <Link href="/teacher/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

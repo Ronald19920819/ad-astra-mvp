@@ -951,6 +951,7 @@ export function SubjectActivityPage({
         <div className="mx-auto w-full max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:max-w-3xl">
           <Link
             href={buildSubjectRoute(subject, "learnerActivities")}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
           >
             <ArrowLeft size={16} /> Back to Activities
@@ -1043,6 +1044,7 @@ export function SubjectActivityPage({
         <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:flex lg:h-full lg:flex-col lg:p-6">
           <Link
             href={activitiesHref}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]"
           >
             <ArrowLeft size={16} /> Back to Activities
@@ -1324,6 +1326,7 @@ export function SubjectActivityPage({
         {submission && (
           <Link
             href={activitiesHref}
+            prefetch={false}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--subject-border)] bg-white py-4 font-bold text-[var(--subject-primary)] shadow-sm lg:mx-auto lg:max-w-4xl"
           >
             <ArrowLeft size={18} />

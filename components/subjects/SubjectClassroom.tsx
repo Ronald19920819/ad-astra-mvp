@@ -451,7 +451,7 @@ export function SubjectClassroom({
       <div className="mx-auto w-full min-w-0 max-w-md lg:max-w-6xl">
         <div className="mb-6 rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg lg:mb-8 lg:p-6">
           <div className="flex items-center gap-4">
-            <Link href={buildSubjectRoute(subject, "learnerDashboard")}>
+            <Link href={buildSubjectRoute(subject, "learnerDashboard")} prefetch={false}>
               <ArrowLeft size={22} />
             </Link>
             <div

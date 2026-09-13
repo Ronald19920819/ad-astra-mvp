@@ -55,6 +55,7 @@ function ErrorShell({ message }: { message: string }) {
       <div className="mx-auto w-full max-w-md rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:max-w-3xl">
         <Link
           href="/your-work"
+          prefetch={false}
           className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-orange-500"
         >
           <ArrowLeft size={17} /> Back to Your Work
@@ -231,6 +232,7 @@ export default async function SubjectYourWorkPage({
         <section className="rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg lg:p-6">
           <Link
             href={buildSubjectRoute(subject, "learnerDashboard")}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-100"
           >
             <ArrowLeft size={17} /> Back to {subject.displayName}

@@ -39,7 +39,7 @@ export default function TeacherChatPage() {
         
         <div className="sticky top-0 z-50 border-b border-blue-100 bg-[#102A43] px-4 py-3 shadow-sm">
   <div className="mx-auto flex max-w-3xl items-center gap-3">
-    <Link href="/chat">
+    <Link href="/chat" prefetch={false}>
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
         <ArrowLeft
           size={24}

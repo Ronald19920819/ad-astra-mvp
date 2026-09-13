@@ -129,6 +129,7 @@ export default async function TeacherSubjectsPage() {
               <Link
                 key={subject.subject.key}
                 href={buildSubjectRoute(subject.subject, "teacherOverview")}
+                prefetch={false}
                 className="block"
               >
                 <div className="flex items-center gap-4 rounded-[2rem] border border-blue-100 bg-white px-4 py-4 shadow-sm">
@@ -195,25 +196,25 @@ export default async function TeacherSubjectsPage() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
-          <Link href="/teacher">
+          <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
 
-          <Link href="/teacher/subjects">
+          <Link href="/teacher/subjects" prefetch={false}>
             <div className="py-4 text-[#508DB1]">
               Subjects
             </div>
           </Link>
 
-          <Link href="/teacher/messages">
+          <Link href="/teacher/messages" prefetch={false}>
             <div className="py-4">Messages</div>
           </Link>
 
-          <Link href="/teacher/reports">
+          <Link href="/teacher/reports" prefetch={false}>
             <div className="py-4">Reports</div>
           </Link>
 
-          <Link href="/teacher/profile">
+          <Link href="/teacher/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

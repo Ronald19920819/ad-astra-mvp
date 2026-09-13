@@ -385,7 +385,7 @@ export function SubjectLessonPage({
     return (
       <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 lg:px-8`} style={themeStyle}>
         <div className="mx-auto w-full max-w-md rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:max-w-3xl">
-          <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
+          <Link href={buildSubjectRoute(subject, "learnerClassroom")} prefetch={false} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
           </Link>
           <h1 className="text-2xl font-bold text-slate-900">
@@ -454,7 +454,7 @@ export function SubjectLessonPage({
     <main className={`${neueHaas.className} min-h-screen w-full overflow-x-clip bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-12 lg:px-8`} style={themeStyle}>
       <div className="mx-auto w-full min-w-0 max-w-md space-y-5 lg:max-w-7xl lg:space-y-8 xl:max-w-[1400px]">
         <section className="w-full min-w-0 rounded-[2rem] border border-[var(--subject-border)] bg-white p-5 shadow-sm lg:p-6">
-          <Link href={buildSubjectRoute(subject, "learnerClassroom")} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
+          <Link href={buildSubjectRoute(subject, "learnerClassroom")} prefetch={false} className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-[var(--subject-primary)]">
             <ArrowLeft size={16} /> Back to Classroom
           </Link>
           <h1 className="break-words text-3xl font-bold text-slate-900">Lesson {lesson.lesson_number}</h1>

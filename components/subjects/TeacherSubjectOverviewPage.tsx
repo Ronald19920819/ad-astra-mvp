@@ -140,6 +140,7 @@ export async function TeacherSubjectOverviewPage({
 
             <Link
               href="/teacher/subjects"
+              prefetch={false}
               className="mb-4 flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-2 text-xs font-semibold text-white backdrop-blur"
             >
               <ArrowLeft size={14} />
@@ -243,7 +244,7 @@ export async function TeacherSubjectOverviewPage({
 
           
 
-          <Link href={buildSubjectRoute(subject, "teacherClassroom")}>
+          <Link href={buildSubjectRoute(subject, "teacherClassroom")} prefetch={false}>
             <div className="mt-3 flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
               <div className="flex items-center gap-3">
                 <BookOpen size={18} className="text-[#F97316]" />
@@ -278,7 +279,7 @@ export async function TeacherSubjectOverviewPage({
           </p>
 
 
-          <Link href={buildSubjectRoute(subject, "teacherActivities")}>
+          <Link href={buildSubjectRoute(subject, "teacherActivities")} prefetch={false}>
             <div className="flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
               <div className="flex items-center gap-3">
                 <SquarePen size={18} className="text-[#F97316]" />
@@ -308,7 +309,7 @@ export async function TeacherSubjectOverviewPage({
             </div>
           </div>
 
-          <Link href={buildSubjectRoute(subject, "teacherLiveClassroom")}>
+          <Link href={buildSubjectRoute(subject, "teacherLiveClassroom")} prefetch={false}>
             <div className="rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Enter Live Classroom
             </div>
@@ -333,7 +334,7 @@ export async function TeacherSubjectOverviewPage({
 
           
 
-          <Link href={buildSubjectRoute(subject, "teacherTracker")}>
+          <Link href={buildSubjectRoute(subject, "teacherTracker")} prefetch={false}>
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Learning Tracker
             </div>
@@ -358,7 +359,7 @@ export async function TeacherSubjectOverviewPage({
 
           
 
-          <Link href={buildSubjectRoute(subject, "teacherReview")}>
+          <Link href={buildSubjectRoute(subject, "teacherReview")} prefetch={false}>
             <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
               Open Activity Review
             </div>
@@ -375,7 +376,7 @@ export async function TeacherSubjectOverviewPage({
           initialAnnouncement={initialAnnouncement}
         />
 
-        <Link href={buildSubjectRoute(subject, "teacherLearners")}>
+        <Link href={buildSubjectRoute(subject, "teacherLearners")} prefetch={false}>
           <section className="rounded-[1.5rem] border border-orange-100 bg-white/90 p-4 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -401,23 +402,23 @@ export async function TeacherSubjectOverviewPage({
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
-          <Link href="/teacher">
+          <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
 
-          <Link href="/teacher/subjects">
+          <Link href="/teacher/subjects" prefetch={false}>
             <div className="py-4 text-[#508DB1]">Subjects</div>
           </Link>
 
-          <Link href="/teacher/messages">
+          <Link href="/teacher/messages" prefetch={false}>
             <div className="py-4">Messages</div>
           </Link>
 
-          <Link href="/teacher/reports">
+          <Link href="/teacher/reports" prefetch={false}>
             <div className="py-4">Reports</div>
           </Link>
 
-          <Link href="/teacher/profile">
+          <Link href="/teacher/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

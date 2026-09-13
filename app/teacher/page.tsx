@@ -192,6 +192,7 @@ export default async function TeacherHomePage() {
                   <Link
                     key={`${action.category}:${action.subjectId}`}
                     href={action.href}
+                    prefetch={false}
                     className="block rounded-2xl border p-4 transition hover:shadow-sm"
                     style={{
                       borderColor: colourTheme?.border ?? "#E2E8F0",
@@ -260,23 +261,23 @@ export default async function TeacherHomePage() {
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
-          <Link href="/teacher">
+          <Link href="/teacher" prefetch={false}>
             <div className="py-4 text-[#508DB1]">Home</div>
           </Link>
 
-          <Link href="/teacher/subjects">
+          <Link href="/teacher/subjects" prefetch={false}>
             <div className="py-4">Subjects</div>
           </Link>
 
-          <Link href="/teacher/messages">
+          <Link href="/teacher/messages" prefetch={false}>
             <div className="py-4">Messages</div>
           </Link>
 
-          <Link href="/teacher/reports">
+          <Link href="/teacher/reports" prefetch={false}>
             <div className="py-4">Reports</div>
           </Link>
 
-          <Link href="/teacher/profile">
+          <Link href="/teacher/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

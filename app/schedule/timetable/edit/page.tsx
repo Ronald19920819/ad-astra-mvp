@@ -26,7 +26,7 @@ export default function TimetablePage() {
     <main className="min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] pb-32">
       <div className="sticky top-0 z-50 bg-[#102A43] px-4 py-3 shadow-sm">
         <div className="mx-auto flex max-w-5xl items-center gap-3">
-          <Link href="/schedule">
+          <Link href="/schedule" prefetch={false}>
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
               <ArrowLeft size={24} color="white" strokeWidth={2.2} />
             </div>
@@ -105,11 +105,11 @@ export default function TimetablePage() {
 </div>
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm font-semibold text-black">
-          <Link href="/home"><div className="py-4">Home</div></Link>
-          <Link href="/subjects"><div className="py-4">Subjects</div></Link>
-          <Link href="/chat"><div className="py-4">Chat</div></Link>
-          <Link href="/schedule"><div className="py-4">Schedule</div></Link>
-          <Link href="/profile"><div className="py-4">Profile</div></Link>
+          <Link href="/home" prefetch={false}><div className="py-4">Home</div></Link>
+          <Link href="/subjects" prefetch={false}><div className="py-4">Subjects</div></Link>
+          <Link href="/chat" prefetch={false}><div className="py-4">Chat</div></Link>
+          <Link href="/schedule" prefetch={false}><div className="py-4">Schedule</div></Link>
+          <Link href="/profile" prefetch={false}><div className="py-4">Profile</div></Link>
         </div>
       </nav>
     </main>

@@ -97,6 +97,7 @@ function SubjectSelector({
           <Link
             key={subject.key}
             href={`/your-work/subject?subject=${encodeURIComponent(subject.databaseId)}`}
+            prefetch={false}
             className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50"
           >
             <div
@@ -234,6 +235,7 @@ export default async function YourWorkPage() {
         <section className="rounded-[2rem] bg-[#102A43] p-5 text-white shadow-lg lg:p-6">
           <Link
             href="/home"
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold text-blue-100"
           >
             <ArrowLeft size={17} /> Back to Home

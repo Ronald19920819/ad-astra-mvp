@@ -100,23 +100,23 @@ export default function ActivitiesPage() {
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t border-blue-100">
         <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm font-semibold text-black">
-          <Link href="/home">
+          <Link href="/home" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
 
-          <Link href="/subjects">
+          <Link href="/subjects" prefetch={false}>
             <div className="py-4">Subjects</div>
           </Link>
 
-          <Link href="/chat">
+          <Link href="/chat" prefetch={false}>
   <div className="py-4">Chat</div>
 </Link>
 
-          <Link href="/schedule">
+          <Link href="/schedule" prefetch={false}>
             <div className="py-4">Schedule</div>
           </Link>
 
-          <Link href="/profile">
+          <Link href="/profile" prefetch={false}>
             <div className="py-4">Profile</div>
           </Link>
         </div>

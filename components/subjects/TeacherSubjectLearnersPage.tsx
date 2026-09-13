@@ -105,6 +105,7 @@ export async function TeacherSubjectLearnersPage({
         >
           <Link
             href={buildSubjectRoute(subject, "teacherOverview")}
+            prefetch={false}
             className="mb-4 inline-flex items-center gap-2 text-sm font-semibold"
             style={{ color: subject.colourTheme.primary }}
           >

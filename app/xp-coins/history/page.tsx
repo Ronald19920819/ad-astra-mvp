@@ -16,7 +16,7 @@ export default async function CoinHistoryPage() {
       <main className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6`}>
         <div className="mx-auto max-w-md rounded-[2rem] border border-blue-100 bg-white p-6 text-center shadow-sm">
           <p className="text-sm font-semibold text-slate-600">{context.message}</p>
-          <Link href="/home" className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
+          <Link href="/home" prefetch={false} className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
             Back to Home
           </Link>
         </div>
@@ -38,7 +38,7 @@ export default async function CoinHistoryPage() {
           <p className="text-sm font-semibold text-slate-600">
             Unable to load your Coin history right now. Please try again shortly.
           </p>
-          <Link href="/xp-coins" className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
+          <Link href="/xp-coins" prefetch={false} className="mt-4 inline-block text-sm font-semibold text-[#508DB1]">
             Back to XP & Coins
           </Link>
         </div>
@@ -53,6 +53,7 @@ export default async function CoinHistoryPage() {
       <div className="mx-auto flex w-full max-w-md flex-col gap-6 lg:max-w-3xl">
         <Link
           href="/xp-coins"
+          prefetch={false}
           className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[#508DB1]"
         >
           <ArrowLeft size={17} /> Back to XP & Coins

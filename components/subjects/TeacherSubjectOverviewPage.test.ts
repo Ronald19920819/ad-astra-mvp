@@ -38,3 +38,63 @@ test("regression: a missing teacher profile (not signed in / session resolution 
   const matches = SOURCE.match(/summaryError = "Unable to load the current subject summary\.";/g) ?? [];
   assert.equal(matches.length, 2, "expected the error message in both the catch branch and the missing-profile branch");
 });
+
+// AD ASTRA -- REQUEST-AMPLIFICATION REDUCTION: automatic Next.js prefetch
+// on protected subject-feature links and the bottom navigation triggers a
+// full proxy.ts auth/profile/role chain in the background before the
+// teacher ever clicks. Every such link on this page now explicitly opts
+// out of prefetch. Navigation itself (href, click behaviour) is
+// unchanged -- only the prefetch prop was added.
+
+test("subject feature cards (Classroom, Activity Centre, Live Classroom, Tracker, Activity Review, Learners) all disable prefetch, with their real hrefs unchanged", () => {
+  const routeKeys = [
+    "teacherClassroom",
+    "teacherActivities",
+    "teacherLiveClassroom",
+    "teacherTracker",
+    "teacherReview",
+    "teacherLearners",
+  ];
+  for (const routeKey of routeKeys) {
+    const pattern = new RegExp(
+      `<Link href=\\{buildSubjectRoute\\(subject, "${routeKey}"\\)\\} prefetch=\\{false\\}>`,
+    );
+    assert.match(SOURCE, pattern, `expected prefetch={false} on the ${routeKey} link`);
+  }
+});
+
+test("the 'Back to Subjects' hero link and the bottom navigation (Home, Subjects, Messages, Reports, Profile) all disable prefetch", () => {
+  assert.match(
+    SOURCE,
+    /href="\/teacher\/subjects"\s*\n\s*prefetch=\{false\}\s*\n\s*className="mb-4 flex w-fit items-center gap-2 rounded-full bg-white\/15/,
+  );
+  for (const href of [
+    "/teacher",
+    "/teacher/subjects",
+    "/teacher/messages",
+    "/teacher/reports",
+    "/teacher/profile",
+  ]) {
+    assert.match(
+      SOURCE,
+      new RegExp(`<Link href="${href.replace(/\//g, "\\/")}" prefetch=\\{false\\}>`),
+    );
+  }
+});
+
+test("regression: no href, route, or query-parameter string on this page changed -- only prefetch was added", () => {
+  assert.match(SOURCE, /buildSubjectRoute\(subject, "teacherClassroom"\)/);
+  assert.match(SOURCE, /buildSubjectRoute\(subject, "teacherActivities"\)/);
+  assert.match(SOURCE, /buildSubjectRoute\(subject, "teacherLiveClassroom"\)/);
+  assert.match(SOURCE, /buildSubjectRoute\(subject, "teacherTracker"\)/);
+  assert.match(SOURCE, /buildSubjectRoute\(subject, "teacherReview"\)/);
+  assert.match(SOURCE, /buildSubjectRoute\(subject, "teacherLearners"\)/);
+});
+
+test("regression: this prefetch change does not touch authentication -- getAuthenticatedTeacherProfile and getTeacherSubjectSummaryForTeacher are still called exactly as before", () => {
+  assert.match(SOURCE, /const teacherProfile = await getAuthenticatedTeacherProfile\(\);/);
+  assert.match(
+    SOURCE,
+    /summary = await getTeacherSubjectSummaryForTeacher\(teacherProfile, subject\.databaseId\);/,
+  );
+});
