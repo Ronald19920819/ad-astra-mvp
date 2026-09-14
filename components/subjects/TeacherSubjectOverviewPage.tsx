@@ -18,6 +18,7 @@ import { getAuthenticatedTeacherProfile } from "@/lib/supabase/teacherProfile";
 import { TeacherSubjectAnnouncementCard } from "@/components/subjects/TeacherSubjectAnnouncementCard";
 import { TeacherSubjectEventsCard } from "@/components/subjects/TeacherSubjectEventsCard";
 import { logSupabaseError } from "@/lib/supabase/errorDetails";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 import {
   ArrowLeft,
   BarChart3,
@@ -57,10 +58,26 @@ export async function TeacherSubjectOverviewPage({
     try {
       summary = await getTeacherSubjectSummaryForTeacher(teacherProfile, subject.databaseId);
     } catch (error) {
-      console.error(`Unable to load ${subject.displayName} teacher summary:`, error);
+      await logAuthDiagnostic(
+        `Unable to load ${subject.displayName} teacher summary:`,
+        "teacher-page.subject-summary",
+        "summary_fetch_failed",
+        error,
+      );
       summaryError = "Unable to load the current subject summary.";
     }
   } else {
+    // teacherProfile is null here for either a genuine unauthenticated
+    // request or an upstream auth/profile-resolution failure --
+    // getAuthenticatedTeacherProfile() already distinguishes and logs
+    // that with its own stage/requestId; this line just records that the
+    // Subject Overview summary was hidden as a consequence, correlated to
+    // the same request.
+    await logAuthDiagnostic(
+      `Unable to load ${subject.displayName} teacher summary:`,
+      "teacher-page.subject-summary",
+      "teacher_profile_unavailable",
+    );
     summaryError = "Unable to load the current subject summary.";
   }
   let initialEvents: SubjectEventSummary[] = [];

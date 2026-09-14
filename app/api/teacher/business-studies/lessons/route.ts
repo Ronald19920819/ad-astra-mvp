@@ -11,6 +11,7 @@ import {
   getLessonQuizCorrectAnswerText,
   isCompleteLessonQuizQuestion,
 } from "@/lib/lessons/lessonQuiz";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -34,6 +35,13 @@ function isOptionalDate(value: unknown) {
 }
 
 export async function POST(request: Request) {
+  // Diagnostics only: tracks which step of this multi-action handler was
+  // in flight when an error reached the catch-all below, so a production
+  // failure can be correlated (via requestId, in logAuthDiagnostic) with
+  // the exact internal stage and action -- never read for any request
+  // handling or authorization decision.
+  let stage = "request_body";
+  let actionForDiagnostics = "unknown";
   try {
     let body: unknown;
     try {
@@ -45,6 +53,7 @@ export async function POST(request: Request) {
     if (!isRecord(body) || typeof body.action !== "string") {
       return invalid("A valid lesson action is required.");
     }
+    actionForDiagnostics = body.action;
     const subjectId = body.subjectId;
     if (
       typeof subjectId !== "string" ||
@@ -53,6 +62,7 @@ export async function POST(request: Request) {
     ) {
       return invalid("A supported subject is required.");
     }
+    stage = "teacher_authorization";
     const authorization = await authorizeTeacher(subjectId);
     if (!authorization.success) {
       return teacherAuthorizationResponse(authorization);
@@ -105,13 +115,14 @@ export async function POST(request: Request) {
         return invalid("Invalid lesson details.");
       }
 
-      if (
-        typeof topicId === "string" &&
-        !(await topicBelongsToSubject(topicId))
-      ) {
-        return invalid(`Select a valid ${subject.displayName} topic.`);
+      if (typeof topicId === "string") {
+        stage = "topic_ownership_lookup";
+        if (!(await topicBelongsToSubject(topicId))) {
+          return invalid(`Select a valid ${subject.displayName} topic.`);
+        }
       }
 
+      stage = "lesson_create_write";
       const { data, error } = await admin
         .from("lessons")
         .insert({
@@ -141,6 +152,7 @@ export async function POST(request: Request) {
       return invalid("A valid lesson ID is required.");
     }
 
+    stage = "lesson_lookup";
     const { data: lesson, error: lessonError } = await admin
       .from("lessons")
       .select("id, title, status")
@@ -182,6 +194,7 @@ export async function POST(request: Request) {
         return invalid("Invalid lesson material details.");
       }
 
+      stage = "lesson_material_write";
       const { data: existing, error: existingError } = await admin
         .from("lesson_materials")
         .select("id, source_type, content_url")
@@ -265,13 +278,14 @@ export async function POST(request: Request) {
         return invalid("Invalid lesson details.");
       }
 
-      if (
-        typeof topicId === "string" &&
-        !(await topicBelongsToSubject(topicId))
-      ) {
-        return invalid(`Select a valid ${subject.displayName} topic.`);
+      if (typeof topicId === "string") {
+        stage = "topic_ownership_lookup";
+        if (!(await topicBelongsToSubject(topicId))) {
+          return invalid(`Select a valid ${subject.displayName} topic.`);
+        }
       }
 
+      stage = "lesson_details_write";
       const lessonUpdates: {
         lesson_number: string;
         title: string;
@@ -311,6 +325,7 @@ export async function POST(request: Request) {
         return invalid("A valid lesson status is required.");
       }
 
+      stage = "lesson_status_write";
       const { data, error } = await admin
         .from("lessons")
         .update({ status: body.status })
@@ -343,6 +358,7 @@ export async function POST(request: Request) {
         return invalid("A complete 5-question lesson quiz is required.");
       }
 
+      stage = "lesson_quiz_lookup";
       const { data: existingQuiz, error: existingQuizError } = await admin
         .from("lesson_materials")
         .select("id")
@@ -395,6 +411,7 @@ export async function POST(request: Request) {
         const removedQuestionIds = [...existingQuestionIds].filter(
           (questionId) => !submittedQuestionIds.has(questionId),
         );
+        stage = "lesson_quiz_write";
         if (removedQuestionIds.length > 0) {
           const { data: submission, error: submissionError } = await admin
             .from("activity_submissions")
@@ -486,6 +503,7 @@ export async function POST(request: Request) {
         return Response.json({ success: true, data: existingActivity });
       }
 
+      stage = "lesson_quiz_write";
       const { data: quizMaterial, error: materialError } = await admin
         .from("lesson_materials")
         .insert({
@@ -546,7 +564,12 @@ export async function POST(request: Request) {
 
     return invalid("Unsupported lesson action.");
   } catch (error) {
-    console.error("Subject lesson write failed:", error);
+    await logAuthDiagnostic(
+      "Subject lesson write failed:",
+      `lesson-write.${stage}`,
+      `action_${actionForDiagnostics}`,
+      error,
+    );
     return Response.json(
       { error: "The lesson change could not be saved.", code: "SAVE_FAILED" },
       { status: 500 },

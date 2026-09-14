@@ -98,3 +98,44 @@ test("regression: this prefetch change does not touch authentication -- getAuthe
     /summary = await getTeacherSubjectSummaryForTeacher\(teacherProfile, subject\.databaseId\);/,
   );
 });
+
+// AD ASTRA -- CLOSE TEACHER WRITE DIAGNOSTIC BLIND SPOT: both branches
+// that produce "Unable to load the current subject summary." previously
+// logged with a bare console.error (summary-fetch branch) or not at all
+// (missing-profile branch), with no requestId. Both now log via the
+// shared logAuthDiagnostic helper under stage
+// "teacher-page.subject-summary", without changing the summaryError text
+// or which branch sets it.
+
+test("E: the summary-fetch catch now logs via logAuthDiagnostic (requestId-correlated) instead of a bare console.error", () => {
+  assert.doesNotMatch(
+    SOURCE,
+    /console\.error\(`Unable to load \$\{subject\.displayName\} teacher summary:`/,
+  );
+  assert.match(
+    SOURCE,
+    /await logAuthDiagnostic\(\s*\n\s*`Unable to load \$\{subject\.displayName\} teacher summary:`,\s*\n\s*"teacher-page\.subject-summary",\s*\n\s*"summary_fetch_failed",\s*\n\s*error,\s*\n\s*\);/,
+  );
+});
+
+test("E: the missing-teacher-profile branch now also logs via logAuthDiagnostic under the same stage, distinguished by reason 'teacher_profile_unavailable'", () => {
+  assert.match(
+    SOURCE,
+    /await logAuthDiagnostic\(\s*\n\s*`Unable to load \$\{subject\.displayName\} teacher summary:`,\s*\n\s*"teacher-page\.subject-summary",\s*\n\s*"teacher_profile_unavailable",\s*\n\s*\);/,
+  );
+});
+
+test("regression: the two logAuthDiagnostic calls sit immediately before their respective (unchanged) summaryError assignment, and the exact-match count of the message is still 2", () => {
+  const matches = SOURCE.match(/summaryError = "Unable to load the current subject summary\.";/g) ?? [];
+  assert.equal(matches.length, 2);
+
+  const catchBranch = SOURCE.match(
+    /catch \(error\) \{[\s\S]*?await logAuthDiagnostic\([\s\S]*?\);[\s\S]*?summaryError = "Unable to load the current subject summary\.";[\s\S]*?\}/,
+  );
+  assert.ok(catchBranch, "expected logAuthDiagnostic immediately before summaryError in the catch branch");
+
+  const elseBranch = SOURCE.match(
+    /\} else \{[\s\S]*?await logAuthDiagnostic\([\s\S]*?\);[\s\S]*?summaryError = "Unable to load the current subject summary\.";[\s\S]*?\}/,
+  );
+  assert.ok(elseBranch, "expected logAuthDiagnostic immediately before summaryError in the else branch");
+});

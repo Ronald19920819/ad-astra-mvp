@@ -43,6 +43,12 @@ export function toSafeErrorDetails(
 // cookies, emails, or names. requestId correlates this line with the
 // proxy-stage line (if any) for the same request -- it is diagnostics
 // only and is never read for any authorization decision.
+//
+// Also reused (same safe shape, same requestId correlation) by teacher
+// write-path routes that need to distinguish which internal step of a
+// multi-step handler failed -- e.g. "lesson-write.lesson_material_write",
+// "lesson-pdf.pdf_validation" -- without inventing a second logging
+// convention for non-auth failure stages.
 export async function logAuthDiagnostic(
   label: string,
   stage: string,

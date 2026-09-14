@@ -10,6 +10,7 @@ import {
   authorizeTeacher,
   teacherAuthorizationResponse,
 } from "@/lib/supabase/teacherAuth";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -20,7 +21,10 @@ function invalid(error: string) {
   return Response.json({ error }, { status: 400 });
 }
 
-async function getAuthorizedLesson(body: RequestBody) {
+async function getAuthorizedLesson(
+  body: RequestBody,
+  setStage: (stage: string) => void,
+) {
   const subjectId = body.subjectId;
   const lessonId = body.lessonId;
 
@@ -33,11 +37,13 @@ async function getAuthorizedLesson(body: RequestBody) {
     return { response: invalid("Valid subject and lesson details are required.") };
   }
 
+  setStage("teacher_authorization");
   const authorization = await authorizeTeacher(subjectId);
   if (!authorization.success) {
     return { response: teacherAuthorizationResponse(authorization) };
   }
 
+  setStage("lesson_authorization_lookup");
   const { data: lesson, error } = await authorization.teacher.admin
     .from("lessons")
     .select("id")
@@ -91,8 +97,19 @@ export async function POST(request: Request) {
     return invalid("Invalid PDF reading request.");
   }
 
+  // Diagnostics only: tracks which step of the prepare/finalize workflow
+  // was in flight when an error reached the catch-all below, so a
+  // production failure can be correlated (via requestId, in
+  // logAuthDiagnostic) with the exact internal stage and action -- never
+  // read for any request handling or authorization decision.
+  let stage = "lesson_authorization";
+  const actionForDiagnostics =
+    typeof body.action === "string" ? body.action : "unknown";
+
   try {
-    const lessonAccess = await getAuthorizedLesson(body);
+    const lessonAccess = await getAuthorizedLesson(body, (nextStage) => {
+      stage = nextStage;
+    });
     if ("response" in lessonAccess) return lessonAccess.response;
 
     const { authorization, subjectId, lessonId } = lessonAccess;
@@ -110,6 +127,7 @@ export async function POST(request: Request) {
       }
 
       const path = buildLessonReadingPdfPath(subjectId, lessonId);
+      stage = "signed_upload_preparation";
       const { data, error } = await admin.storage
         .from(LESSON_READING_PDF_BUCKET)
         .createSignedUploadUrl(path);
@@ -135,11 +153,13 @@ export async function POST(request: Request) {
         return invalid("Valid PDF reading details are required.");
       }
 
+      stage = "pdf_validation";
       if (!(await verifyStoredPdf(admin, path))) {
         await admin.storage.from(LESSON_READING_PDF_BUCKET).remove([path]);
         return invalid("The uploaded file is not a valid PDF.");
       }
 
+      stage = "reading_metadata_lookup";
       const { data: existing, error: existingError } = await admin
         .from("lesson_materials")
         .select("id, source_type, content_url")
@@ -156,6 +176,7 @@ export async function POST(request: Request) {
         content_text: null,
         display_order: 1,
       };
+      stage = "reading_metadata_write";
       const result = existing
         ? await admin
             .from("lesson_materials")
@@ -197,9 +218,12 @@ export async function POST(request: Request) {
 
     return invalid("Unsupported PDF reading action.");
   } catch (error) {
-    console.error("Lesson PDF reading save failed:", {
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
+    await logAuthDiagnostic(
+      "Lesson PDF reading save failed:",
+      `lesson-pdf.${stage}`,
+      `action_${actionForDiagnostics}`,
+      error,
+    );
     return Response.json(
       { error: "The PDF reading could not be saved." },
       { status: 500 },
