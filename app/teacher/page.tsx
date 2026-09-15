@@ -39,7 +39,7 @@ export default async function TeacherHomePage() {
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-36`}
     >
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto lg:max-w-6xl">
         <div
           className="relative mb-6 overflow-hidden rounded-[2rem] border border-blue-100 bg-black shadow-lg"
           style={{
@@ -100,167 +100,171 @@ export default async function TeacherHomePage() {
           </div>
         </div>
 
-        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
-              <School size={22} />
+        <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
+          <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
+                <School size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  School Overview
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Faculty activity summary
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                School Overview
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Faculty activity summary
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="rounded-2xl bg-[#F8FBFF] p-4">
+                <p className="text-2xl font-bold text-[#102A43]">
+                  {overview?.subjectsTaught ?? 0}
+                </p>
+                <p className="text-xs font-medium text-black/60">
+                  Subjects Managed
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#F8FBFF] p-4">
+                <p className="text-2xl font-bold text-[#102A43]">
+                  {overview?.activeLearners ?? 0}
+                </p>
+                <p className="text-xs font-medium text-black/60">
+                  Learners
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#F8FBFF] p-4">
+                <p className="text-2xl font-bold text-[#F97316]">
+                  {overview?.submissionsAwaitingReview ?? 0}
+                </p>
+                <p className="text-xs font-medium text-black/60">
+                  Submissions Awaiting Review
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#F8FBFF] p-4">
+                <p className="text-2xl font-bold text-[#102A43]">
+                  {overview?.publishedLessons ?? 0}
+                </p>
+                <p className="text-xs font-medium text-black/60">
+                  Published Lessons
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <SchoolOverviewCard
+            href="/teacher/subjects"
+            description="Open your subjects to manage lessons, activities, learners, and review work."
+            openLabel="Open Subjects"
+            pendingLabel="Opening Subjects..."
+          />
+        </div>
+
+        <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
+          <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <ClipboardCheck size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Priority Actions
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  What needs attention today
+                </p>
+              </div>
+            </div>
+
+            {insights.priorityActions.length === 0 ? (
+              <p className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-medium text-slate-600">
+                You&apos;re all caught up.
               </p>
-            </div>
-          </div>
+            ) : (
+              <div className="space-y-3">
+                {insights.priorityActions.map((action) => {
+                  const subject = getSubjectConfigurationByDatabaseId(action.subjectId);
+                  const colourTheme = subject?.colourTheme;
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">
-                {overview?.subjectsTaught ?? 0}
+                  return (
+                    <Link
+                      key={`${action.category}:${action.subjectId}`}
+                      href={action.href}
+                      prefetch={false}
+                      className="block rounded-2xl border p-4 transition hover:shadow-sm"
+                      style={{
+                        borderColor: colourTheme?.border ?? "#E2E8F0",
+                        backgroundColor: colourTheme?.softBackground ?? "#F8FAFC",
+                      }}
+                    >
+                      <p className="text-sm font-bold text-black">
+                        {action.subjectName}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-black/50">
+                        {action.description}
+                      </p>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
+                <BookOpen size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Learner Insights
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Early patterns and learner signals
+                </p>
+              </div>
+            </div>
+
+            {insights.learnerInsights.length === 0 ? (
+              <p className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-medium text-slate-600">
+                No new learner insights yet.
               </p>
-              <p className="text-xs font-medium text-black/60">
-                Subjects Managed
-              </p>
-            </div>
+            ) : (
+              <div className="space-y-3 text-sm text-black/70">
+                {insights.learnerInsights.map((insight) => {
+                  const Icon =
+                    insight.kind === "highest_overdue_burden"
+                      ? AlertCircle
+                      : BarChart3;
+                  const iconClassName =
+                    insight.kind === "highest_overdue_burden"
+                      ? "mt-0.5 text-red-500"
+                      : "mt-0.5 text-[#508DB1]";
 
-            <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">
-                {overview?.activeLearners ?? 0}
-              </p>
-              <p className="text-xs font-medium text-black/60">
-                Learners
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#F97316]">
-                {overview?.submissionsAwaitingReview ?? 0}
-              </p>
-              <p className="text-xs font-medium text-black/60">
-                Submissions Awaiting Review
-              </p>
-            </div>
-
-            <div className="rounded-2xl bg-[#F8FBFF] p-4">
-              <p className="text-2xl font-bold text-[#102A43]">
-                {overview?.publishedLessons ?? 0}
-              </p>
-              <p className="text-xs font-medium text-black/60">
-                Published Lessons
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <SchoolOverviewCard
-          href="/teacher/subjects"
-          description="Open your subjects to manage lessons, activities, learners, and review work."
-          openLabel="Open Subjects"
-          pendingLabel="Opening Subjects..."
-        />
-
-        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <ClipboardCheck size={22} />
-            </div>
-
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Priority Actions
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                What needs attention today
-              </p>
-            </div>
-          </div>
-
-          {insights.priorityActions.length === 0 ? (
-            <p className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-medium text-slate-600">
-              You&apos;re all caught up.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {insights.priorityActions.map((action) => {
-                const subject = getSubjectConfigurationByDatabaseId(action.subjectId);
-                const colourTheme = subject?.colourTheme;
-
-                return (
-                  <Link
-                    key={`${action.category}:${action.subjectId}`}
-                    href={action.href}
-                    prefetch={false}
-                    className="block rounded-2xl border p-4 transition hover:shadow-sm"
-                    style={{
-                      borderColor: colourTheme?.border ?? "#E2E8F0",
-                      backgroundColor: colourTheme?.softBackground ?? "#F8FAFC",
-                    }}
-                  >
-                    <p className="text-sm font-bold text-black">
-                      {action.subjectName}
-                    </p>
-                    <p className="mt-1 text-xs font-medium text-black/50">
-                      {action.description}
-                    </p>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
-              <BookOpen size={22} />
-            </div>
-
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Learner Insights
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Early patterns and learner signals
-              </p>
-            </div>
-          </div>
-
-          {insights.learnerInsights.length === 0 ? (
-            <p className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-medium text-slate-600">
-              No new learner insights yet.
-            </p>
-          ) : (
-            <div className="space-y-3 text-sm text-black/70">
-              {insights.learnerInsights.map((insight) => {
-                const Icon =
-                  insight.kind === "highest_overdue_burden"
-                    ? AlertCircle
-                    : BarChart3;
-                const iconClassName =
-                  insight.kind === "highest_overdue_burden"
-                    ? "mt-0.5 text-red-500"
-                    : "mt-0.5 text-[#508DB1]";
-
-                return (
-                  <div
-                    key={`${insight.kind}:${insight.subjectId}`}
-                    className="flex items-start gap-3"
-                  >
-                    <Icon size={18} className={iconClassName} />
-                    <p>{insight.message}</p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+                  return (
+                    <div
+                      key={`${insight.kind}:${insight.subjectId}`}
+                      className="flex items-start gap-3"
+                    >
+                      <Icon size={18} className={iconClassName} />
+                      <p>{insight.message}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}>
             <div className="py-4 text-[#508DB1]">Home</div>
           </Link>
