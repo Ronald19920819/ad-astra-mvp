@@ -7,8 +7,15 @@ import {
   isAccountRole,
 } from "@/lib/auth/accountRole";
 import { learnerOnboardingDestination } from "@/lib/learners/onboarding";
+import { logAuthDiagnostic } from "@/lib/observability/authDiagnostics";
 
 export async function POST() {
+  // Diagnostics only: tracks which step of session verification was in
+  // flight when an error reached the catch-all below, so a production
+  // "Sign in could not be completed" failure can be correlated (via
+  // requestId, in logAuthDiagnostic) with the exact internal stage --
+  // never read for any authentication/authorization decision.
+  let stage = "auth-user";
   try {
     const requestClient = await createSupabaseRequestClient();
     const {
@@ -16,6 +23,19 @@ export async function POST() {
       error: userError,
     } = await requestClient.auth.getUser();
 
+    // As in authorizeTeacher/getAuthenticatedTeacherProfile: a bare
+    // missing user is the ordinary "not signed in" case and stays
+    // silent; an actual error here is a genuine session-resolution
+    // failure worth distinguishing in logs, since it can surface to a
+    // teacher as this same generic "Sign in could not be completed."
+    if (userError) {
+      await logAuthDiagnostic(
+        "AD Astra session verification failed:",
+        "auth-session.auth-user",
+        "auth_get_user_failed",
+        userError,
+      );
+    }
     if (userError || !user) {
       return Response.json(
         { error: "Sign-in is required.", code: "UNAUTHORIZED" },
@@ -24,6 +44,7 @@ export async function POST() {
     }
 
     const admin = createSupabaseAdminClient();
+    stage = "profile-lookup";
     const { data: profile, error: profileError } = await admin
       .from("profiles")
       .select("id, role")
@@ -39,6 +60,7 @@ export async function POST() {
       );
     }
 
+    stage = "role-validation";
     if (!isAccountRole(profile.role)) {
       await requestClient.auth.signOut();
       return Response.json(
@@ -51,6 +73,7 @@ export async function POST() {
     }
 
     if (profile.role === "teacher") {
+      stage = "teacher-profile";
       const { data: teacherProfile, error: teacherError } = await admin
         .from("teacher_profiles")
         .select("id")
@@ -67,6 +90,7 @@ export async function POST() {
         );
       }
     } else {
+      stage = "learner-profile";
       const { data: learnerProfile, error: learnerError } = await admin
         .from("learner_profiles")
         .select("id, school_name, grade, status")
@@ -98,6 +122,7 @@ export async function POST() {
         });
       }
 
+      stage = "learner-subjects";
       const { count: subjectRequestCount, error: subjectRequestError } =
         await admin
           .from("learner_subjects")
@@ -124,7 +149,12 @@ export async function POST() {
       destination: destinationForAccountRole(profile.role),
     });
   } catch (error) {
-    console.error("AD Astra session verification failed:", error);
+    await logAuthDiagnostic(
+      "AD Astra session verification failed:",
+      `auth-session.${stage}`,
+      "verification_failed",
+      error,
+    );
     return Response.json(
       { error: "Sign-in could not be verified.", code: "VERIFY_FAILED" },
       { status: 500 },
