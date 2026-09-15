@@ -87,3 +87,96 @@ test("regression: teacher_profiles.status must still be 'active' and teacher_sub
   assert.match(loadFn, /!teacherProfile \|\| teacherProfile\.status !== "active"/);
   assert.match(loadFn, /\.eq\("teacher_profile_id", teacherProfile\.id\)\s*\n\s*\.eq\("status", "active"\);/);
 });
+
+// AD ASTRA -- TEACHER DASHBOARD RELIABILITY: getTeacherTeachingOverview()
+// previously chained lessonIds -> materialIds -> activityIds through
+// three separate .in() queries, which could produce an oversized
+// PostgREST request URL (~15,851 characters observed in production,
+// UND_ERR_HEADERS_OVERFLOW). It now makes exactly one RPC call to
+// supabase/migrations/202609150001_teacher_teaching_overview_rpc.sql's
+// get_teacher_teaching_overview(), which computes the same five
+// statistics server-side via real SQL joins/COUNT DISTINCT. Separately,
+// getAuthenticatedTeacherProfileDashboard() no longer lets a
+// teaching-overview failure discard an already-resolved teacher profile.
+
+const overviewFn = SOURCE.slice(
+  SOURCE.indexOf("export async function getTeacherTeachingOverview("),
+  SOURCE.indexOf("async function loadTeacherProfileForUser("),
+);
+
+test("A: the chained lessonIds/materialIds/activityIds .in() architecture is gone -- no .in(\"lesson_id\"/\"lesson_material_id\"/\"activity_id\", ...) filters remain in this function", () => {
+  assert.doesNotMatch(overviewFn, /\.in\("lesson_id"/);
+  assert.doesNotMatch(overviewFn, /\.in\("lesson_material_id"/);
+  assert.doesNotMatch(overviewFn, /\.in\("activity_id"/);
+  assert.doesNotMatch(overviewFn, /\.from\("lesson_materials"\)/);
+  assert.doesNotMatch(overviewFn, /\.from\("activities"\)/);
+  assert.doesNotMatch(overviewFn, /\.from\("activity_submissions"\)/);
+  assert.doesNotMatch(SOURCE, /countDistinctActiveLearners/);
+});
+
+test("B/G: the application performs exactly one teaching-overview RPC call, with a single scalar teacher-profile id as its only argument -- never a subject/content id array", () => {
+  const rpcCalls = [...overviewFn.matchAll(/\.rpc\(/g)];
+  assert.equal(rpcCalls.length, 1, "expected exactly one .rpc() call");
+  assert.match(
+    overviewFn,
+    /\.rpc\("get_teacher_teaching_overview", \{\s*\n\s*p_teacher_profile_id: profile\.teacherProfileId,\s*\n\s*\}\)\s*\n\s*\.single\(\);/,
+  );
+  assert.doesNotMatch(overviewFn, /assignedSubjects\.map/);
+  assert.doesNotMatch(overviewFn, /subjectIds/);
+});
+
+test("C: every returned field maps from the RPC's snake_case column to the exact TeacherTeachingOverview shape", () => {
+  assert.match(overviewFn, /subjectsTaught: row\.subjects_taught,/);
+  assert.match(overviewFn, /activeLearners: row\.active_learners,/);
+  assert.match(overviewFn, /publishedLessons: row\.published_lessons,/);
+  assert.match(overviewFn, /publishedActivities: row\.published_activities,/);
+  assert.match(
+    overviewFn,
+    /submissionsAwaitingReview: row\.submissions_awaiting_review,/,
+  );
+});
+
+test("regression: an RPC error is still thrown (not swallowed) by getTeacherTeachingOverview() itself -- isolation happens one level up, in getAuthenticatedTeacherProfileDashboard()", () => {
+  assert.match(overviewFn, /if \(error\) throw error;/);
+});
+
+const dashboardFn = SOURCE.slice(
+  SOURCE.indexOf("export async function getAuthenticatedTeacherProfileDashboard("),
+);
+
+test("D: the teaching-overview fallback is the exact same all-zero TeacherTeachingOverview shape used elsewhere as an initial/failure default", () => {
+  assert.match(
+    dashboardFn,
+    /let teachingOverview: TeacherTeachingOverview = \{\s*\n\s*subjectsTaught: 0,\s*\n\s*activeLearners: 0,\s*\n\s*publishedLessons: 0,\s*\n\s*publishedActivities: 0,\s*\n\s*submissionsAwaitingReview: 0,\s*\n\s*\};/,
+  );
+});
+
+test("E: a teaching-overview failure does not discard the already-resolved profile -- the try/catch wraps only getTeacherTeachingOverview(), and the returned object always includes the real profile", () => {
+  assert.match(
+    dashboardFn,
+    /try \{\s*\n\s*teachingOverview = await getTeacherTeachingOverview\(profile\);\s*\n\s*\} catch \(error\) \{/,
+  );
+  assert.match(
+    dashboardFn,
+    /return \{\s*\n\s*profile,\s*\n\s*teachingOverview,\s*\n\s*\};/,
+  );
+});
+
+test("F: an overview failure is logged via the shared logAuthDiagnostic helper under stage 'teacher-page.teaching-overview', with the raw error only (no teacher/subject id, name, or email)", () => {
+  assert.match(
+    dashboardFn,
+    /await logAuthDiagnostic\(\s*\n\s*"Teacher dashboard teaching overview failed:",\s*\n\s*"teacher-page\.teaching-overview",\s*\n\s*"teaching_overview_failed",\s*\n\s*error,\s*\n\s*\);/,
+  );
+  const catchBlock = dashboardFn.slice(
+    dashboardFn.indexOf("} catch (error) {"),
+    dashboardFn.indexOf("}", dashboardFn.indexOf("} catch (error) {") + 20) + 1,
+  );
+  assert.doesNotMatch(catchBlock, /profile\.(teacherProfileId|profileId|userId|email|displayName)/);
+});
+
+test("regression: getAuthenticatedTeacherProfileDashboard() still returns null exactly when getAuthenticatedTeacherProfile() returns null -- unauthenticated behaviour is unchanged", () => {
+  assert.match(
+    dashboardFn,
+    /const profile = await getAuthenticatedTeacherProfile\(\);\s*\n\s*if \(!profile\) return null;/,
+  );
+});

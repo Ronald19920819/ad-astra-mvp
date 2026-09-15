@@ -7,7 +7,6 @@ import type {
   TeacherProfileDashboard,
   TeacherTeachingOverview,
 } from "@/lib/teachers/teacherProfile";
-import { countDistinctActiveLearners } from "@/lib/teachers/teacherProfile";
 import {
   createSupabaseAdminClient,
   createSupabaseRequestClient,
@@ -26,91 +25,49 @@ function metadataString(user: User, keys: string[]) {
   return null;
 }
 
+// AD Astra Dashboard Reliability -- Teacher Teaching Overview RPC
+// (supabase/migrations/202609150001_teacher_teaching_overview_rpc.sql):
+// this previously fetched entire lessonIds -> materialIds -> activityIds
+// arrays and passed each into the next query's .in() filter -- a manual
+// application-side join that, for a teacher/school with enough
+// accumulated content, produced a real ~15,851-character PostgREST
+// request URL and UND_ERR_HEADERS_OVERFLOW in production. Every value
+// this function returns is a plain count, never a list, so none of those
+// enumerated ids were ever actually needed by the caller -- the
+// aggregation now happens server-side, in one request, with real SQL
+// joins and COUNT/COUNT DISTINCT. No UUID array of any size is
+// constructed here again. p_teacher_profile_id is the only input, and is
+// always this already-authenticated caller's own resolved
+// profile.teacherProfileId -- never client-supplied -- matching the RPC's
+// service_role-only execute grant (see the migration's own header
+// comment for the full security rationale).
+type TeacherTeachingOverviewRpcRow = {
+  subjects_taught: number;
+  active_learners: number;
+  published_lessons: number;
+  published_activities: number;
+  submissions_awaiting_review: number;
+};
+
 export async function getTeacherTeachingOverview(
   profile: AuthenticatedTeacherProfile,
 ): Promise<TeacherTeachingOverview> {
   const admin = createSupabaseAdminClient();
-  const subjectIds = profile.assignedSubjects.map((subject) => subject.id);
-  if (subjectIds.length === 0) {
-    return {
-      subjectsTaught: 0,
-      activeLearners: 0,
-      publishedLessons: 0,
-      publishedActivities: 0,
-      submissionsAwaitingReview: 0,
-    };
-  }
+  const { data, error } = await admin
+    .rpc("get_teacher_teaching_overview", {
+      p_teacher_profile_id: profile.teacherProfileId,
+    })
+    .single();
 
-  let learnerResult = await admin
-    .from("learner_subjects")
-    .select("learner_profile_id")
-    .in("subject_id", subjectIds)
-    .eq("status", "approved")
-    .eq("is_active", true);
-  if (isMissingColumnError(learnerResult.error)) {
-    learnerResult = await admin
-      .from("learner_subjects")
-      .select("learner_profile_id")
-      .in("subject_id", subjectIds);
-  }
-
-  const lessonResult = await admin
-    .from("lessons")
-    .select("id")
-    .in("subject_id", subjectIds)
-    .eq("status", "published");
-
-  if (learnerResult.error) throw learnerResult.error;
-  if (lessonResult.error) throw lessonResult.error;
-
-  const activeLearners = countDistinctActiveLearners(
-    (learnerResult.data ?? []).map((row) => row.learner_profile_id),
-  );
-  const lessonIds = (lessonResult.data ?? []).map((lesson) => lesson.id);
-  if (lessonIds.length === 0) {
-    return {
-      subjectsTaught: subjectIds.length,
-      activeLearners,
-      publishedLessons: 0,
-      publishedActivities: 0,
-      submissionsAwaitingReview: 0,
-    };
-  }
-
-  const { data: materials, error: materialError } = await admin
-    .from("lesson_materials")
-    .select("id")
-    .in("lesson_id", lessonIds);
-  if (materialError) throw materialError;
-
-  const materialIds = (materials ?? []).map((material) => material.id);
-  let activityIds: string[] = [];
-  if (materialIds.length > 0) {
-    const { data: activities, error: activityError } = await admin
-      .from("activities")
-      .select("id")
-      .in("lesson_material_id", materialIds);
-    if (activityError) throw activityError;
-    activityIds = (activities ?? []).map((activity) => activity.id);
-  }
-
-  let submissionsAwaitingReview = 0;
-  if (activityIds.length > 0) {
-    const { count, error } = await admin
-      .from("activity_submissions")
-      .select("id", { count: "exact", head: true })
-      .in("activity_id", activityIds)
-      .in("status", ["submitted", "marking_failed", "awaiting_review"]);
-    if (error) throw error;
-    submissionsAwaitingReview = count ?? 0;
-  }
+  if (error) throw error;
+  const row = data as TeacherTeachingOverviewRpcRow;
 
   return {
-    subjectsTaught: subjectIds.length,
-    activeLearners,
-    publishedLessons: lessonIds.length,
-    publishedActivities: activityIds.length,
-    submissionsAwaitingReview,
+    subjectsTaught: row.subjects_taught,
+    activeLearners: row.active_learners,
+    publishedLessons: row.published_lessons,
+    publishedActivities: row.published_activities,
+    submissionsAwaitingReview: row.submissions_awaiting_review,
   };
 }
 
@@ -305,13 +262,44 @@ export async function getAuthenticatedTeacherProfile() {
   return loadTeacherProfileForUser(user);
 }
 
+// AD Astra Dashboard Reliability -- profile/overview failure isolation:
+// a teaching-overview failure (network, RPC, or otherwise) must never
+// discard an already-resolved, healthy teacher identity. Previously this
+// function awaited getTeacherTeachingOverview() directly, so any failure
+// there rejected the whole call -- callers (app/teacher/page.tsx,
+// /api/teacher/profile) then treated a perfectly good profile resolution
+// as if it had failed too, showing a generic "Teacher"/all-zero fallback
+// instead of the teacher's real name/school. The teaching-overview call
+// is now isolated in its own try/catch: on failure it is logged (safe
+// fields only, via the shared requestId-correlated logAuthDiagnostic
+// helper) and degrades to the same all-zero TeacherTeachingOverview shape
+// already used elsewhere as an initial/failure fallback -- the returned
+// profile itself is always the real, successfully resolved one.
 export async function getAuthenticatedTeacherProfileDashboard():
   Promise<TeacherProfileDashboard | null> {
   const profile = await getAuthenticatedTeacherProfile();
   if (!profile) return null;
 
+  let teachingOverview: TeacherTeachingOverview = {
+    subjectsTaught: 0,
+    activeLearners: 0,
+    publishedLessons: 0,
+    publishedActivities: 0,
+    submissionsAwaitingReview: 0,
+  };
+  try {
+    teachingOverview = await getTeacherTeachingOverview(profile);
+  } catch (error) {
+    await logAuthDiagnostic(
+      "Teacher dashboard teaching overview failed:",
+      "teacher-page.teaching-overview",
+      "teaching_overview_failed",
+      error,
+    );
+  }
+
   return {
     profile,
-    teachingOverview: await getTeacherTeachingOverview(profile),
+    teachingOverview,
   };
 }
