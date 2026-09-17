@@ -148,9 +148,40 @@ export function validatePastedTextNarration(args: {
     };
   }
 
+  // checkHeadings: false -- heading/subheading BLOCKS are already excluded
+  // from sourceText above (SUBSTANTIVE_BLOCK_TYPES), and leading
+  // structural-label paragraphs are already stripped
+  // (stripLeadingStructuralLabels). Re-deriving "heading-shaped" lines
+  // from the remaining substantive text (validateStructuredReadingCompleteness's
+  // default behaviour, still used as-is by app/api/kingdom/structure-reading's
+  // own call) would only rediscover textbook-style labels (e.g. "Example
+  // Question", "Model Answer") embedded inside a paragraph/list/
+  // definition/table block -- exactly the kind of technical/assessment
+  // label the narration rules
+  // (lib/accessibility/narrationTranscriptPrompt.ts) explicitly permit the
+  // narrator to transform or omit, so requiring it verbatim produced false
+  // "heading_missing" rejections of transcripts that had not actually
+  // dropped any educational content.
+  // edgeMode: "coverage" -- the narration rules
+  // (lib/accessibility/narrationTranscriptPrompt.ts) explicitly instruct
+  // Kingdom to open with a natural spoken introduction and to paraphrase
+  // rather than quote the reading (e.g. its own worked example: "Sub-topic:
+  // Trench Warfare" -> "This part of the lesson focuses on trench
+  // warfare."), which the default "literal" edge mode's exact 8-word
+  // verbatim match cannot tolerate. A real production transcript ("In Part
+  // 1 you learned..." narrated as "In the previous part you learned...",
+  // after a short spoken introduction) was rejected as
+  // beginning_content_missing despite fully covering the reading's actual
+  // opening content. "coverage" measures ordered word-overlap within a
+  // widened transcript edge window instead -- see
+  // validateStructuredReadingCompleteness's own edgeMode doc comment and
+  // this file's/structuredReading.test.ts's "coverage edge mode" tests for
+  // the calibration evidence.
   const completeness = validateStructuredReadingCompleteness({
     sourceText,
     editorText: transcript,
+    checkHeadings: false,
+    edgeMode: "coverage",
   });
 
   if (!completeness.ok) {

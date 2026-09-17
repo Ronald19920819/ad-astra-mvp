@@ -14,6 +14,26 @@ const EDGE_ANCHOR_COUNT = 4;
 const EDGE_ANCHOR_WORDS = 8;
 const MIN_ANCHOR_WORDS = 4;
 
+// Narration-specific edge validation ("coverage" edgeMode -- see
+// validateStructuredReadingCompleteness below). Accessibility narration is
+// explicitly instructed (lib/accessibility/narrationTranscriptPrompt.ts) to
+// open with a natural spoken introduction and to paraphrase rather than
+// quote the reading verbatim, which the default literal-8-word-anchor edge
+// check cannot tolerate. NARRATION_EDGE_SEARCH_MULTIPLIER widens the
+// transcript window searched for source-edge coverage beyond the source's
+// own EDGE_WORD_LIMIT-word window, so a bounded spoken intro (or closing)
+// doesn't push the real content out of range.
+// NARRATION_EDGE_COVERAGE_THRESHOLD was derived empirically from paired
+// pass/fail examples (a real production transcript plus constructed
+// omission/coincidental-overlap cases) -- see
+// structuredReading.test.ts/narrationIntegrity.test.ts's "coverage edge
+// mode" tests for the exact cases and measured scores that justify 0.6:
+// faithful paraphrase examples scored 0.69-0.92, genuine
+// omission/coincidental-overlap examples scored 0.10-0.22, a wide margin
+// either side of this threshold.
+const NARRATION_EDGE_SEARCH_MULTIPLIER = 3;
+const NARRATION_EDGE_COVERAGE_THRESHOLD = 0.6;
+
 export type StructuredReadingBlock =
   | { type: "heading"; text: string }
   | { type: "subheading"; text: string }
@@ -457,6 +477,60 @@ function requiredAnchorMatches(anchorCount: number) {
   return Math.max(1, Math.ceil(anchorCount * 0.75));
 }
 
+// Longest common subsequence length -- deterministic, purely lexical
+// (no AI/embeddings/fuzzy matching), tolerates paraphrasing because it
+// only requires the source's own words to reappear in the same relative
+// ORDER, not as one exact contiguous phrase: insertions, substitutions,
+// and reorderings in between still let the shared words line up. Single-
+// row DP (standard technique), safe here since both inputs are bounded to
+// at most a few hundred words by the edge-window slicing in
+// computeNarrationEdgeCoverage below.
+function lcsLength(a: string[], b: string[]): number {
+  const row = new Array(b.length + 1).fill(0);
+
+  for (let i = 1; i <= a.length; i += 1) {
+    let previousDiagonal = 0;
+    for (let j = 1; j <= b.length; j += 1) {
+      const previousRowValue = row[j];
+      row[j] =
+        a[i - 1] === b[j - 1]
+          ? previousDiagonal + 1
+          : Math.max(row[j], row[j - 1]);
+      previousDiagonal = previousRowValue;
+    }
+  }
+
+  return row[b.length];
+}
+
+// Narration-specific ("coverage" edgeMode) replacement for the literal
+// 8-word-anchor check: what fraction of the source's own edge-window words
+// (in order, not necessarily contiguous) reappear inside a correspondingly
+// widened transcript edge window. Deliberately widens the transcript side
+// (NARRATION_EDGE_SEARCH_MULTIPLIER) rather than the source side, so a
+// bounded spoken introduction/closing before/after the real content is
+// tolerated without weakening what source content must actually be
+// present.
+function computeNarrationEdgeCoverage(
+  sourceWords: string[],
+  transcriptWords: string[],
+  position: "start" | "end",
+): number {
+  const sourceEdge =
+    position === "start"
+      ? sourceWords.slice(0, EDGE_WORD_LIMIT)
+      : sourceWords.slice(-EDGE_WORD_LIMIT);
+  if (sourceEdge.length === 0) return 1;
+
+  const searchLimit = EDGE_WORD_LIMIT * NARRATION_EDGE_SEARCH_MULTIPLIER;
+  const transcriptWindow =
+    position === "start"
+      ? transcriptWords.slice(0, searchLimit)
+      : transcriptWords.slice(-searchLimit);
+
+  return lcsLength(sourceEdge, transcriptWindow) / sourceEdge.length;
+}
+
 function extractObviousHeadings(sourceText: string) {
   return Array.from(
     new Set(
@@ -479,9 +553,52 @@ function extractObviousHeadings(sourceText: string) {
 export function validateStructuredReadingCompleteness({
   sourceText,
   editorText,
+  checkHeadings = true,
+  edgeMode = "literal",
 }: {
   sourceText: string;
   editorText: string;
+  // extractObviousHeadings() re-derives "heading-shaped" lines (short,
+  // unpunctuated, title-like) directly from sourceText -- it has no
+  // awareness of which lines came from a real heading/subheading block
+  // versus a structural/decorative label embedded inside an already-
+  // classified substantive block (paragraph/list/definition/table). For
+  // app/api/kingdom/structure-reading/route.ts (the default, checkHeadings
+  // left true) sourceText is the teacher's raw, unfiltered original text
+  // and editorText legitimately renders real heading/subheading lines
+  // (structuredReadingToEditorText emits "# .../## ..."), so this check
+  // does genuine, needed work there: catching a heading Kingdom's
+  // structuring silently dropped. For narration validation
+  // (lib/accessibility/narrationIntegrity.ts), sourceText has already had
+  // heading/subheading BLOCKS excluded and leading structural-label
+  // blocks stripped before it ever reaches this function -- a caller that
+  // has already done its own block-type-based heading handling should set
+  // this to false, since re-scanning the remaining substantive text for
+  // heading-SHAPED lines only rediscovers embedded labels the narration
+  // rules explicitly permit the narrator to transform or omit, causing a
+  // false "heading_missing" rejection of a transcript that has not
+  // actually dropped any educational content.
+  checkHeadings?: boolean;
+  // "literal" (default, unchanged) requires an exact, ordered 8-word
+  // source phrase to appear verbatim in the output -- correct for
+  // app/api/kingdom/structure-reading/route.ts, whose editorText is
+  // expected to preserve the teacher's own wording closely. Accessibility
+  // narration (lib/accessibility/narrationIntegrity.ts) is explicitly
+  // instructed to open with a natural spoken introduction and to
+  // paraphrase rather than quote the reading
+  // (lib/accessibility/narrationTranscriptPrompt.ts), which a literal
+  // 8-word match cannot tolerate -- a faithful, complete transcript that
+  // (correctly) never repeats the source's exact opening/closing wording
+  // was being rejected as beginning/ending_content_missing. "coverage"
+  // instead measures what fraction of the source's own edge-window words
+  // reappear, in order, inside a correspondingly widened transcript edge
+  // window (computeNarrationEdgeCoverage) -- tolerant of paraphrasing and
+  // of a bounded leading/trailing spoken framing, while still failing a
+  // genuine omission or a transcript that only coincidentally shares a
+  // handful of common words with the source (see this file's and
+  // narrationIntegrity.test.ts's "coverage edge mode" tests for the
+  // calibration cases).
+  edgeMode?: "literal" | "coverage";
 }): StructuredReadingCompletenessResult {
   const normalizedSource = normalizeForContainment(sourceText);
   const normalizedOutput = normalizeForContainment(editorText);
@@ -500,53 +617,84 @@ export function validateStructuredReadingCompleteness({
     };
   }
 
-  const beginningAnchors = buildEdgeAnchors(
-    extractMeaningfulWords(sourceText),
-    "start",
-  );
-  const beginningMatches = countOrderedAnchorMatches(
-    normalizedOutput,
-    beginningAnchors,
-  );
-  if (
-    beginningAnchors.length > 0 &&
-    beginningMatches < requiredAnchorMatches(beginningAnchors.length)
-  ) {
-    return {
-      ok: false,
-      reason: "beginning_content_missing",
-    };
+  if (edgeMode === "coverage") {
+    const sourceWords = extractMeaningfulWords(sourceText);
+    const transcriptWords = extractMeaningfulWords(editorText);
+
+    const beginningCoverage = computeNarrationEdgeCoverage(
+      sourceWords,
+      transcriptWords,
+      "start",
+    );
+    if (beginningCoverage < NARRATION_EDGE_COVERAGE_THRESHOLD) {
+      return {
+        ok: false,
+        reason: "beginning_content_missing",
+      };
+    }
+
+    const endingCoverage = computeNarrationEdgeCoverage(
+      sourceWords,
+      transcriptWords,
+      "end",
+    );
+    if (endingCoverage < NARRATION_EDGE_COVERAGE_THRESHOLD) {
+      return {
+        ok: false,
+        reason: "ending_content_missing",
+      };
+    }
+  } else {
+    const beginningAnchors = buildEdgeAnchors(
+      extractMeaningfulWords(sourceText),
+      "start",
+    );
+    const beginningMatches = countOrderedAnchorMatches(
+      normalizedOutput,
+      beginningAnchors,
+    );
+    if (
+      beginningAnchors.length > 0 &&
+      beginningMatches < requiredAnchorMatches(beginningAnchors.length)
+    ) {
+      return {
+        ok: false,
+        reason: "beginning_content_missing",
+      };
+    }
+
+    const endingAnchors = buildEdgeAnchors(
+      extractMeaningfulWords(sourceText),
+      "end",
+    );
+    const endingMatches = countOrderedAnchorMatches(
+      normalizedOutput,
+      endingAnchors,
+    );
+    if (
+      endingAnchors.length > 0 &&
+      endingMatches < requiredAnchorMatches(endingAnchors.length)
+    ) {
+      return {
+        ok: false,
+        reason: "ending_content_missing",
+      };
+    }
   }
 
-  const endingAnchors = buildEdgeAnchors(
-    extractMeaningfulWords(sourceText),
-    "end",
-  );
-  const endingMatches = countOrderedAnchorMatches(
-    normalizedOutput,
-    endingAnchors,
-  );
-  if (
-    endingAnchors.length > 0 &&
-    endingMatches < requiredAnchorMatches(endingAnchors.length)
-  ) {
-    return {
-      ok: false,
-      reason: "ending_content_missing",
-    };
-  }
+  if (checkHeadings) {
+    const headings = extractObviousHeadings(sourceText);
+    const missingHeadings = headings.filter((heading) => {
+      const normalizedHeading = normalizeForContainment(heading);
+      return normalizedHeading && !normalizedOutput.includes(normalizedHeading);
+    });
 
-  const headings = extractObviousHeadings(sourceText);
-  const missingHeadings = headings.filter((heading) => {
-    const normalizedHeading = normalizeForContainment(heading);
-    return normalizedHeading && !normalizedOutput.includes(normalizedHeading);
-  });
-
-  if (missingHeadings.length > 0) {
-    return {
-      ok: false,
-      reason: "heading_missing",
-    };
+    if (missingHeadings.length > 0) {
+      return {
+        ok: false,
+        reason: "heading_missing",
+      };
+    }
   }
 
   return {
