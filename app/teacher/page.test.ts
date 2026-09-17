@@ -66,11 +66,11 @@ test("the four School Overview stat tiles keep their mobile 2x2 grid and add lg:
   assert.match(SOURCE, /<div className="grid grid-cols-2 gap-3 lg:grid-cols-4">/);
 });
 
-test("School Overview and SchoolOverviewCard ('Open Subjects') are paired using the approved lg two-column wrapper", () => {
+test("School Overview and SchoolOverviewCard ('Open Subjects') are paired using the approved lg two-column wrapper (Row 1, with its added lg:mb-6 row gap)", () => {
   const wrapperStart = SOURCE.indexOf(
-    '<div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">',
+    '<div className="lg:mb-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">',
   );
-  assert.notEqual(wrapperStart, -1, "expected the lg two-column wrapper to be present");
+  assert.notEqual(wrapperStart, -1, "expected Row 1's lg two-column wrapper to be present");
 
   const firstWrapperBlock = SOURCE.slice(
     wrapperStart,
@@ -84,7 +84,7 @@ test("School Overview and SchoolOverviewCard ('Open Subjects') are paired using 
   assert.match(firstWrapperBlock, /href="\/teacher\/subjects"/);
 });
 
-test("Priority Actions and Learner Insights are paired using the approved lg two-column wrapper", () => {
+test("Priority Actions and Learner Insights are paired using the approved lg two-column wrapper (Row 2, unchanged -- no row gap needed below the last row)", () => {
   const wrapperOccurrences = [
     ...SOURCE.matchAll(
       /<div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:\[&>\*\]:mb-0">/g,
@@ -92,11 +92,11 @@ test("Priority Actions and Learner Insights are paired using the approved lg two
   ];
   assert.equal(
     wrapperOccurrences.length,
-    2,
-    "expected exactly two lg two-column wrappers on this page",
+    1,
+    "expected exactly one Row 2 wrapper without the lg:mb-6 prefix (Row 1 now carries lg:mb-6)",
   );
 
-  const secondWrapperBlock = SOURCE.slice(wrapperOccurrences[1].index);
+  const secondWrapperBlock = SOURCE.slice(wrapperOccurrences[0].index);
   assert.match(secondWrapperBlock, /Priority Actions/);
   assert.match(secondWrapperBlock, /Learner Insights/);
   const priorityIndex = secondWrapperBlock.indexOf("Priority Actions");
@@ -105,6 +105,27 @@ test("Priority Actions and Learner Insights are paired using the approved lg two
     priorityIndex > -1 && insightsIndex > -1 && priorityIndex < insightsIndex,
     "expected Priority Actions to remain before Learner Insights (unchanged mobile order)",
   );
+});
+
+// AD ASTRA -- DESKTOP SPACING FIX: lg:[&>*]:mb-0 neutralises each row's
+// own children's mobile mb-5/mb-6 at lg:, which left Row 1 and Row 2
+// touching vertically on desktop (no gap between rows, only the
+// horizontal lg:gap-6 between columns). Row 1's wrapper now also carries
+// lg:mb-6 (24px) so the two desktop rows have the same breathing room
+// vertically as they already have horizontally. Mobile spacing (each
+// child's own mb-5/mb-6) and the horizontal lg:gap-6 are untouched.
+
+test("Row 1's wrapper adds a 24px desktop-only row gap (lg:mb-6) before Row 2, without touching the horizontal lg:gap-6 or mobile spacing", () => {
+  assert.match(
+    SOURCE,
+    /<div className="lg:mb-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:\[&>\*\]:mb-0">/,
+  );
+
+  const mb6Count = (SOURCE.match(/lg:mb-6/g) ?? []).length;
+  assert.equal(mb6Count, 1, "expected lg:mb-6 to appear exactly once (Row 1 only, not Row 2)");
+
+  const gap6Count = (SOURCE.match(/lg:gap-6/g) ?? []).length;
+  assert.equal(gap6Count, 2, "expected the horizontal lg:gap-6 to remain on both rows, unchanged");
 });
 
 test("regression: every section keeps its own mobile mb-5/mb-6 class -- the lg: wrappers are additive, not a replacement for the mobile stacking margins", () => {

@@ -100,7 +100,7 @@ export default async function TeacherHomePage() {
           </div>
         </div>
 
-        <div className="lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
+        <div className="lg:mb-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
           <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
               <div className="rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
