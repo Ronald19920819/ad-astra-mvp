@@ -423,7 +423,7 @@ const askKingdom = async () => {
         } as CSSProperties
       }
     >
-      <div className="mx-auto max-w-md px-4 pt-3">
+      <div className="mx-auto max-w-md px-4 pt-3 lg:max-w-6xl">
         {/* Hero Banner */}
         <div
           className="relative mb-5 w-full overflow-hidden rounded-[2rem] border border-blue-100 shadow-lg"
@@ -573,33 +573,35 @@ const askKingdom = async () => {
               </p>
             )}
 
-            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3">
-  <span className="text-sm font-semibold text-slate-600">
-    Total Marks
-  </span>
-
-  <span className="font-bold text-slate-900">
-    {marks}
-  </span>
-</div>
-
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <span className="block text-xs font-bold uppercase tracking-wide text-slate-500">
-                Due Date (inherited from linked lesson)
-              </span>
-              {dueDate ? (
-                <span className="mt-1 block font-semibold text-slate-900">
-                  {new Date(`${dueDate}T00:00:00Z`).toLocaleDateString("en-ZA", {
-                    timeZone: "UTC",
-                  })}
+            <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
+              <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <span className="text-sm font-semibold text-slate-600">
+                  Total Marks
                 </span>
-              ) : (
-                <span className="mt-1 block font-semibold text-red-600">
-                  {linkedLesson
-                    ? "This lesson has no due date yet. Set one on the lesson before publishing this activity."
-                    : "Select a linked lesson to see its due date."}
+
+                <span className="font-bold text-slate-900">
+                  {marks}
                 </span>
-              )}
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <span className="block text-xs font-bold uppercase tracking-wide text-slate-500">
+                  Due Date (inherited from linked lesson)
+                </span>
+                {dueDate ? (
+                  <span className="mt-1 block font-semibold text-slate-900">
+                    {new Date(`${dueDate}T00:00:00Z`).toLocaleDateString("en-ZA", {
+                      timeZone: "UTC",
+                    })}
+                  </span>
+                ) : (
+                  <span className="mt-1 block font-semibold text-red-600">
+                    {linkedLesson
+                      ? "This lesson has no due date yet. Set one on the lesson before publishing this activity."
+                      : "Select a linked lesson to see its due date."}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -739,7 +741,7 @@ disabled={isAskingKingdom}
 
       {/* Bottom Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black">
+        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>

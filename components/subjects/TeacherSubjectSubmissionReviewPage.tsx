@@ -105,7 +105,7 @@ export async function TeacherSubjectSubmissionReviewPage({
         } as CSSProperties
       }
     >
-      <div className="mx-auto max-w-2xl px-4 pt-4">
+      <div className="mx-auto max-w-2xl px-4 pt-4 lg:max-w-6xl">
         <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
           <Link
             href={buildSubjectRoute(subject, "teacherReview")}

@@ -98,7 +98,7 @@ export async function TeacherSubjectLearnersPage({
 
   return (
     <main className="min-h-screen bg-slate-100 pb-24">
-      <div className="mx-auto max-w-md px-4 pt-4">
+      <div className="mx-auto max-w-md px-4 pt-4 lg:max-w-6xl">
         <div
           className="mb-5 rounded-[2rem] border bg-white p-5 shadow-sm"
           style={{ borderColor: subject.colourTheme.border }}
@@ -146,7 +146,7 @@ export async function TeacherSubjectLearnersPage({
             No learner participation has been recorded yet.
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
             {learners.map((learner) => {
               const supportStatus = getLearnerSupportStatus(learner.overdueItems);
               return (
@@ -243,6 +243,7 @@ export async function TeacherSubjectLearnersPage({
                       "teacherLearners",
                       learner.id,
                     )}
+                    prefetch={false}
                     className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold text-white"
                     style={{ backgroundColor: subject.colourTheme.primary }}
                   >

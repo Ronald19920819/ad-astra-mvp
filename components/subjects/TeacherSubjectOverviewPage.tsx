@@ -119,7 +119,7 @@ export async function TeacherSubjectOverviewPage({
         } as CSSProperties
       }
     >
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto lg:max-w-6xl">
         <div
           className="relative mb-6 overflow-hidden rounded-[2rem] border border-blue-100 bg-black shadow-lg"
           style={{
@@ -209,7 +209,7 @@ export async function TeacherSubjectOverviewPage({
               {summaryError}
             </p>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <div className="rounded-2xl bg-[#FFFDF9] p-4">
                 <p className="text-2xl font-bold text-[#102A43]">{summary.learnerCount}</p>
                 <p className="text-xs font-medium text-black/60">Enrolled Learners</p>
@@ -239,159 +239,165 @@ export async function TeacherSubjectOverviewPage({
           )}
         </section>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <BookOpen size={22} />
-            </div>
-
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Classroom Management
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Videos, readings and pop quizzes
-              </p>
-            </div>
-          </div>
-
-          <p className="mb-4 text-sm leading-relaxed text-black/70">
-            Manage lessons, videos, readings and quizzes available to learners.
-          </p>
-
-          
-
-          <Link href={buildSubjectRoute(subject, "teacherClassroom")} prefetch={false}>
-            <div className="mt-3 flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
-              <div className="flex items-center gap-3">
-                <BookOpen size={18} className="text-[#F97316]" />
-                <p className="text-sm font-semibold text-black">
-                  Open Classroom
-                </p>
+        <div className="lg:mb-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
+          <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <BookOpen size={22} />
               </div>
 
-              <span className="text-lg font-bold text-[#F97316]">→</span>
-            </div>
-          </Link>
-        </section>
-
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <SquarePen size={22} />
-            </div>
-
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Activity Management
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Upload work and review submissions
-              </p>
-            </div>
-          </div>
-
-          <p className="mb-4 text-sm leading-relaxed text-black/70">
-            Manage lesson activities, submissions and assessment tasks.
-          </p>
-
-
-          <Link href={buildSubjectRoute(subject, "teacherActivities")} prefetch={false}>
-            <div className="flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
-              <div className="flex items-center gap-3">
-                <SquarePen size={18} className="text-[#F97316]" />
-                <p className="text-sm font-semibold text-black">
-                  Open Activity Centre
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Classroom Management
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Videos, readings and pop quizzes
                 </p>
               </div>
-
-              <span className="text-lg font-bold text-[#F97316]">→</span>
-            </div>
-          </Link>
-        </section>
-
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <MonitorPlay size={22} />
             </div>
 
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Live Classroom
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Open the live stream and manage learner chat for this subject.
-              </p>
-            </div>
-          </div>
+            <p className="mb-4 text-sm leading-relaxed text-black/70">
+              Manage lessons, videos, readings and quizzes available to learners.
+            </p>
 
-          <Link href={buildSubjectRoute(subject, "teacherLiveClassroom")} prefetch={false}>
-            <div className="rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
-              Enter Live Classroom
-            </div>
-          </Link>
-        </section>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <ClipboardCheck size={22} />
-            </div>
 
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Learning Tracker
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Video, reading and quiz completion
-              </p>
-            </div>
-          </div>
+            <Link href={buildSubjectRoute(subject, "teacherClassroom")} prefetch={false}>
+              <div className="mt-3 flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <BookOpen size={18} className="text-[#F97316]" />
+                  <p className="text-sm font-semibold text-black">
+                    Open Classroom
+                  </p>
+                </div>
 
-          
+                <span className="text-lg font-bold text-[#F97316]">→</span>
+              </div>
+            </Link>
+          </section>
 
-          <Link href={buildSubjectRoute(subject, "teacherTracker")} prefetch={false}>
-            <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
-              Open Learning Tracker
-            </div>
-          </Link>
-        </section>
+          <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <SquarePen size={22} />
+              </div>
 
-        <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center gap-3">
-            <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
-              <FileText size={22} />
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Activity Management
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Upload work and review submissions
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h2 className="text-lg font-bold text-[#102A43]">
-                Activity Review
-              </h2>
-              <p className="text-xs font-medium text-black/50">
-                Submissions, AI marks and teacher review
-              </p>
+            <p className="mb-4 text-sm leading-relaxed text-black/70">
+              Manage lesson activities, submissions and assessment tasks.
+            </p>
+
+
+            <Link href={buildSubjectRoute(subject, "teacherActivities")} prefetch={false}>
+              <div className="flex items-center justify-between rounded-2xl border border-orange-100 bg-[#FFFDF9] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <SquarePen size={18} className="text-[#F97316]" />
+                  <p className="text-sm font-semibold text-black">
+                    Open Activity Centre
+                  </p>
+                </div>
+
+                <span className="text-lg font-bold text-[#F97316]">→</span>
+              </div>
+            </Link>
+          </section>
+        </div>
+
+        <div className="lg:mb-6 lg:grid lg:grid-cols-3 lg:gap-6 lg:[&>*]:mb-0">
+          <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <MonitorPlay size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Live Classroom
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Open the live stream and manage learner chat for this subject.
+                </p>
+              </div>
             </div>
-          </div>
 
-          
+            <Link href={buildSubjectRoute(subject, "teacherLiveClassroom")} prefetch={false}>
+              <div className="rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
+                Enter Live Classroom
+              </div>
+            </Link>
+          </section>
 
-          <Link href={buildSubjectRoute(subject, "teacherReview")} prefetch={false}>
-            <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
-              Open Activity Review
+          <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <ClipboardCheck size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Learning Tracker
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Video, reading and quiz completion
+                </p>
+              </div>
             </div>
-          </Link>
-        </section>
 
-        <TeacherSubjectEventsCard
-          subjectId={subject.databaseId}
-          initialEvents={initialEvents.slice(0, 3)}
-        />
 
-        <TeacherSubjectAnnouncementCard
-          subjectId={subject.databaseId}
-          initialAnnouncement={initialAnnouncement}
-        />
+
+            <Link href={buildSubjectRoute(subject, "teacherTracker")} prefetch={false}>
+              <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
+                Open Learning Tracker
+              </div>
+            </Link>
+          </section>
+
+          <section className="mb-5 rounded-[2rem] border border-orange-100 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[#FFF3E6] p-3 text-[#F97316]">
+                <FileText size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  Activity Review
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Submissions, AI marks and teacher review
+                </p>
+              </div>
+            </div>
+
+
+
+            <Link href={buildSubjectRoute(subject, "teacherReview")} prefetch={false}>
+              <div className="mt-4 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white">
+                Open Activity Review
+              </div>
+            </Link>
+          </section>
+        </div>
+
+        <div className="lg:mb-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
+          <TeacherSubjectEventsCard
+            subjectId={subject.databaseId}
+            initialEvents={initialEvents.slice(0, 3)}
+          />
+
+          <TeacherSubjectAnnouncementCard
+            subjectId={subject.databaseId}
+            initialAnnouncement={initialAnnouncement}
+          />
+        </div>
 
         <Link href={buildSubjectRoute(subject, "teacherLearners")} prefetch={false}>
           <section className="rounded-[1.5rem] border border-orange-100 bg-white/90 p-4 shadow-sm">
@@ -418,7 +424,7 @@ export async function TeacherSubjectOverviewPage({
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>
@@ -442,7 +448,8 @@ export async function TeacherSubjectOverviewPage({
       </nav>
       <style>{`
         .subject-theme .bg-orange-50,
-        .subject-theme .bg-orange-100 {
+        .subject-theme .bg-orange-100,
+        .subject-theme .bg-\\[\\#FFF3E6\\] {
           background-color: var(--subject-soft) !important;
         }
         .subject-theme .text-orange-500,

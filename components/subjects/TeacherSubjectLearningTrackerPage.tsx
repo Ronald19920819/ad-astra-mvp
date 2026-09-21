@@ -216,7 +216,7 @@ export async function TeacherSubjectLearningTrackerPage({
         } as CSSProperties
       }
     >
-      <div className="mx-auto w-full min-w-0 max-w-3xl px-4 pt-4">
+      <div className="mx-auto w-full min-w-0 max-w-3xl px-4 pt-4 lg:max-w-6xl">
         <div
           className="relative mb-5 w-full overflow-hidden rounded-[2rem] border border-blue-100 shadow-lg"
           style={{ height: "240px" }}
@@ -327,7 +327,7 @@ export async function TeacherSubjectLearningTrackerPage({
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black">
+        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}><div className="py-4">Home</div></Link>
           <Link href="/teacher/subjects" prefetch={false}><div className="py-4 text-[#508DB1]">Subjects</div></Link>
           <Link href="/teacher/messages" prefetch={false}><div className="py-4">Messages</div></Link>

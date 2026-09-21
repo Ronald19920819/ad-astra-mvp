@@ -66,7 +66,7 @@ export default function TeacherProfilePage() {
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-32`}
     >
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto lg:max-w-6xl">
         <section className="flex flex-col items-center text-center mb-6">
           <Image
             src="/ad_astra_logo.png"
@@ -105,66 +105,68 @@ export default function TeacherProfilePage() {
           </div>
         </section>
 
-        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center gap-3">
-            <User size={22} className="text-[#508DB1]" />
-            <h2 className="text-lg font-bold text-[#102A43]">
-              Teacher Information
-            </h2>
-          </div>
+        <div className="lg:mb-6 lg:grid lg:grid-cols-2 lg:gap-6 lg:[&>*]:mb-0">
+          <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center gap-3">
+              <User size={22} className="text-[#508DB1]" />
+              <h2 className="text-lg font-bold text-[#102A43]">
+                Teacher Information
+              </h2>
+            </div>
 
-          <div className="space-y-2 text-sm">
-            <p><strong>Name:</strong> {profile?.displayName ?? "Teacher"}</p>
-            <p className="break-all"><strong>Teacher ID:</strong> {profile?.teacherProfileId ?? (isLoading ? "Loading..." : "Unavailable")}</p>
-            <p><strong>Email:</strong> {profile?.email ?? "Not supplied"}</p>
-            <p><strong>School:</strong> {profile?.school ?? "Not supplied"}</p>
-            <p>
-              <strong>Role:</strong>{" "}
-              {profile
-                ? profile.isAdministrator
-                  ? "Teacher and Administrator"
-                  : "Teacher"
-                : "Teacher"}
-            </p>
-            <p>
-              <strong>Administrator:</strong>{" "}
-              {profile?.isAdministrator ? "Yes" : "No"}
-            </p>
-            <p>
-              <strong>Account status:</strong>{" "}
-              {profile?.accountStatus
-                ? `${profile.accountStatus.charAt(0).toUpperCase()}${profile.accountStatus.slice(1)}`
-                : isLoading
-                  ? "Loading..."
-                  : "Unavailable"}
-            </p>
-            <p>
-              <strong>Assigned subjects:</strong>{" "}
-              {profile?.assignedSubjects.length
-                ? profile.assignedSubjects
-                    .map((subject) => subject.name)
-                    .join(", ")
-                : "None"}
-            </p>
-          </div>
-        </section>
+            <div className="space-y-2 text-sm">
+              <p><strong>Name:</strong> {profile?.displayName ?? "Teacher"}</p>
+              <p className="break-all"><strong>Teacher ID:</strong> {profile?.teacherProfileId ?? (isLoading ? "Loading..." : "Unavailable")}</p>
+              <p><strong>Email:</strong> {profile?.email ?? "Not supplied"}</p>
+              <p><strong>School:</strong> {profile?.school ?? "Not supplied"}</p>
+              <p>
+                <strong>Role:</strong>{" "}
+                {profile
+                  ? profile.isAdministrator
+                    ? "Teacher and Administrator"
+                    : "Teacher"
+                  : "Teacher"}
+              </p>
+              <p>
+                <strong>Administrator:</strong>{" "}
+                {profile?.isAdministrator ? "Yes" : "No"}
+              </p>
+              <p>
+                <strong>Account status:</strong>{" "}
+                {profile?.accountStatus
+                  ? `${profile.accountStatus.charAt(0).toUpperCase()}${profile.accountStatus.slice(1)}`
+                  : isLoading
+                    ? "Loading..."
+                    : "Unavailable"}
+              </p>
+              <p>
+                <strong>Assigned subjects:</strong>{" "}
+                {profile?.assignedSubjects.length
+                  ? profile.assignedSubjects
+                      .map((subject) => subject.name)
+                      .join(", ")
+                  : "None"}
+              </p>
+            </div>
+          </section>
 
-        <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center gap-3">
-            <GraduationCap size={22} className="text-[#508DB1]" />
-            <h2 className="text-lg font-bold text-[#102A43]">
-              Teaching Overview
-            </h2>
-          </div>
+          <section className="mb-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm">
+            <div className="mb-3 flex items-center gap-3">
+              <GraduationCap size={22} className="text-[#508DB1]" />
+              <h2 className="text-lg font-bold text-[#102A43]">
+                Teaching Overview
+              </h2>
+            </div>
 
-          <div className="space-y-2 text-sm">
-            <p><strong>Subjects Taught:</strong> {overview?.subjectsTaught ?? 0}</p>
-            <p><strong>Active Learners:</strong> {overview?.activeLearners ?? 0}</p>
-            <p><strong>Published Lessons:</strong> {overview?.publishedLessons ?? 0}</p>
-            <p><strong>Published Activities:</strong> {overview?.publishedActivities ?? 0}</p>
-            <p><strong>Submissions Awaiting Review:</strong> {overview?.submissionsAwaitingReview ?? 0}</p>
-          </div>
-        </section>
+            <div className="space-y-2 text-sm">
+              <p><strong>Subjects Taught:</strong> {overview?.subjectsTaught ?? 0}</p>
+              <p><strong>Active Learners:</strong> {overview?.activeLearners ?? 0}</p>
+              <p><strong>Published Lessons:</strong> {overview?.publishedLessons ?? 0}</p>
+              <p><strong>Published Activities:</strong> {overview?.publishedActivities ?? 0}</p>
+              <p><strong>Submissions Awaiting Review:</strong> {overview?.submissionsAwaitingReview ?? 0}</p>
+            </div>
+          </section>
+        </div>
 
         <section className="mb-5 rounded-[2rem] border border-yellow-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-3">
@@ -304,7 +306,7 @@ export default function TeacherProfilePage() {
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm  text-black">
+        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm  text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>

@@ -63,7 +63,7 @@ export default async function TeacherSubjectsPage() {
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-6 pb-36`}
     >
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto lg:max-w-6xl">
         <div
           className="relative mb-6 overflow-hidden rounded-[2rem] border border-blue-100 bg-black shadow-lg"
           style={{
@@ -121,7 +121,7 @@ export default async function TeacherSubjectsPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
           {subjects.map((subject) => {
             const Icon = subjectIcons[subject.subject.iconKey];
 
@@ -195,7 +195,7 @@ export default async function TeacherSubjectsPage() {
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black">
+        <div className="max-w-md mx-auto grid grid-cols-5 text-center text-sm  text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}>
             <div className="py-4">Home</div>
           </Link>

@@ -998,7 +998,7 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
         } as CSSProperties
       }
     >
-      <div className="mx-auto max-w-md px-4 pt-3">
+      <div className="mx-auto max-w-md px-4 pt-3 lg:max-w-6xl">
 
        {/* Hero Banner */}
 <div
@@ -1110,18 +1110,20 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
     )}
   </select>
 </div>
-            <input
-              value={lessonNumber}
-              onChange={(e) => setLessonNumber(e.target.value)}
-              placeholder="Lesson Number, for example 2.7"
-              className="w-full rounded-2xl border border-slate-200 p-3 outline-none"
-            />
-            <input
-              value={lessonTitle}
-              onChange={(e) => setLessonTitle(e.target.value)}
-              placeholder="Lesson Title"
-              className="w-full rounded-2xl border border-slate-200 p-3 outline-none"
-            />
+            <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0">
+              <input
+                value={lessonNumber}
+                onChange={(e) => setLessonNumber(e.target.value)}
+                placeholder="Lesson Number, for example 2.7"
+                className="w-full rounded-2xl border border-slate-200 p-3 outline-none"
+              />
+              <input
+                value={lessonTitle}
+                onChange={(e) => setLessonTitle(e.target.value)}
+                placeholder="Lesson Title"
+                className="w-full rounded-2xl border border-slate-200 p-3 outline-none"
+              />
+            </div>
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <label
@@ -1296,7 +1298,7 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
           )}
           {activeContentPanel && (
   <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 px-4 py-6 sm:items-center">
-    <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-2xl">
+    <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-[2rem] bg-white p-5 shadow-2xl lg:max-w-4xl">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-xl font-bold text-slate-900">
@@ -2126,7 +2128,7 @@ const generateReadingWithKingdom = async (isRegeneration = false) => {
         </div>
 {/* Bottom Navigation */}
 <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-  <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black">
+  <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black lg:max-w-6xl">
     <Link href="/teacher" prefetch={false}>
       <div className="py-4">Home</div>
     </Link>

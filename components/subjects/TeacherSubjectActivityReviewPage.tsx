@@ -149,6 +149,7 @@ function ReviewRows({
                     "teacherReview",
                     learner.submission.id,
                   )}
+                  prefetch={false}
                   className="flex items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-[10px] font-semibold text-white"
                 >
                   <FileSearch size={13} /> Open
@@ -198,6 +199,7 @@ function ReviewRows({
                     "teacherReview",
                     learner.submission.id,
                   )}
+                  prefetch={false}
                   className="mt-3 flex w-full items-center justify-center gap-1 rounded-full bg-orange-500 px-3 py-2 text-xs font-semibold text-white"
                 >
                   <FileSearch size={14} /> Open
@@ -256,7 +258,7 @@ export async function TeacherSubjectActivityReviewPage({
         } as CSSProperties
       }
     >
-      <div className="mx-auto max-w-3xl px-4 pt-4">
+      <div className="mx-auto max-w-3xl px-4 pt-4 lg:max-w-6xl">
         <div
           className="relative mb-5 w-full overflow-hidden rounded-[2rem] border border-blue-100 shadow-lg"
           style={{ height: "240px" }}
@@ -373,7 +375,7 @@ export async function TeacherSubjectActivityReviewPage({
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-blue-100 bg-white shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">
-        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black">
+        <div className="mx-auto grid max-w-md grid-cols-5 text-center text-sm text-black lg:max-w-6xl">
           <Link href="/teacher" prefetch={false}><div className="py-4">Home</div></Link>
           <Link href="/teacher/subjects" prefetch={false}><div className="py-4 text-[#508DB1]">Subjects</div></Link>
           <Link href="/teacher/messages" prefetch={false}><div className="py-4">Messages</div></Link>

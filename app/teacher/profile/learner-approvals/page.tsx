@@ -78,7 +78,7 @@ export default function LearnerApprovalsPage() {
     <main
       className={`${neueHaas.className} min-h-screen bg-gradient-to-b from-[#EEF7FF] to-[#FFF8E6] p-4 pb-12 sm:p-6`}
     >
-      <div className="mx-auto max-w-2xl">
+      <div className="mx-auto max-w-2xl lg:max-w-6xl">
         <Link
           href="/teacher/profile"
           className="mb-5 inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-[#102A43] shadow-sm"
@@ -127,7 +127,7 @@ export default function LearnerApprovalsPage() {
               </p>
             </div>
           ) : (
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 space-y-4 lg:grid lg:grid-cols-2 lg:gap-6 lg:space-y-0">
               {requests.map((request) => {
                 const isReviewing = reviewingId === request.id;
 
