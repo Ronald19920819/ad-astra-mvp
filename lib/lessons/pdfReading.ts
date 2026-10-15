@@ -55,3 +55,78 @@ export function hasPdfSignature(bytes: Uint8Array) {
     bytes[4] === 0x2d
   );
 }
+
+// AD ASTRA -- LIBRARY CLUB (STAGE C): builds a human-readable download
+// filename entirely from already-canonical subject/lesson metadata --
+// never from a client-supplied value. Strips path separators, the
+// characters Windows/most filesystems and Content-Disposition both
+// forbid, and any control character (including \r/\n, which is what
+// would let a crafted title inject a second HTTP header) before joining
+// the parts. The result always ends in exactly one ".pdf" extension.
+const UNSAFE_FILENAME_CHARACTERS = /[\\/:*?"<>|\u0000-\u001F]/g;
+
+function sanitizeFilenamePart(value: string) {
+  return value
+    .replace(UNSAFE_FILENAME_CHARACTERS, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function buildLibraryReadingDownloadFilename(
+  subjectDisplayName: string,
+  lessonNumber: string,
+  lessonTitle: string,
+) {
+  const sanitizedLessonNumber = sanitizeFilenamePart(lessonNumber);
+
+  const parts = [
+    sanitizeFilenamePart(subjectDisplayName),
+    sanitizedLessonNumber ? `Lesson ${sanitizedLessonNumber}` : "",
+    sanitizeFilenamePart(lessonTitle),
+  ].filter((part) => part.length > 0);
+
+  const baseName = parts.join(" - ") || "AD Astra Library Club Reading";
+  return `${baseName}.pdf`;
+}
+
+// AD ASTRA -- LIBRARY CLUB (STAGE C): the two pure eligibility checks
+// behind resolveAuthorizedLibraryReading (lib/supabase/libraryPdfAccess.ts).
+// Deliberately kept here, in a module with no "server-only" import, so
+// they can be exercised directly with real imports in a plain node:test
+// run (this codebase has no established Supabase-client-mocking
+// convention, so this is the genuinely-behavioural alternative to a
+// source-string assertion for this decision logic) rather than merely
+// re-implemented/mirrored inside a test file.
+
+export function isPublishedLessonForSubject(
+  lesson: { status: string; subject_id: string } | null | undefined,
+  expectedSubjectId: string,
+): boolean {
+  return Boolean(
+    lesson && lesson.status === "published" && lesson.subject_id === expectedSubjectId,
+  );
+}
+
+export function isEligibleLibraryReadingMaterial(
+  material:
+    | {
+        lesson_id: string;
+        material_type: string;
+        source_type: string;
+        content_url: string | null;
+      }
+    | null
+    | undefined,
+  expectedLessonId: string,
+  expectedSubjectId: string,
+): boolean {
+  if (!material) return false;
+
+  return (
+    material.lesson_id === expectedLessonId &&
+    material.material_type === "reading" &&
+    material.source_type === "pdf" &&
+    typeof material.content_url === "string" &&
+    isLessonReadingPdfPath(material.content_url, expectedSubjectId, expectedLessonId)
+  );
+}

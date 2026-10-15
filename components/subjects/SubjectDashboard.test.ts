@@ -56,3 +56,62 @@ test("regression: no href, route, or query-parameter string on this page changed
 test("regression: this prefetch change does not touch authentication -- getAuthenticatedLearnerProfile is still called exactly as before", () => {
   assert.match(SOURCE, /currentLearner = await getAuthenticatedLearnerProfile\(\);/);
 });
+
+// AD ASTRA -- LIBRARY CLUB (STAGE B) DASHBOARD ENTRANCE: a single new
+// section, added once to this shared SubjectDashboard component (used by
+// all 8 subject variants, per BusinessStudiesDashboard/EnglishDashboard/
+// AfrikaansDashboard/HistoryDashboard's identical wrapper pages), after
+// the existing "Your Work" card and before the bottom navigation. No
+// existing section, card, or data fetch was touched.
+
+test("1/4: the 'AD Astra -- Library Club' entrance links to /library/${subject.key}, the exact canonical subjectKey, not a display name", () => {
+  assert.match(SOURCE, /AD Astra &ndash; Library Club/);
+  assert.match(SOURCE, /href=\{`\/library\/\$\{subject\.key\}`\}/);
+});
+
+test("2: the entrance is added once to the shared SubjectDashboard component -- not duplicated per subject variant", () => {
+  const occurrences = (SOURCE.match(/AD Astra &ndash; Library Club/g) ?? []).length;
+  assert.equal(occurrences, 1, "expected the Library Club heading exactly once in this shared component");
+});
+
+test("5: the Library Club entrance link disables prefetch, matching the established learner-navigation convention", () => {
+  assert.match(
+    SOURCE,
+    /<Link href=\{`\/library\/\$\{subject\.key\}`\} prefetch=\{false\}>/,
+  );
+});
+
+test("6: the entrance reuses the existing subject colour theme variables -- no new hardcoded colour system was introduced", () => {
+  const entranceStart = SOURCE.indexOf("AD Astra &ndash; Library Club");
+  const entranceEnd = SOURCE.indexOf("</section>", entranceStart);
+  const entranceBlock = SOURCE.slice(entranceStart - 400, entranceEnd);
+  assert.match(entranceBlock, /var\(--subject-soft\)/);
+  assert.match(entranceBlock, /var\(--subject-primary\)/);
+  assert.doesNotMatch(entranceBlock, /#F97316|#2563EB|#EB2525|#3AAA35/);
+});
+
+test("7: the entrance introduces no progress/XP/Coin/due-date language", () => {
+  const entranceStart = SOURCE.indexOf("AD Astra &ndash; Library Club");
+  const entranceEnd = SOURCE.indexOf("</section>", entranceStart);
+  const entranceBlock = SOURCE.slice(entranceStart - 200, entranceEnd);
+  assert.doesNotMatch(entranceBlock, /XP|Coin|progress|completion|due date|overdue|mark/i);
+});
+
+test("8: existing dashboard content (Learning Overview, Live Classroom, Classroom, Activities, Your Work) remains present, before the new entrance", () => {
+  assert.match(SOURCE, /Learning Overview/);
+  assert.match(SOURCE, /Live Classroom/);
+  assert.match(SOURCE, />\s*Classroom\s*</);
+  assert.match(SOURCE, />\s*Activities\s*</);
+  assert.match(SOURCE, /Your Work/);
+  const yourWorkIndex = SOURCE.indexOf("Your Work");
+  const libraryClubIndex = SOURCE.indexOf("AD Astra &ndash; Library Club");
+  assert.ok(yourWorkIndex > -1 && libraryClubIndex > -1);
+  assert.ok(yourWorkIndex < libraryClubIndex, "expected the Library Club entrance after Your Work");
+});
+
+test("the entrance sits after the content wrapper's existing sections and before the bottom navigation", () => {
+  const libraryClubIndex = SOURCE.indexOf("AD Astra &ndash; Library Club");
+  const navIndex = SOURCE.indexOf("<nav");
+  assert.ok(libraryClubIndex > -1 && navIndex > -1);
+  assert.ok(libraryClubIndex < navIndex, "expected the Library Club entrance before the bottom nav");
+});

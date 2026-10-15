@@ -25,6 +25,7 @@ import {
   BookOpen,
   GraduationCap,
   Languages,
+  Library,
   MonitorPlay,
   PlayCircle,
   FileText,
@@ -502,6 +503,43 @@ export async function SubjectDashboard({
               </div>
             </section>
           </Link>
+
+          <section className="mt-5 rounded-[2rem] border border-blue-100 bg-white p-5 shadow-sm lg:mt-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="rounded-2xl bg-[var(--subject-soft)] p-3 text-[var(--subject-primary)]">
+                <Library size={22} />
+              </div>
+
+              <div>
+                <h2 className="text-lg font-bold text-[#102A43]">
+                  AD Astra &ndash; Library Club
+                </h2>
+                <p className="text-xs font-medium text-black/50">
+                  Your permanent study shelf
+                </p>
+              </div>
+            </div>
+
+            <p className="mb-4 text-sm leading-relaxed text-black/70">
+              Your coursework, readings and study materials in one place.
+              Read online or download for revision and independent study.
+            </p>
+
+            <Link href={`/library/${subject.key}`} prefetch={false}>
+              <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-[#F8FBFF] px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <Library size={18} className="text-[var(--subject-primary)]" />
+                  <p className="text-sm font-semibold text-black">
+                    Enter Library Club
+                  </p>
+                </div>
+
+                <span className="text-lg font-bold text-[var(--subject-primary)]">
+                  {LEARNER_DASHBOARD_ARROW}
+                </span>
+              </div>
+            </Link>
+          </section>
         </div>
       </div>
 
