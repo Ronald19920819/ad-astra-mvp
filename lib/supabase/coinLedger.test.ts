@@ -77,6 +77,35 @@ test("recordAdminCoinAdjustment delegates to the admin_adjust_learner_coins RPC 
   assert.doesNotMatch(fn!, /\.from\("coin_transactions"\)\s*\n\s*\.insert\(/);
 });
 
+// STAGE B1 AUDIT REGRESSION: the RPC resolves the acting administrator
+// via auth.uid() internally. A service-role (createSupabaseAdminClient)
+// call carries no end-user JWT "sub" claim, so auth.uid() would be null
+// inside the function and its own administrator check would reject
+// EVERY call unconditionally -- this must call the RPC through the
+// administrator's own request-scoped client instead, exactly matching
+// requestStoreRedemption()/adminDeclineStoreRedemption()'s already-correct
+// pattern in lib/supabase/storeRedemptions.ts.
+test("recordAdminCoinAdjustment calls the RPC through the ADMINISTRATOR'S OWN request-scoped client -- never the service-role admin client", () => {
+  const fn = SOURCE.match(/export async function recordAdminCoinAdjustment\([\s\S]*?\n\}/)?.[0];
+  assert.ok(fn, "recordAdminCoinAdjustment not found");
+  assert.match(fn!, /const supabase = await createSupabaseRequestClient\(\);/);
+  assert.doesNotMatch(fn!, /createSupabaseAdminClient/);
+});
+
+test("createSupabaseRequestClient is imported alongside createSupabaseAdminClient -- the other three ledger functions (balance/transaction reads, pair rewards) are unaffected and still use the admin client", () => {
+  assert.match(
+    SOURCE,
+    /import \{\s*\n\s*createSupabaseAdminClient,\s*\n\s*createSupabaseRequestClient,\s*\n\s*\} from "@\/lib\/supabase\/server";/,
+  );
+  const getBalanceFn = SOURCE.match(/export async function getLearnerCoinBalance\([\s\S]*?\n\}/)?.[0];
+  const getTransactionsFn = SOURCE.match(/export async function getLearnerCoinTransactions\([\s\S]*?\n\}/)?.[0];
+  const pairRewardFn = SOURCE.match(/export async function recordLessonActivityPairReward\([\s\S]*?\n\}/)?.[0];
+  for (const fn of [getBalanceFn, getTransactionsFn, pairRewardFn]) {
+    assert.ok(fn);
+    assert.match(fn!, /createSupabaseAdminClient\(\)/);
+  }
+});
+
 test("the RPC call passes the pre-signed amount, transaction type, reason, optional reference transaction, and metadata -- never a separate 'direction' field the database would have to interpret", () => {
   const fn = SOURCE.match(/export async function recordAdminCoinAdjustment\([\s\S]*?\n\}/)?.[0];
   assert.ok(fn);

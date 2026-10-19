@@ -289,12 +289,13 @@ export default async function XpCoinsPage() {
               )}
             </div>
             <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <span
-                className="flex-1 cursor-not-allowed rounded-2xl border border-blue-100 bg-[#F8FBFF] py-3 text-center text-sm font-semibold text-black/40"
-                title="The Ad Astra Store is coming soon."
+              <Link
+                href="/store"
+                prefetch={false}
+                className="flex-1 rounded-2xl border border-blue-100 bg-[#F8FBFF] py-3 text-center text-sm font-semibold text-[#508DB1]"
               >
                 View Store
-              </span>
+              </Link>
               <Link
                 href="/xp-coins/history"
                 className="flex-1 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
@@ -381,18 +382,22 @@ export default async function XpCoinsPage() {
           )}
         </Card>
 
-        {/* E. Full-width Store preview */}
+        {/* E. Full-width Store entrance */}
         <section className="rounded-[2rem] border border-blue-100 bg-white p-6 text-center shadow-sm lg:p-10">
           <div className="mx-auto mb-3 inline-flex rounded-2xl bg-[#EEF7FF] p-3 text-[#508DB1]">
             <ShoppingBag size={22} />
           </div>
           <h2 className="text-lg font-bold text-[#102A43]">AD ASTRA STORE</h2>
-          <p className="mt-1 text-sm font-semibold uppercase tracking-[0.14em] text-[#508DB1]">
-            Coming Soon
-          </p>
           <p className="mx-auto mt-3 max-w-md text-sm text-black/60">
-            Soon you&apos;ll be able to use your Ad Astra Coins toward real Ad Astra rewards.
+            See the rewards you&apos;re working toward with your Ad Astra Coins.
           </p>
+          <Link
+            href="/store"
+            prefetch={false}
+            className="mt-4 inline-block rounded-2xl bg-[#102A43] px-6 py-3 text-sm font-semibold text-white"
+          >
+            Enter Store
+          </Link>
         </section>
       </div>
 

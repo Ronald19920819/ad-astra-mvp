@@ -352,13 +352,22 @@ export default function ProfilePage() {
                   );
                 })()}
 
-              <Link
-                href="/xp-coins"
-                prefetch={false}
-                className="mt-4 block w-full rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
-              >
-                View XP &amp; Coins
-              </Link>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                <Link
+                  href="/xp-coins"
+                  prefetch={false}
+                  className="flex-1 rounded-2xl bg-[#102A43] py-3 text-center text-sm font-semibold text-white"
+                >
+                  View XP &amp; Coins
+                </Link>
+                <Link
+                  href="/store"
+                  prefetch={false}
+                  className="flex-1 rounded-2xl border border-blue-100 bg-[#F8FBFF] py-3 text-center text-sm font-semibold text-[#508DB1]"
+                >
+                  Enter Store
+                </Link>
+              </div>
             </>
           ) : (
             <p className="text-sm text-black/60">

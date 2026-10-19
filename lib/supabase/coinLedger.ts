@@ -1,6 +1,9 @@
 import "server-only";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/server";
+import {
+  createSupabaseAdminClient,
+  createSupabaseRequestClient,
+} from "@/lib/supabase/server";
 
 // THE authoritative write path for the AD Astra Coin ledger
 // (public.coin_transactions -- see
@@ -215,10 +218,30 @@ const RPC_FAILURE_MESSAGES: Record<string, RecordAdminCoinAdjustmentFailureCode>
 // -- never a client-supplied actor id -- since it is SECURITY DEFINER and
 // therefore reachable by anything holding EXECUTE, not only this
 // function.
+//
+// STAGE B1 AUDIT CORRECTION: this calls the RPC through the
+// ADMINISTRATOR'S OWN request-scoped client (createSupabaseRequestClient(),
+// carrying their real session cookie/JWT) -- deliberately NOT
+// createSupabaseAdminClient(). The RPC resolves the acting administrator
+// via auth.uid() internally; a service-role call carries no end-user JWT
+// "sub" claim, so auth.uid() would resolve to null inside the function
+// and its own "ADMINISTRATOR_REQUIRED" re-verification would reject
+// EVERY call unconditionally, regardless of which real administrator
+// invoked it -- this was failing closed (never a security hole) but also
+// meant the feature could never actually succeed. This now matches the
+// identical, already-correct pattern used by
+// lib/supabase/storeRedemptions.ts's requestStoreRedemption() and
+// adminDeclineStoreRedemption(). The RPC's own EXECUTE grant
+// (`grant execute on function public.admin_adjust_learner_coins(...) to
+// authenticated;`, in 202609080002_admin_adjust_learner_coins_rpc.sql)
+// already permits exactly this -- any authenticated session, with the
+// function's own internal check (unchanged) deciding whether that
+// specific caller is really an active administrator. No SQL/migration
+// change was needed or made; only which client invokes it.
 export async function recordAdminCoinAdjustment(
   params: RecordAdminCoinAdjustmentParams,
 ): Promise<RecordAdminCoinAdjustmentResult> {
-  const supabase = createSupabaseAdminClient();
+  const supabase = await createSupabaseRequestClient();
 
   const metadata: Record<string, unknown> = {};
   if (params.adminNote?.trim()) {
