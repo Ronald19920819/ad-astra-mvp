@@ -5,7 +5,9 @@ import {
   AlertCircle,
   BarChart3,
   BookOpen,
+  ChevronRight,
   ClipboardCheck,
+  GraduationCap,
   School,
 } from "lucide-react";
 import SchoolOverviewCard from "@/components/SchoolOverviewCard";
@@ -261,6 +263,32 @@ export default async function TeacherHomePage() {
             )}
           </section>
         </div>
+
+        {/* Examination Centre -- entry card. Always visible to every
+            teacher regardless of subjects/learners/lessons/activities
+            (rendered unconditionally, not gated on `dashboard` or
+            `insights`). Now links to the real landing page
+            (/teacher/examination-centre). */}
+        <Link
+          href="/teacher/examination-centre"
+          prefetch={false}
+          className="mt-6 mb-5 flex items-center gap-4 rounded-[2rem] border border-[#D9A106]/30 bg-[#FFF8E6] p-5 shadow-sm transition hover:shadow-md"
+        >
+          <div className="flex-shrink-0 rounded-2xl bg-white p-3 text-[#D9A106]">
+            <GraduationCap size={22} />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-bold text-[#102A43]">
+              Examination Centre
+            </h2>
+            <p className="text-xs font-medium text-black/50">
+              Create. Assess. Inspire.
+            </p>
+          </div>
+
+          <ChevronRight size={20} className="flex-shrink-0 text-[#D9A106]" />
+        </Link>
       </div>
 
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-blue-100 shadow-[0_-8px_24px_rgba(15,23,42,0.08)]">

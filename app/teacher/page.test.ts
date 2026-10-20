@@ -13,6 +13,75 @@ const SOURCE = readFileSync("app/teacher/page.tsx", "utf8");
 // into protected, per-subject teacher routes) now explicitly disable
 // prefetch. Navigation itself (href, click behaviour) is unchanged.
 
+// EXAMINATION CENTRE -- STAGE 1: entry card only, placed below Priority
+// Actions/Learner Insights, visible unconditionally to every teacher.
+
+test("the Examination Centre card exists with the exact required heading and subtitle", () => {
+  assert.match(SOURCE, /Examination Centre/);
+  assert.match(SOURCE, /Create\. Assess\. Inspire\./);
+});
+
+test("the Examination Centre card renders unconditionally -- not gated on `dashboard`, `overview`, or `insights`, so it stays visible for a teacher with no subjects/learners/lessons/activities", () => {
+  const cardIndex = SOURCE.indexOf("Examination Centre");
+  const sectionStart = SOURCE.lastIndexOf("<div", cardIndex);
+  const sectionEnd = SOURCE.indexOf("</div>", cardIndex);
+  const cardBlock = SOURCE.slice(sectionStart, sectionEnd);
+  assert.doesNotMatch(cardBlock, /dashboard\?\.|overview\?\.|insights\./);
+  assert.doesNotMatch(cardBlock, /\{.*&&/);
+});
+
+test("the Examination Centre card is placed AFTER the Priority Actions/Learner Insights row and BEFORE the bottom navigation -- never above School Overview", () => {
+  const priorityActionsIndex = SOURCE.indexOf("Priority Actions");
+  const learnerInsightsIndex = SOURCE.indexOf("Learner Insights");
+  const examCentreIndex = SOURCE.indexOf("Examination Centre");
+  const schoolOverviewIndex = SOURCE.indexOf("School Overview");
+  const bottomNavIndex = SOURCE.indexOf("<nav");
+
+  assert.ok(schoolOverviewIndex < examCentreIndex, "must render after School Overview");
+  assert.ok(priorityActionsIndex < examCentreIndex, "must render after Priority Actions");
+  assert.ok(learnerInsightsIndex < examCentreIndex, "must render after Learner Insights");
+  assert.ok(examCentreIndex < bottomNavIndex, "must render before the bottom navigation");
+});
+
+test("the Examination Centre card is now a real Link to the landing page, with prefetch disabled matching this dashboard's other navigation links", () => {
+  assert.match(
+    SOURCE,
+    /<Link\s*\n\s*href="\/teacher\/examination-centre"\s*\n\s*prefetch=\{false\}/,
+  );
+});
+
+test("the Examination Centre card spans the full dashboard content width -- it sits outside any lg:grid-cols-2 wrapper", () => {
+  const examCentreIndex = SOURCE.indexOf("Examination Centre");
+  const closingDivsBetween = SOURCE.slice(
+    SOURCE.indexOf("</section>", SOURCE.indexOf("Learner Insights")),
+    examCentreIndex,
+  );
+  // Exactly one closing </div> (ending the lg:grid-cols-2 row wrapper)
+  // must appear between Learner Insights' closing </section> and the
+  // Examination Centre card -- confirming the card is a sibling of that
+  // wrapper, not nested inside it.
+  assert.equal((closingDivsBetween.match(/<\/div>/g) ?? []).length, 1);
+});
+
+test("the Examination Centre card has its own mt-6 (24px) top margin, so it never touches the Priority Actions/Learner Insights row above it at any breakpoint -- relies on standard CSS margin collapsing rather than stacking with the row's own mb-5, so spacing is never duplicated", () => {
+  assert.match(SOURCE, /className="mt-6 mb-5 flex items-center gap-4/);
+});
+
+test("the Examination Centre card uses the existing warm-gold/cream colour tokens and rounded-[2rem] corners already established elsewhere in this app, introducing no new design system", () => {
+  const wrapperIndex = SOURCE.indexOf("bg-[#FFF8E6] p-5 shadow-sm");
+  assert.ok(wrapperIndex >= 0, "expected to find the Examination Centre card's wrapper className");
+  const cardBlock = SOURCE.slice(wrapperIndex, wrapperIndex + 600);
+  assert.match(SOURCE.slice(Math.max(0, wrapperIndex - 100), wrapperIndex), /rounded-\[2rem\]/);
+  assert.match(SOURCE.slice(Math.max(0, wrapperIndex - 100), wrapperIndex), /#D9A106/);
+  assert.match(cardBlock, /#D9A106/);
+});
+
+test("type safety: no any, @ts-ignore or @ts-expect-error is used anywhere in this file", () => {
+  assert.doesNotMatch(SOURCE, /:\s*any\b/);
+  assert.doesNotMatch(SOURCE, /@ts-ignore/);
+  assert.doesNotMatch(SOURCE, /@ts-expect-error/);
+});
+
 test("the bottom navigation (Home, Subjects, Messages, Reports, Profile) disables prefetch", () => {
   for (const href of [
     "/teacher",
